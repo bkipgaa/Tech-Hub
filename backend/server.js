@@ -1,4 +1,4 @@
-// backend/server.js
+// backend/server.js (update with routes)
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
@@ -13,6 +13,11 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+// Routes
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/technicians', require('./routes/technicianRoutes'));
+app.use('/api/service-catalog', require('./routes/serviceCatalogRoutes')); // NEW
 
 // Basic route
 app.get('/', (req, res) => {
