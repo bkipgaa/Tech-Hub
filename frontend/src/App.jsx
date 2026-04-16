@@ -4,6 +4,8 @@ import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Services from './pages/Services';
+import Technicians from './pages/Technicians';
+import TechnicianProfile from './pages/TechnicianProfile';
 import Search from './pages/Search';
 import BookService from './pages/BookService';
 import SignUp from './pages/SignUp';
@@ -22,6 +24,8 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
             <Route path="services" element={<Services />} />
+            <Route path="/technicians" element={<Technicians />} />
+            <Route path="/technician/:id" element={<TechnicianProfile />} /> 
             <Route path="search" element={<Search />} />
             <Route path="book-service" element={<BookService />} />
             <Route path="signup" element={<SignUp />} />

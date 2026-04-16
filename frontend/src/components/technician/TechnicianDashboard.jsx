@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+
 // Import tab components
 import ProfileTab from './tabs/ProfileTab';
 import ServicesTab from './tabs/ServicesTab';
@@ -18,13 +19,14 @@ import ProfileCompletionBar from './common/ProfileCompletionBar';
 import TabNavigation from './common/TabNavigation';
 
 // Import icons
-import { Edit, Save } from 'lucide-react';
+import { Edit, Save, X } from 'lucide-react';
 
 const TechnicianDashboard = () => {
   const { user, technicianProfile, updateTechnicianProfile, getTechnicianProfile } = useAuth();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('profile');
   
   // Form data state
@@ -150,8 +152,12 @@ const TechnicianDashboard = () => {
 
     if (!technicianProfile) {
       getTechnicianProfile();
-    } else {
-      // Map backend data to form state
+    }
+  }, [user, technicianProfile, navigate, getTechnicianProfile]);
+
+  // Separate effect to update form data when technicianProfile changes
+  useEffect(() => {
+    if (technicianProfile) {
       setFormData({
         aboutMe: technicianProfile.aboutMe || '',
         profileHeadline: technicianProfile.profileHeadline || '',
@@ -229,7 +235,7 @@ const TechnicianDashboard = () => {
         gallery: technicianProfile.portfolio?.map(item => item.mediaUrl) || []
       });
     }
-  }, [user, technicianProfile]);
+  }, [technicianProfile]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -268,26 +274,26 @@ const TechnicianDashboard = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
     
     // Prepare data for submission
-    const submitData = {
-      ...formData,
-      gallery: undefined
-    };
+    const { gallery, ...submitData } = formData;
     
     const result = await updateTechnicianProfile(submitData);
     setLoading(false);
     if (result.success) {
       setIsEditing(false);
+    } else {
+      setError(result.error || 'Failed to update profile');
     }
   };
 
   if (!technicianProfile) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading profile...</p>
         </div>
       </div>
@@ -295,130 +301,140 @@ const TechnicianDashboard = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
-      {/* Header with Stats - No background color */}
-      <Header technicianProfile={technicianProfile} />
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header with Stats */}
+        <Header technicianProfile={technicianProfile} />
 
-      {/* Verification Status Banner */}
-      <VerificationBanner status={technicianProfile.verificationStatus} />
+        {/* Verification Status Banner */}
+        <VerificationBanner status={technicianProfile.verificationStatus} />
 
-      {/* Profile Completion Bar */}
-      <ProfileCompletionBar percentage={technicianProfile.profileCompletionPercentage} />
+        {/* Profile Completion Bar */}
+        <ProfileCompletionBar percentage={technicianProfile.profileCompletionPercentage} />
 
-      {/* Tabs Navigation */}
-      <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
+        {/* Tabs Navigation */}
+        <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Main Content */}
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-        {/* Header with Edit Toggle */}
-        <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {activeTab === 'profile' && 'Professional Information'}
-            {activeTab === 'services' && 'Services & Pricing'}
-            {activeTab === 'portfolio' && 'Work Portfolio'}
-            {activeTab === 'credentials' && 'Education & Certifications'}
-            {activeTab === 'availability' && 'Availability Schedule'}
-            {activeTab === 'business' && 'Business Details'}
-            {activeTab === 'settings' && 'Account Settings'}
-          </h2>
-          {!isEditing ? (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
-            >
-              <Edit className="w-4 h-4" />
-              <span>Edit Profile</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsEditing(false)}
-              className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
-            >
-              Cancel Editing
-            </button>
-          )}
-        </div>
-
-        {/* Profile Form */}
-        <form onSubmit={handleSubmit} className="p-6">
-          {/* Render active tab */}
-          {activeTab === 'profile' && (
-            <ProfileTab 
-              formData={formData}
-              setFormData={setFormData}
-              isEditing={isEditing}
-              handleInputChange={handleInputChange}
-            />
-          )}
-          
-          {activeTab === 'services' && (
-            <ServicesTab 
-              formData={formData}
-              setFormData={setFormData}
-              isEditing={isEditing}
-              handleInputChange={handleInputChange}
-            />
-          )}
-          
-          {activeTab === 'portfolio' && (
-            <PortfolioTab 
-              formData={formData}
-              setFormData={setFormData}
-              isEditing={isEditing}
-            />
-          )}
-          
-          {activeTab === 'credentials' && (
-            <CredentialsTab 
-              formData={formData}
-              setFormData={setFormData}
-              isEditing={isEditing}
-              handleInputChange={handleInputChange}
-            />
-          )}
-          
-          {activeTab === 'availability' && (
-            <AvailabilityTab 
-              formData={formData}
-              setFormData={setFormData}
-              isEditing={isEditing}
-              handleInputChange={handleInputChange}
-            />
-          )}
-          
-          {activeTab === 'business' && (
-            <BusinessTab 
-              formData={formData}
-              setFormData={setFormData}
-              isEditing={isEditing}
-              handleInputChange={handleInputChange}
-            />
-          )}
-          
-          {activeTab === 'settings' && (
-            <SettingsTab 
-              formData={formData}
-              setFormData={setFormData}
-              isEditing={isEditing}
-              handleInputChange={handleInputChange}
-              user={user}
-            />
-          )}
-
-          {/* Submit Button */}
-          {isEditing && (
-            <div className="mt-8 flex justify-end">
+        {/* Main Content */}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+          {/* Header with Edit Toggle */}
+          <div className="bg-gray-50 px-6 py-5 border-b border-gray-200 flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-gray-800 hover:text-red-600 transition-colors duration-200 cursor-pointer">
+              {activeTab === 'profile' && 'Professional Information'}
+              {activeTab === 'services' && 'Services & Pricing'}
+              {activeTab === 'portfolio' && 'Work Portfolio'}
+              {activeTab === 'credentials' && 'Education & Certifications'}
+              {activeTab === 'availability' && 'Availability Schedule'}
+              {activeTab === 'business' && 'Business Details'}
+              {activeTab === 'settings' && 'Account Settings'}
+            </h2>
+            {!isEditing ? (
               <button
-                type="submit"
-                disabled={loading}
-                className="bg-gradient-to-r from-green-600 to-green-700 text-white px-8 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-green-800 transition-all disabled:opacity-50 flex items-center space-x-2"
+                onClick={() => setIsEditing(true)}
+                className="bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-red-600 transition-all duration-200 flex items-center space-x-2"
               >
-                <Save className="w-5 h-5" />
-                <span>{loading ? 'Saving...' : 'Save Changes'}</span>
+                <Edit className="w-4 h-4" />
+                <span>Edit Profile</span>
               </button>
+            ) : (
+              <button
+                onClick={() => setIsEditing(false)}
+                className="bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-red-600 hover:text-white transition-all duration-200 flex items-center space-x-2"
+              >
+                <X className="w-4 h-4" />
+                <span>Cancel</span>
+              </button>
+            )}
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+              {error}
             </div>
           )}
-        </form>
+
+          {/* Profile Form */}
+          <form onSubmit={handleSubmit} className="p-6">
+            {/* Render active tab */}
+            {activeTab === 'profile' && (
+              <ProfileTab 
+                formData={formData}
+                setFormData={setFormData}
+                isEditing={isEditing}
+                handleInputChange={handleInputChange}
+              />
+            )}
+            
+            {activeTab === 'services' && (
+              <ServicesTab 
+                formData={formData}
+                setFormData={setFormData}
+                isEditing={isEditing}
+                handleInputChange={handleInputChange}
+              />
+            )}
+            
+            {activeTab === 'portfolio' && (
+              <PortfolioTab 
+                formData={formData}
+                setFormData={setFormData}
+                isEditing={isEditing}
+              />
+            )}
+            
+            {activeTab === 'credentials' && (
+              <CredentialsTab 
+                formData={formData}
+                setFormData={setFormData}
+                isEditing={isEditing}
+                handleInputChange={handleInputChange}
+              />
+            )}
+            
+            {activeTab === 'availability' && (
+              <AvailabilityTab 
+                formData={formData}
+                setFormData={setFormData}
+                isEditing={isEditing}
+                handleInputChange={handleInputChange}
+              />
+            )}
+            
+            {activeTab === 'business' && (
+              <BusinessTab 
+                formData={formData}
+                setFormData={setFormData}
+                isEditing={isEditing}
+                handleInputChange={handleInputChange}
+              />
+            )}
+            
+            {activeTab === 'settings' && (
+              <SettingsTab 
+                formData={formData}
+                setFormData={setFormData}
+                isEditing={isEditing}
+                handleInputChange={handleInputChange}
+                user={user}
+              />
+            )}
+
+            {/* Submit Button */}
+            {isEditing && (
+              <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="bg-gray-800 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-red-600 transition-all duration-200 disabled:opacity-50 flex items-center space-x-2"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{loading ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+              </div>
+            )}
+          </form>
+        </div>
       </div>
     </div>
   );

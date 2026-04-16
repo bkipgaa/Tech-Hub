@@ -1,39 +1,25 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api'; // your configured axios instance
 
 // Create the authentication context
 const AuthContext = createContext();
 
-/**
- * Custom hook to use the auth context
- * @returns {Object} Auth context value
- */
 export const useAuth = () => {
   return useContext(AuthContext);
 };
 
-/**
- * AuthProvider Component
- * Provides authentication state and methods to all child components
- * Manages user authentication, technician profiles, and API interactions
- */
 export const AuthProvider = ({ children }) => {
-  // State management
-  const [user, setUser] = useState(null);                 // User data from database
-  const [technicianProfile, setTechnicianProfile] = useState(null); // Technician profile data
-  const [token, setToken] = useState(localStorage.getItem('token')); // JWT token from localStorage
-  const [loading, setLoading] = useState(true);           // Loading state for initial auth check
-  const [showToken, setShowToken] = useState(false);       // For toggling token display in UI
+  const [user, setUser] = useState(null);
+  const [technicianProfile, setTechnicianProfile] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(true);
+  const [showToken, setShowToken] = useState(false);
 
-  // Set axios default header with token if it exists
-  if (token) {
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  // Set default Authorization header for api instance
+  if (token && !api.defaults.headers.common['Authorization']) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
-  /**
-   * Effect to fetch user profile when token changes
-   * Runs on initial load and after login/register
-   */
   useEffect(() => {
     if (token) {
       fetchUserProfile();
@@ -42,684 +28,363 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
-  /**
-   * Fetch user profile from the server
-   * Uses the token from localStorage to authenticate
-   * If user is a technician, also fetches their technician profile
-   */
   const fetchUserProfile = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/auth/profile');
+      const response = await api.get('/auth/profile');
       setUser(response.data.user);
-      
-      // If user is a technician, fetch their technician profile
+
       if (response.data.user.role === 'technician') {
-        fetchTechnicianProfile();
+        await fetchTechnicianProfile();
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      logout(); // Log out if token is invalid
+      logout();
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Fetch technician profile using the new endpoint structure
-   * GET /api/technicians/profile/get
-   * This matches the route we created in technicianRoutes.js
-   */
+  // ✅ Corrected technician profile endpoint
   const fetchTechnicianProfile = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/technicians/profile/get');
+      const response = await api.get('/technician/profile');
       setTechnicianProfile(response.data.technician);
     } catch (error) {
-      console.error('Error fetching technician profile:', error);
+      // 404 means no profile yet – that's fine
+      if (error.response?.status !== 404) {
+        console.error('Error fetching technician profile:', error);
+      }
     }
   };
 
-  /**
-   * Register a new user
-   * POST /api/auth/register
-   * @param {Object} userData - User registration data (name, email, password, phone)
-   * @returns {Object} Success status and user data or error
-   */
   const register = async (userData) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/register', userData);
+      const response = await api.post('/auth/register', userData);
       const { token, user } = response.data;
-      
-      // Store token and set default header
+
       localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setToken(token);
       setUser(user);
-      
+
       return { success: true, user };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Registration failed' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Registration failed',
       };
     }
   };
 
-  /**
-   * Upgrade existing user to technician role
-   * PUT /api/auth/become-technician
-   * This updates the user's role in the database
-   * @returns {Object} Success status and updated user data
-   */
   const becomeTechnician = async () => {
     try {
-      console.log('Upgrading user to technician...');
-      const response = await axios.put('http://localhost:5000/api/auth/become-technician');
-      
-      // Update user in state with new role
+      const response = await api.put('/users/become-technician'); // adjust if different
       setUser(response.data.user);
-      
-      return { 
-        success: true, 
-        user: response.data.user,
-        message: response.data.message 
-      };
+      return { success: true, user: response.data.user, message: response.data.message };
     } catch (error) {
-      console.error('Become technician error:', error.response?.data || error.message);
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to upgrade to technician' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to upgrade to technician',
       };
     }
   };
 
-  /**
-   * Login user with email and password
-   * POST /api/auth/login
-   * @param {string} email - User email
-   * @param {string} password - User password
-   * @returns {Object} Success status and user data or error
-   */
   const login = async (email, password) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+      const response = await api.post('/auth/login', { email, password });
       const { token, user } = response.data;
-      
-      console.log('✅ Login successful! Token received:', token);
-      
-      // Store token and set default header
+
       localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setToken(token);
       setUser(user);
-      
-      // If user is a technician, fetch their profile
+
       if (user.role === 'technician') {
         await fetchTechnicianProfile();
       }
-      
+
       return { success: true, user, token };
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Login failed' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Login failed',
       };
     }
   };
 
-  /**
-   * Logout user - clear token and user data
-   */
   const logout = () => {
     localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
+    delete api.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
     setTechnicianProfile(null);
   };
 
-  /**
-   * Update user profile information
-   * PUT /api/users/profile
-   * @param {Object} userData - Updated user data
-   * @returns {Object} Success status and updated user data
-   */
   const updateUserProfile = async (userData) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/users/profile', userData);
+      const response = await api.put('/users/profile', userData);
       setUser(response.data.user);
       return { success: true, user: response.data.user };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Update failed' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Update failed',
       };
     }
   };
 
-  /**
-   * Create technician profile
-   * POST /api/technicians/profile/create
-   * This matches the route we created in technicianRoutes.js
-   * @param {Object} profileData - Complete technician profile data matching the schema
-   * @returns {Object} Success status and created profile
-   */
+  // ✅ Corrected technician profile creation endpoint
   const createTechnicianProfile = async (profileData) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/technicians/profile/create', profileData);
+      const response = await api.post('/technician/profile', profileData);
       setTechnicianProfile(response.data.technician);
-      
-      // Update user role if not already technician
+
       if (user.role !== 'technician') {
         setUser({ ...user, role: 'technician' });
       }
-      
+
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to create technician profile' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to create technician profile',
       };
     }
   };
 
-  /**
-   * Update technician profile
-   * PUT /api/technicians/profile/update
-   * Note: This is a general update endpoint. For specific sections,
-   * we'll need to add more specific endpoints later.
-   * @param {Object} profileData - Updated profile data
-   * @returns {Object} Success status and updated profile
-   */
-  const updateTechnicianProfile = async (profileData) => {
-    try {
-      const response = await axios.put('http://localhost:5000/api/technicians/profile/update', profileData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update technician profile' 
-      };
-    }
-  };
-
-  /**
-   * Get technician profile
-   * GET /api/technicians/profile/get
-   * This matches the route we created in technicianRoutes.js
-   * @returns {Object} Success status and technician profile
-   */
-  const getTechnicianProfile = async () => {
-    try {
-      const response = await axios.get('http://localhost:5000/api/technicians/profile/get');
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to fetch technician profile' 
-      };
-    }
-  };
-
-  /**
-   * ====================================
-   * SPECIFIC PROFILE SECTION UPDATES
-   * These functions will be added as we implement the tab components
-   * Each one corresponds to a specific tab in the technician dashboard
-   * ====================================
-   */
-
-  /**
-   * Update basic profile information (Tab 1)
-   * PUT /api/technicians/profile/basic/update
-   * Updates aboutMe, profileHeadline, category
-   */
+  // General update (if needed) – you may not use this
+ const updateTechnicianProfile = async (profileData) => {
+  try {
+    const response = await api.put('/technician/profile', profileData);
+    setTechnicianProfile(response.data.technician);
+    return { success: true, technician: response.data.technician };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Failed to update technician profile',
+    };
+  }
+};
+  // ------------------------------------------------------------
+  //  Section‑specific updates (match your modular controllers)
+  // ------------------------------------------------------------
   const updateBasicInfo = async (data) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/profile/basic/update', data);
+      const response = await api.put('/technician/profile/basic', data);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update basic info' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update basic info' };
     }
   };
 
-  /**
-   * Update skills (Tab 1)
-   * PUT /api/technicians/profile/skills/update
-   */
   const updateSkills = async (skills) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/profile/skills/update', { skills });
+      const response = await api.put('/technician/profile/skills', { skills });
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update skills' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update skills' };
     }
   };
 
-  /**
-   * Update languages (Tab 1)
-   * PUT /api/technicians/profile/languages/update
-   */
   const updateLanguages = async (languages) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/profile/languages/update', { languages });
+      const response = await api.put('/technician/profile/languages', { languages });
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update languages' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update languages' };
     }
   };
 
-  /**
-   * Update location (Tab 1)
-   * PUT /api/technicians/profile/location/update
-   */
   const updateLocation = async (locationData) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/profile/location/update', locationData);
+      const response = await api.put('/technician/profile/location', locationData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update location' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update location' };
     }
   };
 
-  /**
-   * Update pricing (Tab 2)
-   * PUT /api/technicians/services/pricing/update
-   */
   const updatePricing = async (pricingData) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/services/pricing/update', pricingData);
+      const response = await api.put('/technician/profile/pricing', pricingData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update pricing' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update pricing' };
     }
   };
 
-  /**
-   * Add service category (Tab 2)
-   * POST /api/technicians/services/category/add
-   */
   const addServiceCategory = async (categoryData) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/technicians/services/category/add', categoryData);
+      const response = await api.post('/technician/profile/service-category', categoryData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to add service category' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to add service category' };
     }
   };
 
-  /**
-   * Update service category (Tab 2)
-   * PUT /api/technicians/services/category/:categoryId/update
-   */
-  const updateServiceCategory = async (categoryId, categoryData) => {
+  const removeServiceCategory = async (categoryName) => {
     try {
-      const response = await axios.put(`http://localhost:5000/api/technicians/services/category/${categoryId}/update`, categoryData);
+      const response = await api.delete(`/technician/profile/service-category/${encodeURIComponent(categoryName)}`);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update service category' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to remove service category' };
     }
   };
 
-  /**
-   * Remove service category (Tab 2)
-   * DELETE /api/technicians/services/category/:categoryId/remove
-   */
-  const removeServiceCategory = async (categoryId) => {
-    try {
-      const response = await axios.delete(`http://localhost:5000/api/technicians/services/category/${categoryId}/remove`);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to remove service category' 
-      };
-    }
-  };
-
-  /**
-   * Add portfolio item (Tab 3)
-   * POST /api/technicians/portfolio/item/add
-   */
   const addPortfolioItem = async (itemData) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/technicians/portfolio/item/add', itemData);
+      const response = await api.post('/technician/profile/portfolio', itemData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to add portfolio item' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to add portfolio item' };
     }
   };
 
-  /**
-   * Update portfolio item (Tab 3)
-   * PUT /api/technicians/portfolio/item/:itemId/update
-   */
-  const updatePortfolioItem = async (itemId, itemData) => {
-    try {
-      const response = await axios.put(`http://localhost:5000/api/technicians/portfolio/item/${itemId}/update`, itemData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update portfolio item' 
-      };
-    }
-  };
-
-  /**
-   * Remove portfolio item (Tab 3)
-   * DELETE /api/technicians/portfolio/item/:itemId/remove
-   */
   const removePortfolioItem = async (itemId) => {
     try {
-      const response = await axios.delete(`http://localhost:5000/api/technicians/portfolio/item/${itemId}/remove`);
+      const response = await api.delete(`/technician/profile/portfolio/${itemId}`);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to remove portfolio item' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to remove portfolio item' };
     }
   };
 
-  /**
-   * Add education (Tab 4)
-   * POST /api/technicians/education/add
-   */
   const addEducation = async (educationData) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/technicians/education/add', educationData);
+      const response = await api.post('/technician/profile/education', educationData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to add education' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to add education' };
     }
   };
 
-  /**
-   * Add certification (Tab 4)
-   * POST /api/technicians/certifications/add
-   */
   const addCertification = async (certData) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/technicians/certifications/add', certData);
+      const response = await api.post('/technician/profile/certifications', certData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to add certification' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to add certification' };
     }
   };
 
-  /**
-   * Add experience (Tab 4)
-   * POST /api/technicians/experience/add
-   */
   const addExperience = async (expData) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/technicians/experience/add', expData);
+      const response = await api.post('/technician/profile/experience', expData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to add experience' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to add experience' };
     }
   };
 
-  /**
-   * Update availability schedule (Tab 5)
-   * PUT /api/technicians/availability/schedule/update
-   */
   const updateAvailabilitySchedule = async (scheduleData) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/availability/schedule/update', scheduleData);
+      const response = await api.put('/technician/profile/availability', scheduleData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update availability' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update availability' };
     }
   };
 
-  /**
-   * Toggle availability status (Tab 5)
-   * PATCH /api/technicians/availability/status/toggle
-   */
   const toggleAvailability = async () => {
     try {
-      const response = await axios.patch('http://localhost:5000/api/technicians/availability/status/toggle');
+      const response = await api.patch('/technician/profile/status', { isAvailable: !technicianProfile?.isAvailable });
       setTechnicianProfile(response.data.technician);
       return { success: true, isAvailable: response.data.isAvailable };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to toggle availability' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to toggle availability' };
     }
   };
 
-  /**
-   * Update business info (Tab 6)
-   * PUT /api/technicians/business/info/update
-   */
   const updateBusinessInfo = async (businessData) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/business/info/update', businessData);
+      const response = await api.put('/technician/profile/business', businessData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update business info' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update business info' };
     }
   };
 
-  /**
-   * Update insurance info (Tab 6)
-   * PUT /api/technicians/business/insurance/update
-   */
-  const updateInsuranceInfo = async (insuranceData) => {
-    try {
-      const response = await axios.put('http://localhost:5000/api/technicians/business/insurance/update', insuranceData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update insurance info' 
-      };
-    }
-  };
-
-  /**
-   * Update social links (Tab 6)
-   * PUT /api/technicians/business/social/update
-   */
   const updateSocialLinks = async (socialData) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/business/social/update', socialData);
+      const response = await api.put('/technician/profile/social-links', socialData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update social links' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update social links' };
     }
   };
 
-  /**
-   * Update privacy settings (Tab 7)
-   * PUT /api/technicians/settings/privacy/update
-   */
   const updatePrivacySettings = async (privacyData) => {
     try {
-      const response = await axios.put('http://localhost:5000/api/technicians/settings/privacy/update', privacyData);
+      const response = await api.put('/technician/profile/settings', privacyData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update privacy settings' 
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to update settings' };
     }
   };
 
-  /**
-   * Update booking settings (Tab 7)
-   * PUT /api/technicians/settings/booking/update
-   */
-  const updateBookingSettings = async (bookingData) => {
-    try {
-      const response = await axios.put('http://localhost:5000/api/technicians/settings/booking/update', bookingData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update booking settings' 
-      };
-    }
-  };
-
-  /**
-   * Update notification settings (Tab 7)
-   * PUT /api/technicians/settings/notifications/update
-   */
-  const updateNotificationSettings = async (notificationData) => {
-    try {
-      const response = await axios.put('http://localhost:5000/api/technicians/settings/notifications/update', notificationData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Failed to update notification settings' 
-      };
-    }
-  };
-
-  /**
-   * Toggle token display for debugging
-   */
   const toggleTokenDisplay = () => {
     setShowToken(!showToken);
   };
 
-  /**
-   * Context value object containing all state and methods
-   * This will be provided to all child components
-   */
   const value = {
-    // State
     user,
     technicianProfile,
     token,
     loading,
     showToken,
-    
-    // Auth methods
+
     register,
     login,
     logout,
     becomeTechnician,
     updateUserProfile,
-    
-    // Technician profile methods - Main
+
     createTechnicianProfile,
     updateTechnicianProfile,
-    getTechnicianProfile,
-    
-    // Technician profile methods - Tab 1 (Profile)
+    fetchTechnicianProfile,
+
     updateBasicInfo,
     updateSkills,
     updateLanguages,
     updateLocation,
-    
-    // Technician profile methods - Tab 2 (Services)
+
     updatePricing,
     addServiceCategory,
-    updateServiceCategory,
     removeServiceCategory,
-    
-    // Technician profile methods - Tab 3 (Portfolio)
+
     addPortfolioItem,
-    updatePortfolioItem,
     removePortfolioItem,
-    
-    // Technician profile methods - Tab 4 (Credentials)
+
     addEducation,
     addCertification,
     addExperience,
-    
-    // Technician profile methods - Tab 5 (Availability)
+
     updateAvailabilitySchedule,
     toggleAvailability,
-    
-    // Technician profile methods - Tab 6 (Business)
+
     updateBusinessInfo,
-    updateInsuranceInfo,
     updateSocialLinks,
-    
-    // Technician profile methods - Tab 7 (Settings)
+
     updatePrivacySettings,
-    updateBookingSettings,
-    updateNotificationSettings,
-    
-    // Utility methods
-    toggleTokenDisplay
+
+    toggleTokenDisplay,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

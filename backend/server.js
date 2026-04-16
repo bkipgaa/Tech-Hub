@@ -4,6 +4,9 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
+const technicianProfileRoutes = require('./routes/technicianProfileRoutes');
+const serviceCatalogRoutes = require('./routes/serviceCatalogRoutes');
+const searchRoutes=require('./routes/searchRoutes');
 
 dotenv.config();
 
@@ -16,8 +19,9 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/technicians', require('./routes/technicianRoutes'));
-app.use('/api/service-catalog', require('./routes/serviceCatalogRoutes')); // NEW
+app.use('/api/technician', technicianProfileRoutes);
+app.use('/api/service-catalog', serviceCatalogRoutes);
+app.use('/api/search', searchRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

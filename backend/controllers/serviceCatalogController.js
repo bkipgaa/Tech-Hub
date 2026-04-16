@@ -432,3 +432,85 @@ exports.validateServices = async (req, res) => {
     });
   }
 };
+
+
+/**
+ * Get detailed sub-services for a specific service category
+ * This endpoint returns all sub-services with their full details
+ * Used by the frontend Services page to display expandable service details
+ * 
+ * @route   GET /api/service-catalog/:mainCategory/:serviceCategory/sub-services/detailed
+ * @access  Public
+ * @param {string} mainCategory - The main category (e.g., "IT & Networking")
+ * @param {string} serviceCategory - The service category (e.g., "Internet Services")
+ * @returns {Object} JSON with category info and array of sub-services
+ */
+exports.getDetailedSubServices = async (req, res) => {
+  try {
+    const { mainCategory, serviceCategory } = req.params;
+    
+    // Find the catalog document for the given main category
+    const catalog = await ServiceCatalog.findOne({ 
+      mainCategory, 
+      isActive: true 
+    });
+    
+    // Return 404 if main category not found
+    if (!catalog) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Main category not found' 
+      });
+    }
+    
+    // Find the specific service category within the catalog
+    const category = catalog.serviceCategories.find(
+      c => c.name === serviceCategory && c.isActive
+    );
+    
+    // Return 404 if service category not found
+    if (!category) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Service category not found' 
+      });
+    }
+    
+    // Filter and map only active sub-services
+    // Extract only the fields needed for display (excludes internal fields)
+    const subServices = category.subServices
+      .filter(s => s.isActive)  // Only show active services
+      .map(s => ({
+        id: s._id,
+        name: s.name,
+        description: s.description,
+        suggestedPriceRange: s.suggestedPriceRange,
+        typicalDuration: s.typicalDuration,
+        commonRequirements: s.commonRequirements,
+        requiredSkills: s.requiredSkills,
+        expertiseLevel: s.expertiseLevel,
+        equipmentNeeded: s.equipmentNeeded,
+        displayOrder: s.displayOrder,
+        popularity: s.popularity
+      }))
+      .sort((a, b) => a.displayOrder - b.displayOrder);  // Sort by display order
+    
+    // Return success response with category metadata and sub-services
+    res.json({ 
+      success: true, 
+      data: {
+        categoryName: category.name,
+        categoryDescription: category.description,
+        categoryIcon: category.icon,
+        subServices
+      }
+    });
+  } catch (error) {
+    console.error('Error in getDetailedSubServices:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};

@@ -1,5 +1,8 @@
-// scripts/populateServiceCatalog.js
+const mongoose = require('mongoose');
+const dotenv = require('dotenv');
 const ServiceCatalog = require('../models/ServiceCatalog');
+
+dotenv.config();
 
 const serviceCatalogData = [
   {
@@ -242,11 +245,16 @@ const serviceCatalogData = [
       }
     ]
   }
-  // Add more main categories as needed
 ];
 
 async function populateServiceCatalog() {
   try {
+    // Connect to MongoDB
+    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/weba-hub';
+    console.log('Connecting to MongoDB...');
+    await mongoose.connect(mongoURI);
+    console.log('Connected to MongoDB');
+
     // Check if data already exists
     const count = await ServiceCatalog.countDocuments();
     
@@ -256,15 +264,21 @@ async function populateServiceCatalog() {
       for (const data of serviceCatalogData) {
         const catalog = new ServiceCatalog(data);
         await catalog.save();
+        console.log(`  Added: ${data.mainCategory}`);
       }
       
-      console.log('Service catalog populated successfully');
+      console.log(`Service catalog populated successfully! Added ${serviceCatalogData.length} main categories.`);
     } else {
-      console.log('Service catalog already exists, skipping population');
+      console.log(`Service catalog already exists (${count} documents), skipping population.`);
+      console.log('To repopulate, first delete the existing documents.');
     }
   } catch (error) {
     console.error('Error populating service catalog:', error);
+  } finally {
+    await mongoose.disconnect();
+    console.log('Disconnected from MongoDB');
   }
 }
 
-module.exports = populateServiceCatalog;
+// Run the population
+populateServiceCatalog();

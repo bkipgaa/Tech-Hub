@@ -1,63 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { 
   Wrench, MapPin, Briefcase, Clock, Award, 
   Languages, Plus, Trash2, CheckCircle, AlertCircle,
-  User, DollarSign, BadgeCheck as Certificate,Calendar, Globe, Settings,
-  BookOpen,  Image, Video, Link as LinkIcon,
-  Facebook, Twitter, Linkedin, Instagram, Youtube
+  User, DollarSign, BadgeCheck as Certificate, Calendar, Globe, Settings,
+  BookOpen, Image, Video, Star,Facebook, Twitter, Linkedin, Instagram, Youtube, 
 } from 'lucide-react';
+import api from '../services/api';
 
 const CreateTechnicianProfile = () => {
   const { user, createTechnicianProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  // Categories from backend
-  const categories = [
-    'IT & Networking',
-    'Electrical Services',
-    'Mechanical Services',
-    'Plumbing',
-    'Programming & AI',
-    'Hairdressing & Beauty',
-    'Carpentry & Furniture',
-    'Laundry & Dry Cleaning',
-    'Cleaning Services',
-    'Painting & Decorating',
-    'Welding & Fabrication',
-    'Automotive Repair',
-    'Tutoring & Training',
-    'Photography & Videography',
-    'Event Planning',
-    'Construction & Renovation',
-    'HVAC Services',
-    'Appliance Repair',
-    'Moving & Logistics',
-    'Gardening & Landscaping'
-  ];
 
-  // Proficiency levels
+  // Service catalog data
+  const [mainCategories, setMainCategories] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
+  const [subServices, setSubServices] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  // Temporary selections for adding a service category
+  const [tempServiceCategory, setTempServiceCategory] = useState('');
+  const [tempSubServices, setTempSubServices] = useState([]);
+
+  // Proficiency & skill levels
   const proficiencyLevels = ['Basic', 'Conversational', 'Fluent', 'Native'];
-  
-  // Skill levels
   const skillLevels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 
+  // Form state
   const [formData, setFormData] = useState({
-    // Basic Info
     aboutMe: '',
     profileHeadline: '',
-    
-    // Skills - array of objects with name, level, years
     skills: [],
-    
-    // Services
     category: '',
     serviceCategories: [],
-    
-    // Pricing
     pricing: {
       hourlyRate: 0,
       fixedPrice: 0,
@@ -65,21 +43,11 @@ const CreateTechnicianProfile = () => {
       currency: 'KES',
       paymentMethods: ['Cash', 'M-Pesa']
     },
-    
-    // Education - array of objects
     education: [],
-    
-    // Certifications - array of objects
     certifications: [],
-    
-    // Experience
     yearsOfExperience: 0,
     experience: [],
-    
-    // Portfolio - array of objects
     portfolio: [],
-    
-    // Location
     address: {
       street: '',
       city: '',
@@ -88,16 +56,12 @@ const CreateTechnicianProfile = () => {
       country: 'Kenya'
     },
     location: {
-      coordinates: [36.8219, -1.2921], // Default Nairobi
+      coordinates: [36.8219, -1.2921],
       formattedAddress: '',
       placeId: ''
     },
     serviceRadius: 10,
-    
-    // Languages - array of objects with name and proficiency
     languages: [{ name: 'English', proficiency: 'Fluent' }],
-    
-    // Availability
     availability: {
       monday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
       tuesday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
@@ -110,12 +74,8 @@ const CreateTechnicianProfile = () => {
     emergencyAvailable: false,
     remoteServiceAvailable: false,
     weekendAvailable: false,
-    
-    // Business Info
     businessName: '',
     businessRegistrationNumber: '',
-    
-    // Social Links
     socialLinks: {
       website: '',
       facebook: '',
@@ -124,8 +84,6 @@ const CreateTechnicianProfile = () => {
       instagram: '',
       youtube: ''
     },
-    
-    // Settings
     settings: {
       showEmail: false,
       showPhone: true,
@@ -139,13 +97,15 @@ const CreateTechnicianProfile = () => {
         push: true
       }
     },
-    
-    // Status
     isAvailable: true
   });
 
-  // State for dynamic inputs
-  const [newSkill, setNewSkill] = useState({ name: '', level: 'Intermediate', years: 0 });
+  // --- Dynamic input states (unchanged from your original) ---
+  const [newSkill, setNewSkill] = useState({ 
+    name: '', 
+    level: 'Intermediate', 
+    yearsOfExperience: 0
+  });
   const [newLanguage, setNewLanguage] = useState({ name: '', proficiency: 'Fluent' });
   const [newEducation, setNewEducation] = useState({
     institution: '',
@@ -190,22 +150,72 @@ const CreateTechnicianProfile = () => {
   });
   const [newAchievement, setNewAchievement] = useState('');
   const [newTag, setNewTag] = useState('');
-  const [selectedServiceCategory, setSelectedServiceCategory] = useState('');
   const [newPaymentMethod, setNewPaymentMethod] = useState('');
 
-  if (!user) {
-    navigate('/login');
-    return null;
-  }
+  // --- Fetch main categories on mount ---
+  useEffect(() => {
+    const fetchMainCategories = async () => {
+      try {
+        const response = await api.get('/service-catalog/main-categories');
+        setMainCategories(response.data.data);
+      } catch (err) {
+        console.error('Failed to load main categories', err);
+        setError('Could not load service categories. Please refresh the page.');
+      } finally {
+        setCatalogLoading(false);
+      }
+    };
+    fetchMainCategories();
+  }, []);
 
-  if (user.role !== 'technician') {
-    navigate('/');
-    return null;
-  }
+  // --- When main category changes, fetch its service categories ---
+  useEffect(() => {
+    if (!formData.category) {
+      setServiceCategories([]);
+      setSubServices([]);
+      setTempServiceCategory('');
+      setTempSubServices([]);
+      return;
+    }
 
+    const fetchServiceCategories = async () => {
+      try {
+        const response = await api.get(`/service-catalog/${formData.category}/service-categories`);
+        setServiceCategories(response.data.data);
+        // Reset temporary selections
+        setTempServiceCategory('');
+        setTempSubServices([]);
+        setSubServices([]);
+      } catch (err) {
+        console.error('Failed to load service categories', err);
+        setServiceCategories([]);
+      }
+    };
+    fetchServiceCategories();
+  }, [formData.category]);
+
+  // --- When temporary service category changes, fetch its sub-services ---
+  useEffect(() => {
+    if (!formData.category || !tempServiceCategory) {
+      setSubServices([]);
+      return;
+    }
+
+    const fetchSubServices = async () => {
+      try {
+        const response = await api.get(`/service-catalog/${formData.category}/${tempServiceCategory}/sub-services`);
+        setSubServices(response.data.data.subServices || []);
+      } catch (err) {
+        console.error('Failed to load sub-services', err);
+        setSubServices([]);
+      }
+    };
+    fetchSubServices();
+  }, [formData.category, tempServiceCategory]);
+
+  // --- Handlers for form fields (nested paths) ---
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
     if (name.includes('.')) {
       const parts = name.split('.');
       if (parts.length === 2) {
@@ -238,17 +248,16 @@ const CreateTechnicianProfile = () => {
     }
   };
 
-  // Skills management
+  // --- Skills management ---
   const addSkill = () => {
     if (newSkill.name) {
       setFormData(prev => ({
         ...prev,
-        skills: [...prev.skills, newSkill]
+        skills: [...prev.skills, { ...newSkill }]
       }));
-      setNewSkill({ name: '', level: 'Intermediate', years: 0 });
+      setNewSkill({ name: '', level: 'Intermediate', yearsOfExperience: 0 });
     }
   };
-
   const removeSkill = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -256,17 +265,16 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // Languages management
+  // --- Languages management ---
   const addLanguage = () => {
     if (newLanguage.name) {
       setFormData(prev => ({
         ...prev,
-        languages: [...prev.languages, newLanguage]
+        languages: [...prev.languages, { ...newLanguage }]
       }));
       setNewLanguage({ name: '', proficiency: 'Fluent' });
     }
   };
-
   const removeLanguage = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -274,12 +282,12 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // Education management
+  // --- Education management ---
   const addEducation = () => {
     if (newEducation.institution && newEducation.degree) {
       setFormData(prev => ({
         ...prev,
-        education: [...prev.education, newEducation]
+        education: [...prev.education, { ...newEducation }]
       }));
       setNewEducation({
         institution: '',
@@ -293,7 +301,6 @@ const CreateTechnicianProfile = () => {
       });
     }
   };
-
   const removeEducation = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -301,12 +308,12 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // Certifications management
+  // --- Certifications management ---
   const addCertification = () => {
     if (newCertification.name && newCertification.issuingOrganization) {
       setFormData(prev => ({
         ...prev,
-        certifications: [...prev.certifications, newCertification]
+        certifications: [...prev.certifications, { ...newCertification }]
       }));
       setNewCertification({
         name: '',
@@ -319,7 +326,6 @@ const CreateTechnicianProfile = () => {
       });
     }
   };
-
   const removeCertification = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -327,7 +333,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // Experience management
+  // --- Experience management ---
   const addAchievement = () => {
     if (newAchievement) {
       setNewExperience(prev => ({
@@ -337,19 +343,17 @@ const CreateTechnicianProfile = () => {
       setNewAchievement('');
     }
   };
-
   const removeAchievement = (index) => {
     setNewExperience(prev => ({
       ...prev,
       achievements: prev.achievements.filter((_, i) => i !== index)
     }));
   };
-
   const addExperience = () => {
     if (newExperience.title && newExperience.company) {
       setFormData(prev => ({
         ...prev,
-        experience: [...prev.experience, newExperience]
+        experience: [...prev.experience, { ...newExperience }]
       }));
       setNewExperience({
         title: '',
@@ -363,7 +367,6 @@ const CreateTechnicianProfile = () => {
       });
     }
   };
-
   const removeExperience = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -371,7 +374,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // Portfolio management
+  // --- Portfolio management ---
   const addTag = () => {
     if (newTag) {
       setNewPortfolio(prev => ({
@@ -381,19 +384,17 @@ const CreateTechnicianProfile = () => {
       setNewTag('');
     }
   };
-
   const removeTag = (index) => {
     setNewPortfolio(prev => ({
       ...prev,
       tags: prev.tags.filter((_, i) => i !== index)
     }));
   };
-
   const addPortfolio = () => {
     if (newPortfolio.title && newPortfolio.mediaUrl) {
       setFormData(prev => ({
         ...prev,
-        portfolio: [...prev.portfolio, newPortfolio]
+        portfolio: [...prev.portfolio, { ...newPortfolio }]
       }));
       setNewPortfolio({
         title: '',
@@ -409,7 +410,6 @@ const CreateTechnicianProfile = () => {
       });
     }
   };
-
   const removePortfolio = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -417,7 +417,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // Payment methods management
+  // --- Payment methods ---
   const addPaymentMethod = () => {
     if (newPaymentMethod && !formData.pricing.paymentMethods.includes(newPaymentMethod)) {
       setFormData(prev => ({
@@ -430,7 +430,6 @@ const CreateTechnicianProfile = () => {
       setNewPaymentMethod('');
     }
   };
-
   const removePaymentMethod = (method) => {
     setFormData(prev => ({
       ...prev,
@@ -441,18 +440,31 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // Service Categories management
+  // --- Service categories (using catalog data) ---
   const addServiceCategory = () => {
-    if (selectedServiceCategory) {
-      setFormData(prev => ({
-        ...prev,
-        serviceCategories: [...prev.serviceCategories, {
-          categoryName: selectedServiceCategory,
-          subServices: []
-        }]
-      }));
-      setSelectedServiceCategory('');
+    if (!tempServiceCategory) {
+      setError('Please select a service category');
+      return;
     }
+    if (tempSubServices.length === 0) {
+      setError('Please select at least one sub-service for this category');
+      return;
+    }
+    if (formData.serviceCategories.some(sc => sc.categoryName === tempServiceCategory)) {
+      setError('This service category is already added');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      serviceCategories: [
+        ...prev.serviceCategories,
+        { categoryName: tempServiceCategory, subServices: [...tempSubServices] }
+      ]
+    }));
+    // Reset temporary selections
+    setTempServiceCategory('');
+    setTempSubServices([]);
+    setError('');
   };
 
   const removeServiceCategory = (index) => {
@@ -462,25 +474,30 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
+  // Toggle sub-service selection
+  const toggleSubService = (subName) => {
+    setTempSubServices(prev =>
+      prev.includes(subName) ? prev.filter(s => s !== subName) : [...prev, subName]
+    );
+  };
+
+  // --- Submit handler ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Validate required fields
     if (!formData.category) {
-      setError('Please select a category');
+      setError('Please select a main category');
       setLoading(false);
       return;
     }
-
     if (!formData.address.city || !formData.address.state) {
       setError('City and state are required');
       setLoading(false);
       return;
     }
 
-    // Ensure yearsOfExperience is a number
     const submitData = {
       ...formData,
       yearsOfExperience: Number(formData.yearsOfExperience)
@@ -488,13 +505,23 @@ const CreateTechnicianProfile = () => {
 
     const result = await createTechnicianProfile(submitData);
     setLoading(false);
-    
     if (result.success) {
       navigate('/technician-dashboard');
     } else {
       setError(result.error || 'Failed to create profile');
     }
   };
+
+  if (catalogLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading service catalog...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-4">
@@ -520,19 +547,15 @@ const CreateTechnicianProfile = () => {
           )}
 
           <div className="space-y-8">
-            {/* ========== BASIC INFO SECTION ========== */}
+            {/* ========== BASIC INFO ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <User className="w-6 h-6 mr-2 text-green-600" />
                 Basic Information
               </h2>
-              
               <div className="space-y-4">
-                {/* Profile Headline */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Profile Headline
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Profile Headline</label>
                   <input
                     type="text"
                     name="profileHeadline"
@@ -542,12 +565,8 @@ const CreateTechnicianProfile = () => {
                     placeholder="e.g., Expert Electrician with 10+ years experience"
                   />
                 </div>
-
-                {/* About Me */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    About Me
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">About Me</label>
                   <textarea
                     name="aboutMe"
                     value={formData.aboutMe}
@@ -557,12 +576,8 @@ const CreateTechnicianProfile = () => {
                     placeholder="Tell clients about yourself, your experience, and what makes you unique..."
                   />
                 </div>
-
-                {/* Business Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Business Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Business Name</label>
                   <input
                     type="text"
                     name="businessName"
@@ -572,12 +587,8 @@ const CreateTechnicianProfile = () => {
                     placeholder="Your Business Name"
                   />
                 </div>
-
-                {/* Business Registration Number */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Business Registration Number (Optional)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Business Registration Number (Optional)</label>
                   <input
                     type="text"
                     name="businessRegistrationNumber"
@@ -590,15 +601,14 @@ const CreateTechnicianProfile = () => {
               </div>
             </div>
 
-            {/* ========== SERVICES SECTION ========== */}
+            {/* ========== SERVICES OFFERED (Dynamic from catalog) ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Wrench className="w-6 h-6 mr-2 text-green-600" />
                 Services Offered
               </h2>
-
               <div className="space-y-4">
-                {/* Category */}
+                {/* Main Category Dropdown */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Main Category <span className="text-red-500">*</span>
@@ -611,62 +621,111 @@ const CreateTechnicianProfile = () => {
                     className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                   >
                     <option value="">Select a category</option>
-                    {categories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {mainCategories.map(cat => (
+                      <option key={cat.name} value={cat.name}>
+                        {cat.name} {!cat.hasServices && '(coming soon)'}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Service Categories */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Service Categories
-                  </label>
-                  <div className="flex gap-2 mb-3">
-                    <input
-                      type="text"
-                      value={selectedServiceCategory}
-                      onChange={(e) => setSelectedServiceCategory(e.target.value)}
-                      placeholder="Enter service category"
-                      className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={addServiceCategory}
-                      className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.serviceCategories.map((cat, index) => (
-                      <span
-                        key={index}
-                        className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
+                {/* Add Service Categories (only if main category selected) */}
+                {formData.category && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Add Service Category
+                    </label>
+                    <div className="space-y-3">
+                      <select
+                        value={tempServiceCategory}
+                        onChange={(e) => {
+                          setTempServiceCategory(e.target.value);
+                          setTempSubServices([]);
+                        }}
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
                       >
-                        {cat.categoryName}
-                        <button
-                          type="button"
-                          onClick={() => removeServiceCategory(index)}
-                          className="ml-2 text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
+                        <option value="">Select a service category</option>
+                        {serviceCategories.map(cat => (
+                          <option key={cat.id} value={cat.name}>
+                            {cat.name} ({cat.subServiceCount} sub-services)
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Sub-services checkboxes */}
+                      {tempServiceCategory && subServices.length > 0 && (
+                        <div className="mt-3">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Select Sub-Services you offer
+                          </label>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2 border border-gray-200 rounded-lg">
+                            {subServices.map(sub => (
+                              <label key={sub.name} className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  checked={tempSubServices.includes(sub.name)}
+                                  onChange={() => toggleSubService(sub.name)}
+                                  className="h-4 w-4 text-green-600 rounded"
+                                />
+                                <span className="text-sm text-gray-700">{sub.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={addServiceCategory}
+                        className="mt-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add Category</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Display added service categories */}
+                {formData.serviceCategories.length > 0 && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Your Selected Service Categories
+                    </label>
+                    <div className="space-y-2">
+                      {formData.serviceCategories.map((sc, idx) => (
+                        <div key={idx} className="bg-green-50 p-3 rounded-lg flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-green-800">{sc.categoryName}</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {sc.subServices.map(sub => (
+                                <span key={sub} className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">
+                                  {sub}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeServiceCategory(idx)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* ========== SKILLS SECTION ========== */}
+            {/* ========== SKILLS ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Award className="w-6 h-6 mr-2 text-green-600" />
                 Skills
               </h2>
-
-              {/* Add Skill */}
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                   <input
@@ -687,35 +746,25 @@ const CreateTechnicianProfile = () => {
                   </select>
                   <input
                     type="number"
-                    value={newSkill.years}
-                    onChange={(e) => setNewSkill({...newSkill, years: parseInt(e.target.value) || 0})}
+                    value={newSkill.yearsOfExperience}
+                    onChange={(e) => setNewSkill({...newSkill, yearsOfExperience: parseInt(e.target.value) || 0})}
                     placeholder="Years of experience"
                     className="p-3 border-2 border-gray-300 rounded-lg"
                   />
-                  <button
-                    type="button"
-                    onClick={addSkill}
-                    className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700"
-                  >
+                  <button type="button" onClick={addSkill} className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700">
                     Add Skill
                   </button>
                 </div>
               </div>
-
-              {/* Skills List */}
               <div className="space-y-2">
                 {formData.skills.map((skill, index) => (
                   <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
                     <div>
                       <span className="font-medium">{skill.name}</span>
                       <span className="ml-2 text-sm text-gray-600">({skill.level})</span>
-                      <span className="ml-2 text-sm text-gray-500">{skill.years} years</span>
+                      <span className="ml-2 text-sm text-gray-500">{skill.yearsOfExperience} years</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeSkill(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
+                    <button type="button" onClick={() => removeSkill(index)} className="text-red-500 hover:text-red-700">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -723,18 +772,14 @@ const CreateTechnicianProfile = () => {
               </div>
             </div>
 
-            {/* ========== EXPERIENCE SECTION ========== */}
+            {/* ========== EXPERIENCE ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Briefcase className="w-6 h-6 mr-2 text-green-600" />
                 Experience
               </h2>
-
-              {/* Years of Experience */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Total Years of Experience <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Total Years of Experience <span className="text-red-500">*</span></label>
                 <input
                   type="number"
                   name="yearsOfExperience"
@@ -745,8 +790,6 @@ const CreateTechnicianProfile = () => {
                   className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                 />
               </div>
-
-              {/* Work Experience */}
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
                 <h3 className="font-semibold text-gray-800 mb-4">Add Work Experience</h3>
                 <div className="space-y-4">
@@ -802,8 +845,6 @@ const CreateTechnicianProfile = () => {
                     rows="3"
                     className="w-full p-3 border-2 border-gray-300 rounded-lg"
                   />
-                  
-                  {/* Achievements */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Achievements</label>
                     <div className="flex gap-2 mb-2">
@@ -814,11 +855,7 @@ const CreateTechnicianProfile = () => {
                         placeholder="Add achievement"
                         className="flex-1 p-2 border-2 border-gray-300 rounded-lg"
                       />
-                      <button
-                        type="button"
-                        onClick={addAchievement}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                      >
+                      <button type="button" onClick={addAchievement} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
@@ -826,29 +863,18 @@ const CreateTechnicianProfile = () => {
                       {newExperience.achievements.map((ach, idx) => (
                         <div key={idx} className="flex items-center justify-between bg-gray-100 p-2 rounded">
                           <span className="text-sm">{ach}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeAchievement(idx)}
-                            className="text-red-500 hover:text-red-700"
-                          >
+                          <button type="button" onClick={() => removeAchievement(idx)} className="text-red-500 hover:text-red-700">
                             <Trash2 className="w-3 h-3" />
                           </button>
                         </div>
                       ))}
                     </div>
                   </div>
-                  
-                  <button
-                    type="button"
-                    onClick={addExperience}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                  >
+                  <button type="button" onClick={addExperience} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                     Add Experience
                   </button>
                 </div>
               </div>
-
-              {/* Experience List */}
               {formData.experience.map((exp, index) => (
                 <div key={index} className="bg-gray-50 p-4 rounded-lg mb-3">
                   <div className="flex justify-between items-start">
@@ -860,11 +886,7 @@ const CreateTechnicianProfile = () => {
                       </p>
                       {exp.description && <p className="mt-2 text-gray-700">{exp.description}</p>}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeExperience(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
+                    <button type="button" onClick={() => removeExperience(index)} className="text-red-500 hover:text-red-700">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -872,13 +894,12 @@ const CreateTechnicianProfile = () => {
               ))}
             </div>
 
-            {/* ========== EDUCATION SECTION ========== */}
+            {/* ========== EDUCATION ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <BookOpen className="w-6 h-6 mr-2 text-green-600" />
                 Education
               </h2>
-
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
                 <div className="space-y-4">
                   <input
@@ -940,17 +961,11 @@ const CreateTechnicianProfile = () => {
                     rows="3"
                     className="w-full p-3 border-2 border-gray-300 rounded-lg"
                   />
-                  <button
-                    type="button"
-                    onClick={addEducation}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                  >
+                  <button type="button" onClick={addEducation} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                     Add Education
                   </button>
                 </div>
               </div>
-
-              {/* Education List */}
               {formData.education.map((edu, index) => (
                 <div key={index} className="bg-gray-50 p-4 rounded-lg mb-3">
                   <div className="flex justify-between">
@@ -962,11 +977,7 @@ const CreateTechnicianProfile = () => {
                       </p>
                       {edu.grade && <p className="text-sm text-gray-600">Grade: {edu.grade}</p>}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeEducation(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
+                    <button type="button" onClick={() => removeEducation(index)} className="text-red-500 hover:text-red-700">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -974,13 +985,12 @@ const CreateTechnicianProfile = () => {
               ))}
             </div>
 
-            {/* ========== CERTIFICATIONS SECTION ========== */}
+            {/* ========== CERTIFICATIONS ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Certificate className="w-6 h-6 mr-2 text-green-600" />
                 Certifications
               </h2>
-
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
                 <div className="space-y-4">
                   <input
@@ -1035,17 +1045,11 @@ const CreateTechnicianProfile = () => {
                     placeholder="Credential URL"
                     className="w-full p-3 border-2 border-gray-300 rounded-lg"
                   />
-                  <button
-                    type="button"
-                    onClick={addCertification}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                  >
+                  <button type="button" onClick={addCertification} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                     Add Certification
                   </button>
                 </div>
               </div>
-
-              {/* Certifications List */}
               {formData.certifications.map((cert, index) => (
                 <div key={index} className="bg-gray-50 p-4 rounded-lg mb-3">
                   <div className="flex justify-between">
@@ -1057,11 +1061,7 @@ const CreateTechnicianProfile = () => {
                         {!cert.doesNotExpire && cert.expiryDate && ` • Expires: ${new Date(cert.expiryDate).toLocaleDateString()}`}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeCertification(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
+                    <button type="button" onClick={() => removeCertification(index)} className="text-red-500 hover:text-red-700">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -1069,13 +1069,12 @@ const CreateTechnicianProfile = () => {
               ))}
             </div>
 
-            {/* ========== PORTFOLIO SECTION ========== */}
+            {/* ========== PORTFOLIO ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Image className="w-6 h-6 mr-2 text-green-600" />
                 Portfolio
               </h2>
-
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
                 <div className="space-y-4">
                   <input
@@ -1137,8 +1136,6 @@ const CreateTechnicianProfile = () => {
                     onChange={(e) => setNewPortfolio({...newPortfolio, completionDate: e.target.value})}
                     className="w-full p-3 border-2 border-gray-300 rounded-lg"
                   />
-                  
-                  {/* Tags */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
                     <div className="flex gap-2 mb-2">
@@ -1149,33 +1146,21 @@ const CreateTechnicianProfile = () => {
                         placeholder="Add tag"
                         className="flex-1 p-2 border-2 border-gray-300 rounded-lg"
                       />
-                      <button
-                        type="button"
-                        onClick={addTag}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                      >
+                      <button type="button" onClick={addTag} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {newPortfolio.tags.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm flex items-center"
-                        >
+                        <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm flex items-center">
                           {tag}
-                          <button
-                            type="button"
-                            onClick={() => removeTag(idx)}
-                            className="ml-1 text-blue-500 hover:text-blue-700"
-                          >
+                          <button type="button" onClick={() => removeTag(idx)} className="ml-1 text-blue-500 hover:text-blue-700">
                             <Trash2 className="w-3 h-3" />
                           </button>
                         </span>
                       ))}
                     </div>
                   </div>
-
                   <div className="flex items-center">
                     <input
                       type="checkbox"
@@ -1185,18 +1170,11 @@ const CreateTechnicianProfile = () => {
                     />
                     <label className="ml-2 text-sm text-gray-700">Feature this item</label>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={addPortfolio}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                  >
+                  <button type="button" onClick={addPortfolio} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                     Add to Portfolio
                   </button>
                 </div>
               </div>
-
-              {/* Portfolio Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {formData.portfolio.map((item, index) => (
                   <div key={index} className="bg-gray-50 p-4 rounded-lg">
@@ -1208,11 +1186,7 @@ const CreateTechnicianProfile = () => {
                         {item.mediaType === 'video' && <Video className="w-4 h-4 text-gray-500 mt-1" />}
                         {item.isFeatured && <Star className="w-4 h-4 text-yellow-500 mt-1" />}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removePortfolio(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
+                      <button type="button" onClick={() => removePortfolio(index)} className="text-red-500 hover:text-red-700">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -1221,13 +1195,12 @@ const CreateTechnicianProfile = () => {
               </div>
             </div>
 
-            {/* ========== LANGUAGES SECTION ========== */}
+            {/* ========== LANGUAGES ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Languages className="w-6 h-6 mr-2 text-green-600" />
                 Languages
               </h2>
-
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <input
@@ -1246,28 +1219,16 @@ const CreateTechnicianProfile = () => {
                       <option key={level} value={level}>{level}</option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    onClick={addLanguage}
-                    className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700"
-                  >
+                  <button type="button" onClick={addLanguage} className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700">
                     Add Language
                   </button>
                 </div>
               </div>
-
               <div className="flex flex-wrap gap-2">
                 {formData.languages.map((lang, index) => (
-                  <span
-                    key={index}
-                    className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
-                  >
+                  <span key={index} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center">
                     {lang.name} ({lang.proficiency})
-                    <button
-                      type="button"
-                      onClick={() => removeLanguage(index)}
-                      className="ml-2 text-red-500 hover:text-red-700"
-                    >
+                    <button type="button" onClick={() => removeLanguage(index)} className="ml-2 text-red-500 hover:text-red-700">
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </span>
@@ -1275,18 +1236,15 @@ const CreateTechnicianProfile = () => {
               </div>
             </div>
 
-            {/* ========== LOCATION SECTION ========== */}
+            {/* ========== LOCATION ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <MapPin className="w-6 h-6 mr-2 text-green-600" />
                 Location
               </h2>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Street Address
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
                   <input
                     type="text"
                     name="address.street"
@@ -1297,9 +1255,7 @@ const CreateTechnicianProfile = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    City <span className="text-red-500">*</span>
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     name="address.city"
@@ -1311,9 +1267,7 @@ const CreateTechnicianProfile = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    State <span className="text-red-500">*</span>
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     name="address.state"
@@ -1325,9 +1279,7 @@ const CreateTechnicianProfile = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ZIP Code
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code</label>
                   <input
                     type="text"
                     name="address.zipCode"
@@ -1338,9 +1290,7 @@ const CreateTechnicianProfile = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Country
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
                   <input
                     type="text"
                     name="address.country"
@@ -1351,9 +1301,7 @@ const CreateTechnicianProfile = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Service Radius (km)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Service Radius (km)</label>
                   <input
                     type="number"
                     name="serviceRadius"
@@ -1367,18 +1315,15 @@ const CreateTechnicianProfile = () => {
               </div>
             </div>
 
-            {/* ========== PRICING SECTION ========== */}
+            {/* ========== PRICING ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <DollarSign className="w-6 h-6 mr-2 text-green-600" />
                 Pricing
               </h2>
-
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Hourly Rate (KES)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hourly Rate (KES)</label>
                   <input
                     type="number"
                     name="pricing.hourlyRate"
@@ -1390,9 +1335,7 @@ const CreateTechnicianProfile = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fixed Price (KES)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Fixed Price (KES)</label>
                   <input
                     type="number"
                     name="pricing.fixedPrice"
@@ -1404,9 +1347,7 @@ const CreateTechnicianProfile = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Consultation Fee (KES)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Consultation Fee (KES)</label>
                   <input
                     type="number"
                     name="pricing.consultationFee"
@@ -1418,12 +1359,8 @@ const CreateTechnicianProfile = () => {
                   />
                 </div>
               </div>
-
-              {/* Payment Methods */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Methods
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Methods</label>
                 <div className="flex gap-2 mb-3">
                   <input
                     type="text"
@@ -1432,26 +1369,15 @@ const CreateTechnicianProfile = () => {
                     placeholder="Add payment method"
                     className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={addPaymentMethod}
-                    className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
-                  >
+                  <button type="button" onClick={addPaymentMethod} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700">
                     <Plus className="w-5 h-5" />
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {formData.pricing.paymentMethods.map((method, index) => (
-                    <span
-                      key={index}
-                      className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center"
-                    >
+                    <span key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
                       {method}
-                      <button
-                        type="button"
-                        onClick={() => removePaymentMethod(method)}
-                        className="ml-2 text-red-500 hover:text-red-700"
-                      >
+                      <button type="button" onClick={() => removePaymentMethod(method)} className="ml-2 text-red-500 hover:text-red-700">
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </span>
@@ -1460,13 +1386,12 @@ const CreateTechnicianProfile = () => {
               </div>
             </div>
 
-            {/* ========== AVAILABILITY SECTION ========== */}
+            {/* ========== AVAILABILITY ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Calendar className="w-6 h-6 mr-2 text-green-600" />
                 Availability
               </h2>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
                   <div key={day} className="bg-gray-50 p-4 rounded-lg">
@@ -1535,7 +1460,6 @@ const CreateTechnicianProfile = () => {
                   </div>
                 ))}
               </div>
-
               <div className="space-y-4">
                 <div className="flex items-center">
                   <input
@@ -1547,7 +1471,6 @@ const CreateTechnicianProfile = () => {
                   />
                   <label className="ml-2 text-gray-700">Available for emergency services</label>
                 </div>
-
                 <div className="flex items-center">
                   <input
                     type="checkbox"
@@ -1558,7 +1481,6 @@ const CreateTechnicianProfile = () => {
                   />
                   <label className="ml-2 text-gray-700">Available for remote services</label>
                 </div>
-
                 <div className="flex items-center">
                   <input
                     type="checkbox"
@@ -1572,13 +1494,12 @@ const CreateTechnicianProfile = () => {
               </div>
             </div>
 
-            {/* ========== SOCIAL LINKS SECTION ========== */}
+            {/* ========== SOCIAL LINKS ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Globe className="w-6 h-6 mr-2 text-green-600" />
                 Social Links
               </h2>
-
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <Globe className="w-5 h-5 text-gray-500" />
@@ -1649,121 +1570,61 @@ const CreateTechnicianProfile = () => {
               </div>
             </div>
 
-            {/* ========== SETTINGS SECTION ========== */}
+            {/* ========== SETTINGS ========== */}
             <div className="border-b pb-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                 <Settings className="w-6 h-6 mr-2 text-green-600" />
                 Settings
               </h2>
-
               <div className="space-y-6">
-                {/* Privacy Settings */}
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h3 className="font-semibold text-gray-800 mb-4">Privacy Settings</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">Show email on profile</label>
-                      <input
-                        type="checkbox"
-                        name="settings.showEmail"
-                        checked={formData.settings.showEmail}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.showEmail" checked={formData.settings.showEmail} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">Show phone on profile</label>
-                      <input
-                        type="checkbox"
-                        name="settings.showPhone"
-                        checked={formData.settings.showPhone}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.showPhone" checked={formData.settings.showPhone} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                   </div>
                 </div>
-
-                {/* Booking Settings */}
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h3 className="font-semibold text-gray-800 mb-4">Booking Settings</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">Allow instant booking</label>
-                      <input
-                        type="checkbox"
-                        name="settings.instantBooking"
-                        checked={formData.settings.instantBooking}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.instantBooking" checked={formData.settings.instantBooking} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">Require approval for bookings</label>
-                      <input
-                        type="checkbox"
-                        name="settings.requiresApproval"
-                        checked={formData.settings.requiresApproval}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.requiresApproval" checked={formData.settings.requiresApproval} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">Auto-accept jobs</label>
-                      <input
-                        type="checkbox"
-                        name="settings.autoAcceptJobs"
-                        checked={formData.settings.autoAcceptJobs}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.autoAcceptJobs" checked={formData.settings.autoAcceptJobs} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                   </div>
                 </div>
-
-                {/* Notification Settings */}
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h3 className="font-semibold text-gray-800 mb-4">Notification Settings</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">Email notifications</label>
-                      <input
-                        type="checkbox"
-                        name="settings.notifications.email"
-                        checked={formData.settings.notifications.email}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.notifications.email" checked={formData.settings.notifications.email} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">SMS notifications</label>
-                      <input
-                        type="checkbox"
-                        name="settings.notifications.sms"
-                        checked={formData.settings.notifications.sms}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.notifications.sms" checked={formData.settings.notifications.sms} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">Push notifications</label>
-                      <input
-                        type="checkbox"
-                        name="settings.notifications.push"
-                        checked={formData.settings.notifications.push}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.notifications.push" checked={formData.settings.notifications.push} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                     <div className="flex items-center justify-between">
                       <label className="text-gray-700">Job reminders</label>
-                      <input
-                        type="checkbox"
-                        name="settings.jobReminders"
-                        checked={formData.settings.jobReminders}
-                        onChange={handleInputChange}
-                        className="h-4 w-4 text-green-600 rounded"
-                      />
+                      <input type="checkbox" name="settings.jobReminders" checked={formData.settings.jobReminders} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
                     </div>
                   </div>
                 </div>
