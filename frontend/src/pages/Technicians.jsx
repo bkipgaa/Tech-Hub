@@ -6,7 +6,7 @@
  * - Displays a list of technicians based on the selected service (main category, service category, sub-service)
  * - Captures user's location to find nearby technicians
  * - Calculates and displays distances between user and each technician
- * - Provides radius filter (0-50km) to narrow down search results
+ * - Provides radius filter (1-1000km) to narrow down search results
  * 
  * FLOW:
  * 1. User selects a service from the Services page
@@ -35,7 +35,7 @@ const Technicians = () => {
   const [userLocation, setUserLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   
-  // Filter state - only radius (0-50km)
+  // Filter state - radius (1-1000km)
   const [radius, setRadius] = useState(50);  // Default 50km radius
   const [showFilters, setShowFilters] = useState(false);
   
@@ -99,7 +99,7 @@ const Technicians = () => {
    * @returns {number} Distance in kilometers
    */
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Earth's radius in km
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -130,7 +130,7 @@ const Technicians = () => {
         params.append('lng', userLocation.lng);
       }
       
-      // Add radius filter (only distance filter)
+      // Add radius filter (1-1000km)
       if (radius) params.append('radius', radius);
       
       const response = await api.get(`/search/technicians?${params.toString()}`);
@@ -171,6 +171,17 @@ const Technicians = () => {
    */
   const handleViewProfile = (technicianId) => {
     navigate(`/technician/${technicianId}`);
+  };
+
+  /**
+   * Get radius display text
+   */
+  const getRadiusText = () => {
+    const r = parseInt(radius);
+    if (r <= 50) return `${r} km (Local)`;
+    if (r <= 200) return `${r} km (Regional)`;
+    if (r <= 500) return `${r} km (National)`;
+    return `${r} km (Extended)`;
   };
 
   // Loading state
@@ -243,31 +254,51 @@ const Technicians = () => {
             </button>
 
             {showFilters && (
-              <div className="mb-5 bg-white p-4 rounded-lg border border-gray-200">
+              <div className="mb-5 bg-white p-5 rounded-lg border border-gray-200">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Search Radius: <span className="font-bold text-blue-600">{radius} km</span>
-                  </label>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Search Radius
+                    </label>
+                    <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                      {getRadiusText()}
+                    </span>
+                  </div>
+                  
                   <input
                     type="range"
                     value={radius}
                     onChange={(e) => setRadius(parseInt(e.target.value))}
                     min="1"
-                    max="50"
-                    step="1"
+                    max="1000"
+                    step="10"
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                   />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  
+                  <div className="flex justify-between text-xs text-gray-500 mt-2">
                     <span>1 km</span>
-                    <span>10 km</span>
-                    <span>20 km</span>
-                    <span>30 km</span>
-                    <span>40 km</span>
                     <span>50 km</span>
+                    <span>100 km</span>
+                    <span>250 km</span>
+                    <span>500 km</span>
+                    <span>750 km</span>
+                    <span>1000 km</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Only technicians within {radius} km will be shown
-                  </p>
+                  
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-600">
+                      📍 <span className="font-medium">Current radius:</span> {radius} km
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {radius <= 50 
+                        ? '🔍 Showing local technicians within your area'
+                        : radius <= 200 
+                        ? '🚗 Showing regional technicians - may require travel'
+                        : radius <= 500 
+                        ? '✈️ Showing national technicians - travel may be arranged'
+                        : '🌍 Showing extended range technicians - long distance service available'}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -292,6 +323,14 @@ const Technicians = () => {
             <p className="text-gray-400 text-xs mt-1">
               Try increasing the search radius to see more results.
             </p>
+            {radius < 1000 && (
+              <button
+                onClick={() => setRadius(Math.min(radius + 100, 1000))}
+                className="mt-4 text-red-600 hover:text-red-700 text-sm font-medium"
+              >
+                Increase radius to {Math.min(radius + 100, 1000)} km →
+              </button>
+            )}
           </div>
         )}
 
@@ -299,8 +338,13 @@ const Technicians = () => {
         {technicians.length > 0 && (
           <div className="space-y-4">
             {/* Result count indicator */}
-            <div className="text-sm text-gray-500 mb-2">
+            <div className="text-sm text-gray-500 mb-2 bg-white px-4 py-2 rounded-lg border border-gray-200">
               Found {technicians.length} technician(s) within {radius} km
+              {radius > 50 && (
+                <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+                  Extended search
+                </span>
+              )}
             </div>
             
             {technicians.map((tech) => (

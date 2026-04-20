@@ -1,141 +1,159 @@
 /**
  * TechnicianCard.jsx
  * ===================
- * Reusable Technician Card Component
- * 
- * Purpose:
- * - Displays technician information in a consistent card format
- * - Can be used across multiple pages (Search Results, Favorites, Recommended, etc.)
- * - Promotes code reusability and maintains UI consistency throughout the app
- * 
- * Usage Examples:
- * <TechnicianCard technician={techData} distance="5.2" showDistance={true} />
- * <TechnicianCard technician={techData} onViewProfile={customHandler} />
- * 
- * @component
+ * Reusable Technician Card Component with subscription plan display
  */
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Star, Wrench, DollarSign, Award } from 'lucide-react';
+import { MapPin, Star, Wrench, Award, User, Crown, Zap, Globe, Briefcase } from 'lucide-react';
+
+// Plan configuration
+const planConfig = {
+  free: { icon: User, color: 'text-gray-500', bg: 'bg-gray-100', label: 'Free' },
+  basic: { icon: Briefcase, color: 'text-blue-500', bg: 'bg-blue-100', label: 'Basic' },
+  premium: { icon: Crown, color: 'text-yellow-500', bg: 'bg-yellow-100', label: 'Premium' },
+  business: { icon: Briefcase, color: 'text-purple-500', bg: 'bg-purple-100', label: 'Business' },
+  enterprise: { icon: Globe, color: 'text-indigo-500', bg: 'bg-indigo-100', label: 'Enterprise' },
+  unlimited: { icon: Zap, color: 'text-red-500', bg: 'bg-red-100', label: 'Unlimited' },
+  trial: { icon: Award, color: 'text-green-500', bg: 'bg-green-100', label: 'Trial' }
+};
 
 const TechnicianCard = ({ technician, distance, showDistance = true, onViewProfile }) => {
-  // Hook for programmatic navigation
   const navigate = useNavigate();
 
-  /**
-   * Handles the click event on "View Profile" button
-   * If custom onViewProfile handler is provided, use it
-   * Otherwise, navigate to the default technician profile page
-   */
   const handleViewProfile = () => {
     if (onViewProfile) {
-      // Use custom handler passed from parent component
       onViewProfile(technician._id);
     } else {
-      // Default navigation to technician profile page
       navigate(`/technician/${technician._id}`);
     }
   };
 
+  // Get plan info from technician data (sent from backend)
+  const plan = technician.subscriptionPlan || 'free';
+  const planInfo = planConfig[plan] || planConfig.free;
+  const PlanIcon = planInfo.icon;
+
   return (
-    // Main card container with hover effects and shadow
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition-all duration-300">
-      
-      {/* Flex container for responsive layout - column on mobile, row on desktop */}
-      <div className="flex flex-col md:flex-row gap-5">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300">
+      <div className="flex flex-col md:flex-row gap-5 p-5">
         
-        {/* ========== LEFT SECTION: PROFILE IMAGE ========== */}
+        {/* Profile Image */}
         <div className="flex-shrink-0">
-          {/* Check if profile image exists in user data */}
           {technician.userId?.profileImage ? (
-            // Display actual profile image
             <img 
               src={technician.userId.profileImage} 
               alt={`${technician.userId.firstName} ${technician.userId.lastName}`} 
               className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"
             />
           ) : (
-            // Fallback: Show initials if no profile image
-            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
-              <span className="text-2xl text-gray-500 font-semibold">
-                {/* First letter of first name + first letter of last name */}
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center">
+              <span className="text-2xl text-white font-semibold">
                 {technician.userId?.firstName?.[0]}{technician.userId?.lastName?.[0]}
               </span>
             </div>
           )}
         </div>
         
-        {/* ========== MIDDLE SECTION: TECHNICIAN DETAILS ========== */}
-        <div className="flex-1">
+        {/* Technician Info */}
+        <div className="flex-1 min-w-0">
           
-          {/* Header Row: Name + Rating */}
+          {/* Header Row: Name + Rating + Plan */}
           <div className="flex flex-wrap justify-between items-start gap-2">
-            {/* Name and Headline */}
             <div>
-              <h3 className="text-lg font-bold text-gray-800 hover:text-green-600 transition-colors">
-                {technician.userId?.firstName} {technician.userId?.lastName}
-              </h3>
-              <p className="text-sm text-gray-500">{technician.profileHeadline}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-bold text-gray-800 hover:text-green-600 transition-colors duration-200 cursor-pointer">
+                  {technician.userId?.firstName} {technician.userId?.lastName}
+                </h3>
+                {/* Plan Badge */}
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${planInfo.bg} ${planInfo.color}`}>
+                  <PlanIcon className="w-3 h-3" />
+                  {planInfo.label}
+                </span>
+                {/* Trial Badge */}
+                {technician.isTrial && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                    <Award className="w-3 h-3" />
+                    Trial
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mt-0.5">{technician.profileHeadline}</p>
             </div>
             
-            {/* Rating Badge - Yellow background with star icon */}
-            <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-full">
+            {/* Rating Badge */}
+            <div className="flex items-center gap-1 bg-yellow-50 px-2.5 py-1 rounded-full">
               <Star className="w-4 h-4 text-yellow-500 fill-current" />
-              {/* Display average rating (1 decimal) or 'New' if no ratings */}
-              <span className="font-semibold text-sm">{technician.rating?.average?.toFixed(1) || 'New'}</span>
-              {/* Show total review count */}
+              <span className="font-semibold text-sm text-gray-800">
+                {technician.rating?.average?.toFixed(1) || 'New'}
+              </span>
               <span className="text-gray-400 text-xs">({technician.rating?.count || 0})</span>
             </div>
           </div>
           
-          {/* About Me / Description - Truncated to 2 lines */}
-          <p className="text-gray-600 text-sm mt-2 line-clamp-2">{technician.aboutMe}</p>
+          {/* About Me */}
+          <p className="text-gray-600 text-sm mt-2 line-clamp-2 leading-relaxed text-left">
+            {technician.aboutMe || 'No description provided'}
+          </p>
           
-          {/* Details Row: Distance, Price, Category, Verification Status */}
-          <div className="flex flex-wrap gap-4 mt-3">
+          {/* Details Row */}
+          <div className="flex flex-wrap items-center gap-4 mt-3">
             
-            {/* Distance from user (only shown if showDistance is true and distance exists) */}
+            {/* Distance */}
             {showDistance && distance && (
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <MapPin className="w-3 h-3" />
-                <span>{distance} km away</span>
+              <div className="flex items-center gap-1.5 text-xs bg-gray-50 px-2 py-1 rounded-full">
+                <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                <span className="font-medium text-gray-700">{distance} km away</span>
               </div>
             )}
             
-            {/* Hourly Rate */}
-            <div className="flex items-center gap-1 text-xs text-gray-500">
-              <DollarSign className="w-3 h-3" />
-              <span>KES {technician.pricing?.hourlyRate || 0}/hour</span>
+            {/* Visibility Radius - NEW */}
+            {technician.visibilityRadius && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <Globe className="w-3.5 h-3.5" />
+                <span>Visible up to {technician.visibilityRadius} km</span>
+              </div>
+            )}
+            
+            {/* Category */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <Wrench className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-gray-600 font-medium hover:text-green-600 hover:underline transition-colors duration-200 cursor-pointer">
+                {technician.category}
+              </span>
             </div>
             
-            {/* Main Category (e.g., IT & Networking, Electrical Services) */}
-            <div className="flex items-center gap-1 text-xs text-gray-500">
-              <Wrench className="w-3 h-3" />
-              <span>{technician.category}</span>
-            </div>
-            
-            {/* Verification Badge - Only show if technician is verified */}
+            {/* Verification Badge */}
             {technician.verificationStatus === 'verified' && (
-              <div className="flex items-center gap-1 text-xs text-green-600">
-                <Award className="w-3 h-3" />
-                <span>Verified</span>
+              <div className="flex items-center gap-1 text-xs bg-green-50 px-2 py-0.5 rounded-full">
+                <Award className="w-3.5 h-3.5 text-green-600" />
+                <span className="text-green-700 font-medium">Verified</span>
+              </div>
+            )}
+            
+            {/* Pending Badge */}
+            {technician.verificationStatus === 'pending' && (
+              <div className="flex items-center gap-1 text-xs bg-yellow-50 px-2 py-0.5 rounded-full">
+                <User className="w-3.5 h-3.5 text-yellow-600" />
+                <span className="text-yellow-700 font-medium">Pending</span>
               </div>
             )}
           </div>
           
-          {/* Skills Tags - Display top 3 skills with optional "more" indicator */}
+          {/* Skills Tags */}
           {technician.skills && technician.skills.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {/* Show first 3 skills */}
+            <div className="flex flex-wrap gap-2 mt-3">
               {technician.skills.slice(0, 3).map((skill, idx) => (
-                <span key={idx} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                <span 
+                  key={idx} 
+                  className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full hover:bg-green-500 hover:text-white transition-all duration-200 cursor-pointer"
+                >
                   {skill.name}
                 </span>
               ))}
-              {/* If there are more than 3 skills, show +X more */}
               {technician.skills.length > 3 && (
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-400 px-2 py-1">
                   +{technician.skills.length - 3} more
                 </span>
               )}
@@ -143,11 +161,11 @@ const TechnicianCard = ({ technician, distance, showDistance = true, onViewProfi
           )}
         </div>
         
-        {/* ========== RIGHT SECTION: ACTION BUTTON ========== */}
+        {/* Action Button */}
         <div className="flex-shrink-0">
           <button
             onClick={handleViewProfile}
-            className="w-full md:w-auto bg-gray-800 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-600 transition-colors text-sm"
+            className="w-full md:w-auto bg-gray-800 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-green-600 transition-all duration-200 text-sm shadow-sm hover:shadow-md"
           >
             View Profile
           </button>

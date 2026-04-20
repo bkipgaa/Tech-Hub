@@ -8,7 +8,6 @@ const {
 
 // Public search routes
 router.get('/technicians', searchTechnicians);
-router.get('/by-subservice', getTechniciansBySubService);
 router.get('/nearby', getNearbyTechnicians);
 
 module.exports = router;
