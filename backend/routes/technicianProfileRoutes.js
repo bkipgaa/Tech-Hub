@@ -1,58 +1,65 @@
-// backend/routes/technicianProfileRoutes.js
 const express = require('express');
 const router = express.Router();
-const protect = require('../middleware/auth');
 
+// ✅ CORRECT IMPORT
+const { auth, authorize, requireTechnicianOrAdmin } = require('../middleware/auth');
 
-// Full profile operations
+// Import all controllers
 const { createProfile } = require('../controllers/technician/profile/createProfile');
-const { getProfile} = require('../controllers/technician/profile/getProfile');
+const { getProfile } = require('../controllers/technician/profile/getProfile');
 const { deleteProfile } = require('../controllers/technician/profile/deleteProfile');
 const { updateProfile } = require('../controllers/technician/profile/updateProfile');
-const { getPublicProfile } = require('../controllers/technician/publicController');
-
-
-// Section updates
+const { updateAvailability } = require('../controllers/technician/profile/updateAvailability');
 const { updateBasicInfo } = require('../controllers/technician/profile/updateBasicInfo');
-const { updateSkills } = require('../controllers/technician/profile/updateSkills');
+const { updateBusiness } = require('../controllers/technician/profile/updateBusiness');
+const { updateCertifications } = require('../controllers/technician/profile/updateCertifications');
+const { updateEducation } = require('../controllers/technician/profile/updateEducation');
+const { updateExperience } = require('../controllers/technician/profile/updateExperience');
 const { updateLanguages } = require('../controllers/technician/profile/updateLanguages');
 const { updateLocation } = require('../controllers/technician/profile/updateLocation');
-const { updatePricing } = require('../controllers/technician/profile/updatePricing');
-const { updateEducation } = require('../controllers/technician/profile/updateEducation');
-const { updateCertifications } = require('../controllers/technician/profile/updateCertifications');
-const { updateExperience } = require('../controllers/technician/profile/updateExperience');
 const { updatePortfolio } = require('../controllers/technician/profile/updatePortfolio');
-const { updateBusiness } = require('../controllers/technician/profile/updateBusiness');
-const { updateSocialLinks } = require('../controllers/technician/profile/updateSocialLinks');
-const { updateAvailability } = require('../controllers/technician/profile/updateAvailability');
-const { updateSettings } = require('../controllers/technician/profile/updateSettings');
+const { updatePricing } = require('../controllers/technician/profile/updatePricing');
 const { updateProfileStatus } = require('../controllers/technician/profile/updateProfileStatus');
+const { updateSettings } = require('../controllers/technician/profile/updateSettings');
+const { updateSkills } = require('../controllers/technician/profile/updateSkills');
+const { updateSocialLinks } = require('../controllers/technician/profile/updateSocialLinks');
+const { getPublicProfile } = require('../controllers/technician/publicController');
 
+// ==================== PUBLIC ROUTES ====================
+// No authentication or only basic auth required
 router.get('/public/:id', getPublicProfile);
 
-// All routes require authentication
-router.use(protect);
+// ==================== PROTECTED ROUTES ====================
+// Create a protected router group
+const protectedRouter = express.Router();
 
-// Full profile
-router.post('/profile', createProfile);
-router.get('/profile', getProfile);
-router.delete('/profile', deleteProfile);
-router.put('/profile', updateProfile);
+// Apply authentication AND role middleware to ALL routes in this group
+protectedRouter.use(auth);
+protectedRouter.use(requireTechnicianOrAdmin);
 
-// Section updates (PUT or PATCH)
-router.put('/profile/basic', updateBasicInfo);
-router.put('/profile/skills', updateSkills);
-router.put('/profile/languages', updateLanguages);
-router.put('/profile/location', updateLocation);
-router.put('/profile/pricing', updatePricing);
-router.put('/profile/education', updateEducation);
-router.put('/profile/certifications', updateCertifications);
-router.put('/profile/experience', updateExperience);
-router.put('/profile/portfolio', updatePortfolio);
-router.put('/profile/business', updateBusiness);
-router.put('/profile/social-links', updateSocialLinks);
-router.put('/profile/availability', updateAvailability);
-router.put('/profile/settings', updateSettings);
-router.put('/profile/status', updateProfileStatus);
+// Full profile operations - all require technician or admin role
+protectedRouter.post('/profile', createProfile);  // Create profile
+protectedRouter.get('/profile', getProfile);      // Get profile
+protectedRouter.put('/profile', updateProfile);   // Update profile
+protectedRouter.delete('/profile', deleteProfile); // Delete profile
+
+// Section updates
+protectedRouter.put('/profile/basic', updateBasicInfo);
+protectedRouter.put('/profile/skills', updateSkills);
+protectedRouter.put('/profile/languages', updateLanguages);
+protectedRouter.put('/profile/location', updateLocation);
+protectedRouter.put('/profile/pricing', updatePricing);
+protectedRouter.put('/profile/education', updateEducation);
+protectedRouter.put('/profile/certifications', updateCertifications);
+protectedRouter.put('/profile/experience', updateExperience);
+protectedRouter.put('/profile/portfolio', updatePortfolio);
+protectedRouter.put('/profile/business', updateBusiness);
+protectedRouter.put('/profile/social-links', updateSocialLinks);
+protectedRouter.put('/profile/availability', updateAvailability);
+protectedRouter.put('/profile/settings', updateSettings);
+protectedRouter.put('/profile/status', updateProfileStatus);
+
+// Mount the protected routes
+router.use('/', protectedRouter);
 
 module.exports = router;

@@ -1,8 +1,6 @@
 /**
  * useLocation Hook
- * ================
  * Custom React hook for managing user location
- * Provides location state and methods to get/update location
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -14,9 +12,6 @@ const useLocation = (autoFetch = false) => {
   const [error, setError] = useState(null);
   const [permission, setPermission] = useState(null);
 
-  /**
-   * Fetch user's current location
-   */
   const fetchLocation = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -35,11 +30,6 @@ const useLocation = (autoFetch = false) => {
     }
   }, []);
 
-  /**
-   * Calculate distance to a technician
-   * @param {Object} technicianLocation - Technician's coordinates {lat, lng}
-   * @returns {number|null} Distance in km or null if no location
-   */
   const getDistanceTo = useCallback((technicianLocation) => {
     if (!location || !technicianLocation) return null;
     return locationService.calculateDistance(
@@ -50,15 +40,15 @@ const useLocation = (autoFetch = false) => {
     );
   }, [location]);
 
-  /**
-   * Auto-fetch location on mount if enabled
-   */
+  const formatDistance = useCallback((distance) => {
+    return locationService.formatDistance(distance);
+  }, []);
+
   useEffect(() => {
     if (autoFetch) {
       fetchLocation();
     }
     
-    // Check if location is cached
     const cached = locationService.getCachedLocation();
     if (cached) {
       setLocation(cached);
@@ -73,6 +63,7 @@ const useLocation = (autoFetch = false) => {
     permission,
     fetchLocation,
     getDistanceTo,
+    formatDistance,
     hasLocation: !!location
   };
 };

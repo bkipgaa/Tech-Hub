@@ -1,43 +1,31 @@
 /**
  * Location Service
- * =================
- * Handles all location-related functionality including:
- * - Getting user's current location
- * - Calculating distances
- * - Checking if location is within service radius
- * - Caching location data
+ * Handles geolocation and distance calculations
  */
 
 class LocationService {
   constructor() {
-    this.userLocation = null;
-    this.locationPermission = null;
+    this.cachedLocation = null;
+    this.cacheExpiry = 5 * 60 * 1000; // 5 minutes cache
+    this.lastFetchTime = null;
   }
 
   /**
-   * Check if browser supports geolocation
-   * @returns {boolean} True if geolocation is supported
+   * Get user's current location using browser geolocation
+   * @returns {Promise<{lat: number, lng: number}>}
    */
-  isGeolocationSupported() {
-    return 'geolocation' in navigator;
-  }
-
-  /**
-   * Get user's current location
-   * @param {Object} options - Geolocation options
-   * @returns {Promise} Promise that resolves with location data
-   */
-  async getCurrentLocation(options = {}) {
-    const defaultOptions = {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
-    };
-
-    const mergedOptions = { ...defaultOptions, ...options };
-
+  async getCurrentLocation() {
     return new Promise((resolve, reject) => {
-      if (!this.isGeolocationSupported()) {
+      // Check if we have valid cached location
+      if (this.cachedLocation && this.lastFetchTime) {
+        const age = Date.now() - this.lastFetchTime;
+        if (age < this.cacheExpiry) {
+          resolve(this.cachedLocation);
+          return;
+        }
+      }
+
+      if (!navigator.geolocation) {
         reject(new Error('Geolocation is not supported by your browser'));
         return;
       }
@@ -46,80 +34,95 @@ class LocationService {
         (position) => {
           const location = {
             lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: position.timestamp
+            lng: position.coords.longitude
           };
-          
-          // Cache the location
-          this.userLocation = location;
-          this.locationPermission = 'granted';
-          
+          this.cachedLocation = location;
+          this.lastFetchTime = Date.now();
           resolve(location);
         },
         (error) => {
-          let errorMessage;
+          let message = 'Unable to get your location';
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMessage = 'Please enable location access to find technicians near you';
-              this.locationPermission = 'denied';
+              message = 'Please enable location access to find nearby technicians';
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information is unavailable';
+              message = 'Location information is unavailable';
               break;
             case error.TIMEOUT:
-              errorMessage = 'Location request timed out';
+              message = 'Location request timed out';
               break;
-            default:
-              errorMessage = 'An unknown error occurred';
           }
-          reject(new Error(errorMessage));
+          reject(new Error(message));
         },
-        mergedOptions
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
       );
     });
   }
 
   /**
-   * Calculate distance between two coordinates (Haversine formula)
-   * @param {number} lat1 - Latitude of point 1
-   * @param {number} lng1 - Longitude of point 1
-   * @param {number} lat2 - Latitude of point 2
-   * @param {number} lng2 - Longitude of point 2
+   * Calculate distance between two coordinates using Haversine formula
    * @returns {number} Distance in kilometers
    */
-  calculateDistance(lat1, lng1, lat2, lng2) {
-    const R = 6371; // Earth's radius in km
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
+              Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
+    return Math.round((R * c) * 10) / 10;
   }
 
   /**
-   * Get cached user location
-   * @returns {Object|null} Cached location or null
+   * Format distance for display
+   * @param {number} distance - Distance in km
+   * @returns {string} Formatted distance string
    */
+  formatDistance(distance) {
+    if (!distance && distance !== 0) return 'Distance unknown';
+    if (distance < 1) {
+      return `${Math.round(distance * 1000)}m away`;
+    }
+    return `${distance.toFixed(1)}km away`;
+  }
+
+  /**
+   * Get visibility description based on technician's plan
+   */
+  getVisibilityDescription(plan, isTrial = false) {
+    if (isTrial) return 'Trial: Visible up to 50km';
+    
+    const visibilityRadii = {
+      free: 'Visible up to 10km',
+      basic: 'Visible up to 30km',
+      premium: 'Visible up to 50km',
+      business: 'Visible up to 200km',
+      enterprise: 'Visible up to 500km',
+      unlimited: 'Visible up to 1000km'
+    };
+    
+    return visibilityRadii[plan] || 'Free: Visible up to 10km';
+  }
+
   getCachedLocation() {
-    return this.userLocation;
+    if (this.cachedLocation && this.lastFetchTime) {
+      const age = Date.now() - this.lastFetchTime;
+      if (age < this.cacheExpiry) {
+        return this.cachedLocation;
+      }
+    }
+    return null;
   }
 
-  /**
-   * Clear cached location
-   */
-  clearCachedLocation() {
-    this.userLocation = null;
-  }
-
-  /**
-   * Check if location permission is granted
-   * @returns {boolean} True if permission granted
-   */
-  hasLocationPermission() {
-    return this.locationPermission === 'granted';
+  clearCache() {
+    this.cachedLocation = null;
+    this.lastFetchTime = null;
   }
 }
 

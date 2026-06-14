@@ -4,7 +4,7 @@
  * 
  * PURPOSE:
  * - Displays detailed information about a specific technician
- * - Shows profile, skills, services offered, pricing, location, and contact info
+ * - Shows profile, skills, services offered, portfolio, location, and contact info
  * - Allows clients to view technician's full profile and contact them
  * 
  * FLOW:
@@ -20,30 +20,24 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   MapPin, Star, Wrench, Clock, DollarSign, Phone, Mail, 
   Calendar, Award, Languages, CheckCircle, MessageCircle, 
-  PhoneCall, Briefcase, BookOpen, BadgeCheck, User, ArrowLeft  // ✅ Use BadgeCheck instead
+  PhoneCall, Briefcase, BookOpen, BadgeCheck, User, ArrowLeft,
+  FolderOpen
 } from 'lucide-react';
 import api from '../services/api';
 
 const TechnicianProfile = () => {
-  const { id } = useParams();  // Get technician ID from URL
+  const { id } = useParams();
   const navigate = useNavigate();
   
-  // State for technician data
   const [technician, setTechnician] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showContact, setShowContact] = useState(false);
 
-  /**
-   * Fetch technician profile when component mounts or ID changes
-   */
   useEffect(() => {
     fetchTechnicianProfile();
   }, [id]);
 
-  /**
-   * Fetch technician profile from backend
-   */
   const fetchTechnicianProfile = async () => {
     try {
       setLoading(true);
@@ -57,33 +51,25 @@ const TechnicianProfile = () => {
     }
   };
 
-  /**
-   * Handle contact button click - reveals contact information
-   */
   const handleContact = () => {
     setShowContact(true);
   };
 
-  /**
-   * Go back to previous page
-   */
   const handleGoBack = () => {
     navigate(-1);
   };
 
-  // Loading state
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading profile...</p>
         </div>
       </div>
     );
   }
 
-  // Error state
   if (error || !technician) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -110,63 +96,63 @@ const TechnicianProfile = () => {
         {/* Back Button */}
         <button
           onClick={handleGoBack}
-          className="mb-4 flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors"
+          className="mb-4 flex items-center gap-2 text-gray-500 hover:text-green-600 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Search Results
         </button>
 
-        {/* ========== PROFILE HEADER ========== */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+        {/* ========== PROFILE HEADER - Single Unified Section ========== */}
+        <div className="bg-gradient-to-r from-green-700 to-green-900 rounded-xl shadow-sm overflow-hidden mb-6">
           {/* Cover Image Area */}
-          <div className="bg-gradient-to-r from-gray-700 to-gray-900 h-32"></div>
+          <div className="h-24"></div>
           
           <div className="px-6 pb-6">
-            {/* Profile Image and Basic Info */}
-            <div className="flex flex-col md:flex-row gap-6 -mt-16 mb-4">
+            {/* Profile Image and Basic Info - Integrated together */}
+            <div className="flex flex-col md:flex-row gap-6 -mt-12 mb-4">
               {/* Profile Image */}
               <div className="flex-shrink-0">
                 {technician.userId?.profileImage ? (
                   <img 
                     src={technician.userId.profileImage} 
                     alt={`${technician.userId.firstName} ${technician.userId.lastName}`} 
-                    className="w-32 h-32 rounded-full border-4 border-white object-cover bg-white shadow-md"
+                    className="w-28 h-28 rounded-full border-4 border-white object-cover bg-white shadow-md"
                   />
                 ) : (
-                  <div className="w-32 h-32 rounded-full border-4 border-white bg-gray-200 flex items-center justify-center shadow-md">
-                    <span className="text-4xl text-gray-500 font-semibold">
+                  <div className="w-28 h-28 rounded-full border-4 border-white bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-md">
+                    <span className="text-3xl text-white font-semibold">
                       {technician.userId?.firstName?.[0]}{technician.userId?.lastName?.[0]}
                     </span>
                   </div>
                 )}
               </div>
               
-              {/* Name and Rating */}
-              <div className="flex-1 mt-4 md:mt-0">
+              {/* Name, Headline and Rating - All in one place */}
+              <div className="flex-1 mt-2 md:mt-0">
                 <div className="flex flex-wrap justify-between items-start gap-2">
                   <div>
-                    <h1 className="text-3xl font-bold text-gray-800">
+                    <h1 className="text-3xl font-bold text-white">
                       {technician.userId?.firstName} {technician.userId?.lastName}
                     </h1>
-                    <p className="text-gray-600 mt-1">{technician.profileHeadline}</p>
+                    <p className="text-green-100 mt-1">{technician.profileHeadline}</p>
                   </div>
-                  <div className="flex items-center gap-1 bg-yellow-50 px-3 py-1.5 rounded-full">
-                    <Star className="w-5 h-5 text-yellow-500 fill-current" />
-                    <span className="font-bold text-lg">{technician.rating?.average?.toFixed(1) || 'New'}</span>
-                    <span className="text-gray-400 text-sm">({technician.rating?.count || 0} reviews)</span>
+                  <div className="flex items-center gap-1 bg-yellow-500 px-3 py-1.5 rounded-full">
+                    <Star className="w-5 h-5 text-white fill-current" />
+                    <span className="font-bold text-lg text-white">{technician.rating?.average?.toFixed(1) || 'New'}</span>
+                    <span className="text-white/80 text-sm">({technician.rating?.count || 0} reviews)</span>
                   </div>
                 </div>
                 
-                {/* Contact Buttons */}
+                {/* Contact Buttons - Both with white background */}
                 <div className="flex gap-3 mt-4">
                   <button
                     onClick={handleContact}
-                    className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                    className="bg-white text-green-700 px-6 py-2 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium shadow-sm"
                   >
                     <PhoneCall className="w-4 h-4" />
                     Contact
                   </button>
-                  <button className="border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
+                  <button className="bg-white text-green-700 px-6 py-2 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium shadow-sm">
                     <MessageCircle className="w-4 h-4" />
                     Message
                   </button>
@@ -174,7 +160,7 @@ const TechnicianProfile = () => {
                 
                 {/* Contact Info (revealed when clicking Contact) */}
                 {showContact && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="mt-4 p-4 bg-white rounded-lg shadow-md">
                     <p className="text-sm font-medium text-gray-700 mb-2">Contact Information:</p>
                     <div className="space-y-2">
                       {technician.settings?.showPhone && technician.userId?.phone && (
@@ -210,7 +196,7 @@ const TechnicianProfile = () => {
             <User className="w-5 h-5 text-green-600" />
             About
           </h2>
-          <p className="text-gray-600 leading-relaxed">
+          <p className="text-gray-600 leading-relaxed text-left">
             {technician.aboutMe || 'No bio provided'}
           </p>
         </div>
@@ -224,7 +210,7 @@ const TechnicianProfile = () => {
           <div className="flex flex-wrap gap-2">
             {technician.skills?.length > 0 ? (
               technician.skills.map((skill, idx) => (
-                <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full text-sm">
+                <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full text-sm hover:bg-green-500 hover:text-white transition-colors cursor-pointer">
                   {skill.name} ({skill.level})
                   {skill.yearsOfExperience > 0 && ` · ${skill.yearsOfExperience} yrs`}
                 </span>
@@ -245,10 +231,10 @@ const TechnicianProfile = () => {
             <div className="space-y-4">
               {technician.serviceCategories.map((cat, idx) => (
                 <div key={idx} className="border-b border-gray-100 pb-3 last:border-0">
-                  <h3 className="font-semibold text-gray-800">{cat.categoryName}</h3>
-                  <div className="flex flex-wrap gap-2 mt-2">
+                  <h3 className="font-semibold text-gray-800 text-left">{cat.categoryName}</h3>
+                  <div className="flex flex-wrap gap-2 mt-2 justify-start">
                     {cat.subServices?.map((sub, subIdx) => (
-                      <span key={subIdx} className="text-sm bg-green-50 text-green-700 px-3 py-1 rounded-full">
+                      <span key={subIdx} className="text-sm bg-green-50 text-green-700 px-3 py-1 rounded-full hover:bg-green-500 hover:text-white transition-colors">
                         {sub}
                       </span>
                     ))}
@@ -261,36 +247,41 @@ const TechnicianProfile = () => {
           )}
         </div>
 
-        {/* ========== PRICING SECTION ========== */}
+        {/* ========== PORTFOLIO SECTION ========== */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-green-600" />
-            Pricing
+            <FolderOpen className="w-5 h-5 text-green-600" />
+            Portfolio
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <p className="text-sm text-gray-500">Hourly Rate</p>
-              <p className="text-xl font-semibold text-gray-900">
-                {technician.pricing?.currency || 'KES'} {technician.pricing?.hourlyRate || 0}
-              </p>
+          {technician.portfolio && technician.portfolio.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {technician.portfolio.map((item, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                  {item.mediaType === 'image' && (
+                    <img 
+                      src={item.mediaUrl} 
+                      alt={item.title} 
+                      className="w-full h-40 object-cover"
+                    />
+                  )}
+                  {item.mediaType === 'video' && (
+                    <video src={item.mediaUrl} className="w-full h-40 object-cover" />
+                  )}
+                  <div className="p-3">
+                    <h3 className="font-semibold text-gray-800">{item.title}</h3>
+                    {item.description && (
+                      <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.description}</p>
+                    )}
+                    {item.clientName && (
+                      <p className="text-xs text-gray-500 mt-2">Client: {item.clientName}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Fixed Price</p>
-              <p className="text-xl font-semibold text-gray-900">
-                {technician.pricing?.currency || 'KES'} {technician.pricing?.fixedPrice || 0}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Consultation Fee</p>
-              <p className="text-xl font-semibold text-gray-900">
-                {technician.pricing?.currency || 'KES'} {technician.pricing?.consultationFee || 0}
-              </p>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-sm text-gray-500">Payment Methods</p>
-            <p className="text-gray-700">{technician.pricing?.paymentMethods?.join(', ') || 'Cash, M-Pesa'}</p>
-          </div>
+          ) : (
+            <p className="text-gray-400 italic text-left">No portfolio items added yet</p>
+          )}
         </div>
 
         {/* ========== LOCATION SECTION ========== */}
@@ -299,7 +290,7 @@ const TechnicianProfile = () => {
             <MapPin className="w-5 h-5 text-green-600" />
             Location
           </h2>
-          <div className="space-y-1">
+          <div className="space-y-1 text-left">
             {technician.address?.street && <p className="text-gray-700">{technician.address.street}</p>}
             <p className="text-gray-700">
               {technician.address?.city && `${technician.address.city}, `}
@@ -318,9 +309,9 @@ const TechnicianProfile = () => {
               <Languages className="w-5 h-5 text-green-600" />
               Languages
             </h2>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 justify-start">
               {technician.languages.map((lang, idx) => (
-                <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
+                <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm hover:bg-green-500 hover:text-white transition-colors">
                   {lang.name} ({lang.proficiency})
                 </span>
               ))}
@@ -339,14 +330,14 @@ const TechnicianProfile = () => {
           </div>
         )}
 
-        {/* ========== EXPERIENCE SECTION (Optional) ========== */}
+        {/* ========== EXPERIENCE SECTION ========== */}
         {technician.experience?.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <h2 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
               <Briefcase className="w-5 h-5 text-green-600" />
               Work Experience
             </h2>
-            <div className="space-y-4">
+            <div className="space-y-4 text-left">
               {technician.experience.map((exp, idx) => (
                 <div key={idx} className="border-b border-gray-100 pb-3 last:border-0">
                   <h3 className="font-semibold text-gray-800">{exp.title}</h3>
@@ -362,14 +353,14 @@ const TechnicianProfile = () => {
           </div>
         )}
 
-        {/* ========== EDUCATION SECTION (Optional) ========== */}
+        {/* ========== EDUCATION SECTION ========== */}
         {technician.education?.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <h2 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-green-600" />
               Education
             </h2>
-            <div className="space-y-4">
+            <div className="space-y-4 text-left">
               {technician.education.map((edu, idx) => (
                 <div key={idx} className="border-b border-gray-100 pb-3 last:border-0">
                   <h3 className="font-semibold text-gray-800">{edu.degree}</h3>
@@ -384,14 +375,14 @@ const TechnicianProfile = () => {
           </div>
         )}
 
-        {/* ========== CERTIFICATIONS SECTION (Optional) ========== */}
+        {/* ========== CERTIFICATIONS SECTION ========== */}
         {technician.certifications?.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <h2 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
-              <Certificate className="w-5 h-5 text-green-600" />
+              <BadgeCheck className="w-5 h-5 text-green-600" />
               Certifications
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-3 text-left">
               {technician.certifications.map((cert, idx) => (
                 <div key={idx} className="border-b border-gray-100 pb-2 last:border-0">
                   <h3 className="font-semibold text-gray-800">{cert.name}</h3>

@@ -169,7 +169,7 @@ const TechnicianSchema = new Schema({
     type: Number, // in kilometers
     default: 10,
     min: 1,
-    max: 100
+    max: 1000
   },
 
   // ========== LANGUAGES ==========
@@ -321,23 +321,32 @@ const TechnicianSchema = new Schema({
   },
 
   // ========== SUBSCRIPTION ==========
-  subscription: {
-    plan: { 
-      type: String, 
-      enum: ['free', 'basic', 'premium', 'enterprise'],
-      default: 'free'
-    },
-    startDate: Date,
-    endDate: Date,
-    autoRenew: { type: Boolean, default: true },
-    features: [String],
-    paymentHistory: [{
-      amount: Number,
-      date: Date,
-      transactionId: String,
-      status: String
-    }]
+  // In Technician.js - subscription section (already exists, verify it has these fields)
+subscription: {
+  plan: { 
+    type: String, 
+    enum: ['free', 'basic', 'premium', 'business', 'enterprise', 'trial','unlimited',],
+    default: 'free'
   },
+  planDetails: {
+    name: { type: String },
+    visibilityRadius: { type: Number, default: 10 }, // in km
+    price: { type: Number, default: 0 },
+    features: [String]
+  },
+  startDate: Date,
+  endDate: Date,
+  trialEndDate: Date,
+  isTrial: { type: Boolean, default: false },
+  autoRenew: { type: Boolean, default: true },
+  paymentHistory: [{
+    amount: Number,
+    date: Date,
+    transactionId: String,
+    status: String,
+    plan: String
+  }]
+},
 
   // ========== STATUS ==========
   isActive: { type: Boolean, default: true },

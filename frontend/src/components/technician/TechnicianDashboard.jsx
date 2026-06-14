@@ -1,48 +1,96 @@
+/**
+ * TechnicianDashboard Component
+ * =============================
+ * 
+ * Purpose: Main dashboard for technicians to manage their profile, services,
+ *          portfolio, credentials, availability, business info, and settings.
+ * 
+ * Features:
+ * - Tab-based navigation (7 tabs for different profile sections)
+ * - Edit mode toggle for updating information
+ * - Form validation and submission
+ * - Profile completion tracking
+ * - Verification status display
+ * 
+ * Access: 
+ * - Technicians: Full access to edit their own profile
+ * - Admins: Read-only access (can view but not edit) for support and monitoring
+ * 
+ * Admin View Features:
+ * - Admin badge displayed at top
+ * - All fields are read-only for admins
+ * - Can view all technician data for troubleshooting
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
+// Import tab components - each tab represents a section of the technician profile
+import ProfileTab from './tabs/ProfileTab';        // Basic info, bio, skills
+import ServicesTab from './tabs/ServicesTab';      // Services offered, pricing
+import PortfolioTab from './tabs/PortfolioTab';    // Work samples, gallery
+import CredentialsTab from './tabs/CredentialsTab'; // Education, certifications
+import AvailabilityTab from './tabs/AvailabilityTab'; // Working hours, schedule
+import BusinessTab from './tabs/BusinessTab';      // Business registration, insurance
+import SettingsTab from './tabs/SettingsTab';      // Privacy, notification preferences
 
-// Import tab components
-import ProfileTab from './tabs/ProfileTab';
-import ServicesTab from './tabs/ServicesTab';
-import PortfolioTab from './tabs/PortfolioTab';
-import CredentialsTab from './tabs/CredentialsTab';
-import AvailabilityTab from './tabs/AvailabilityTab';
-import BusinessTab from './tabs/BusinessTab';
-import SettingsTab from './tabs/SettingsTab';
+// Import common UI components
+import Header from './common/Header';                    // Displays technician stats and profile summary
+import VerificationBanner from './common/VerificationBanner'; // Shows verification status with actions
+import ProfileCompletionBar from './common/ProfileCompletionBar'; // Visual progress bar
+import TabNavigation from './common/TabNavigation';      // Tab switching interface
 
-// Import common components
-import Header from './common/Header';
-import VerificationBanner from './common/VerificationBanner';
-import ProfileCompletionBar from './common/ProfileCompletionBar';
-import TabNavigation from './common/TabNavigation';
-
-// Import icons
-import { Edit, Save, X } from 'lucide-react';
+// Import icons from lucide-react for visual elements
+import { Edit, Save, X, Shield, Eye } from 'lucide-react';
 
 const TechnicianDashboard = () => {
-  const { user, technicianProfile, updateTechnicianProfile, getTechnicianProfile } = useAuth();
-  const navigate = useNavigate();
-  const [isEditing, setIsEditing] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('profile');
+  // ===== HOOKS & STATE MANAGEMENT =====
   
-  // Form data state
+  // Get technician ID from URL params (for admin viewing specific technician)
+  const { id } = useParams();
+  
+  // Authentication context - provides user data and profile management functions
+  const { user, technicianProfile, updateTechnicianProfile, getTechnicianProfile, getTechnicianById } = useAuth();
+  const navigate = useNavigate(); // For programmatic navigation
+  
+  // State for admin viewing another technician's profile
+  const [viewingTechnician, setViewingTechnician] = useState(null);
+  const [isAdminView, setIsAdminView] = useState(false);
+  
+  // UI State
+  const [isEditing, setIsEditing] = useState(false); // Toggles edit mode on/off
+  const [loading, setLoading] = useState(false);     // Shows loading spinner during save
+  const [error, setError] = useState('');            // Stores error messages
+  const [activeTab, setActiveTab] = useState('profile'); // Currently active tab
+  
+  /**
+   * Determine if user is admin viewing another technician
+   * Admins can view but not edit other technicians' profiles
+   */
+  const isAdminViewing = user?.role === 'admin' && id;
+  const canEdit = !isAdminViewing && user?.role === 'technician' && isEditing;
+  const isReadOnly = isAdminViewing || (user?.role === 'admin' && !id);
+  
+  /**
+   * Form Data State
+   * ===============
+   * Complete technician profile data structure.
+   * This matches the backend Technician model schema.
+   */
   const [formData, setFormData] = useState({
-    // Basic Info
+    // Basic Information
     aboutMe: '',
     profileHeadline: '',
     
-    // Skills
+    // Professional Skills
     skills: [],
     
-    // Services
+    // Service Categories
     category: '',
     serviceCategories: [],
     
-    // Pricing
+    // Pricing Structure
     pricing: {
       hourlyRate: 0,
       fixedPrice: 0,
@@ -51,20 +99,20 @@ const TechnicianDashboard = () => {
       paymentMethods: ['Cash', 'M-Pesa']
     },
     
-    // Education
+    // Educational Background
     education: [],
     
-    // Certifications
+    // Professional Certifications
     certifications: [],
     
-    // Experience
+    // Work Experience
     yearsOfExperience: 0,
     experience: [],
     
-    // Portfolio
+    // Portfolio/Work Samples
     portfolio: [],
     
-    // Location
+    // Location Information
     address: {
       street: '',
       city: '',
@@ -79,10 +127,10 @@ const TechnicianDashboard = () => {
     },
     serviceRadius: 10,
     
-    // Languages
+    // Languages Spoken
     languages: [{ name: 'English', proficiency: 'Fluent' }],
     
-    // Availability
+    // Working Hours (7 days a week)
     availability: {
       monday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
       tuesday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
@@ -96,7 +144,7 @@ const TechnicianDashboard = () => {
     remoteServiceAvailable: false,
     weekendAvailable: false,
     
-    // Business Info
+    // Business Information
     businessName: '',
     businessRegistrationNumber: '',
     insuranceInfo: {
@@ -105,7 +153,7 @@ const TechnicianDashboard = () => {
       expiryDate: ''
     },
     
-    // Social Links
+    // Social Media Links
     socialLinks: {
       website: '',
       facebook: '',
@@ -116,7 +164,7 @@ const TechnicianDashboard = () => {
       tiktok: ''
     },
     
-    // Settings
+    // Account Settings
     settings: {
       showEmail: false,
       showPhone: true,
@@ -131,66 +179,119 @@ const TechnicianDashboard = () => {
       }
     },
     
-    // Status
+    // Status Flags
     isAvailable: true,
     isActive: true,
     
-    // Gallery (for backward compatibility)
+    // Gallery (legacy support)
     gallery: []
   });
 
+  /**
+   * AUTHENTICATION & AUTHORIZATION CHECK
+   * ====================================
+   * Ensures only authenticated technicians or admins can access this page
+   * 
+   * Access Rules:
+   * 1. Technicians can access their own dashboard (no ID param)
+   * 2. Admins can access their own dashboard (no ID param)
+   * 3. Admins can view any technician's dashboard (with ID param) - read-only
+   * 4. Regular users (customers) are redirected to home
+   */
   useEffect(() => {
+    // Check if user is logged in
     if (!user) {
       navigate('/login');
       return;
     }
 
-    if (user.role !== 'technician') {
+    // Regular users (customers) should not access technician dashboard
+    if (user.role === 'client') {
       navigate('/');
       return;
     }
 
-    if (!technicianProfile) {
-      getTechnicianProfile();
+    // Handle admin viewing specific technician
+    if (user.role === 'admin' && id) {
+      setIsAdminView(true);
+      fetchTechnicianById(id);
+    } 
+    // Handle technician or admin viewing their own dashboard
+    else if (user.role === 'technician' || (user.role === 'admin' && !id)) {
+      if (!technicianProfile) {
+        getTechnicianProfile();
+      }
     }
-  }, [user, technicianProfile, navigate, getTechnicianProfile]);
+  }, [user, technicianProfile, navigate, getTechnicianProfile, id]);
 
-  // Separate effect to update form data when technicianProfile changes
+  /**
+   * FETCH TECHNICIAN BY ID (For Admin View)
+   * ========================================
+   * Admins can fetch and view any technician's profile
+   * This is read-only access for support and monitoring
+   */
+  const fetchTechnicianById = async (technicianId) => {
+    setLoading(true);
+    try {
+      const response = await getTechnicianById(technicianId);
+      if (response.success) {
+        setViewingTechnician(response.data);
+      } else {
+        setError('Technician not found');
+        navigate('/admin/technicians');
+      }
+    } catch (error) {
+      console.error('Error fetching technician:', error);
+      setError('Failed to load technician profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * POPULATE FORM DATA FROM PROFILE
+   * ================================
+   * When technicianProfile is loaded from backend, update formData state
+   * Supports both self-view (technician) and admin-view modes
+   */
   useEffect(() => {
-    if (technicianProfile) {
+    // Use viewingTechnician for admin view, otherwise use technicianProfile
+    const profile = isAdminView ? viewingTechnician : technicianProfile;
+    
+    if (profile) {
       setFormData({
-        aboutMe: technicianProfile.aboutMe || '',
-        profileHeadline: technicianProfile.profileHeadline || '',
-        skills: technicianProfile.skills || [],
-        category: technicianProfile.category || '',
-        serviceCategories: technicianProfile.serviceCategories || [],
-        pricing: technicianProfile.pricing || {
+        aboutMe: profile.aboutMe || '',
+        profileHeadline: profile.profileHeadline || '',
+        skills: profile.skills || [],
+        category: profile.category || '',
+        serviceCategories: profile.serviceCategories || [],
+        pricing: profile.pricing || {
           hourlyRate: 0,
           fixedPrice: 0,
           consultationFee: 0,
           currency: 'KES',
           paymentMethods: ['Cash', 'M-Pesa']
         },
-        education: technicianProfile.education || [],
-        certifications: technicianProfile.certifications || [],
-        yearsOfExperience: technicianProfile.yearsOfExperience || 0,
-        experience: technicianProfile.experience || [],
-        portfolio: technicianProfile.portfolio || [],
-        address: technicianProfile.address || {
+        education: profile.education || [],
+        certifications: profile.certifications || [],
+        yearsOfExperience: profile.yearsOfExperience || 0,
+        experience: profile.experience || [],
+        portfolio: profile.portfolio || [],
+        address: profile.address || {
           street: '',
           city: '',
           state: '',
           zipCode: '',
           country: 'Kenya'
         },
-        location: technicianProfile.location || {
+        location: profile.location || {
           coordinates: [0, 0],
           formattedAddress: '',
           placeId: ''
         },
-        serviceRadius: technicianProfile.serviceRadius || 10,
-        languages: technicianProfile.languages || [{ name: 'English', proficiency: 'Fluent' }],
-        availability: technicianProfile.availability || {
+        serviceRadius: profile.serviceRadius || 10,
+        languages: profile.languages || [{ name: 'English', proficiency: 'Fluent' }],
+        availability: profile.availability || {
           monday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
           tuesday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
           wednesday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
@@ -199,17 +300,17 @@ const TechnicianDashboard = () => {
           saturday: { enabled: false, hours: [] },
           sunday: { enabled: false, hours: [] }
         },
-        emergencyAvailable: technicianProfile.emergencyAvailable || false,
-        remoteServiceAvailable: technicianProfile.remoteServiceAvailable || false,
-        weekendAvailable: technicianProfile.weekendAvailable || false,
-        businessName: technicianProfile.businessName || '',
-        businessRegistrationNumber: technicianProfile.businessRegistrationNumber || '',
-        insuranceInfo: technicianProfile.insuranceInfo || {
+        emergencyAvailable: profile.emergencyAvailable || false,
+        remoteServiceAvailable: profile.remoteServiceAvailable || false,
+        weekendAvailable: profile.weekendAvailable || false,
+        businessName: profile.businessName || '',
+        businessRegistrationNumber: profile.businessRegistrationNumber || '',
+        insuranceInfo: profile.insuranceInfo || {
           provider: '',
           policyNumber: '',
           expiryDate: ''
         },
-        socialLinks: technicianProfile.socialLinks || {
+        socialLinks: profile.socialLinks || {
           website: '',
           facebook: '',
           twitter: '',
@@ -218,7 +319,7 @@ const TechnicianDashboard = () => {
           youtube: '',
           tiktok: ''
         },
-        settings: technicianProfile.settings || {
+        settings: profile.settings || {
           showEmail: false,
           showPhone: true,
           instantBooking: true,
@@ -231,13 +332,22 @@ const TechnicianDashboard = () => {
             push: true
           }
         },
-        isAvailable: technicianProfile.isAvailable !== undefined ? technicianProfile.isAvailable : true,
-        gallery: technicianProfile.portfolio?.map(item => item.mediaUrl) || []
+        isAvailable: profile.isAvailable !== undefined ? profile.isAvailable : true,
+        gallery: profile.portfolio?.map(item => item.mediaUrl) || []
       });
     }
-  }, [technicianProfile]);
+  }, [technicianProfile, viewingTechnician, isAdminView]);
 
+  /**
+   * HANDLE INPUT CHANGES
+   * ====================
+   * Supports nested form fields using dot notation
+   * Disabled when in admin read-only mode
+   */
   const handleInputChange = (e) => {
+    // Don't allow edits in admin view mode
+    if (isAdminView) return;
+    
     const { name, value, type, checked } = e.target;
     
     if (name.includes('.')) {
@@ -272,16 +382,28 @@ const TechnicianDashboard = () => {
     }
   };
 
+  /**
+   * HANDLE FORM SUBMISSION
+   * ======================
+   * Only technicians can save changes
+   * Admins cannot save changes when viewing other technicians
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent admins from editing other technicians' profiles
+    if (isAdminView) {
+      setError('Admins cannot edit technician profiles. This is read-only mode.');
+      return;
+    }
+    
     setError('');
     setLoading(true);
     
-    // Prepare data for submission
     const { gallery, ...submitData } = formData;
-    
     const result = await updateTechnicianProfile(submitData);
     setLoading(false);
+    
     if (result.success) {
       setIsEditing(false);
     } else {
@@ -289,7 +411,11 @@ const TechnicianDashboard = () => {
     }
   };
 
-  if (!technicianProfile) {
+  /**
+   * LOADING STATE
+   * =============
+   */
+  if ((!technicianProfile && !isAdminView) || (isAdminView && !viewingTechnician && loading)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
@@ -300,26 +426,79 @@ const TechnicianDashboard = () => {
     );
   }
 
+  // Get the current profile object
+  const currentProfile = isAdminView ? viewingTechnician : technicianProfile;
+
+  /**
+   * MAIN RENDER
+   * ===========
+   */
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header with Stats */}
-        <Header technicianProfile={technicianProfile} />
+        
+        {/* Admin View Banner - Shows when admin is viewing another technician */}
+        {isAdminView && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <Shield className="w-6 h-6 text-blue-600" />
+              <div>
+                <p className="text-blue-800 font-semibold">Admin View Mode</p>
+                <p className="text-blue-600 text-sm">
+                  You are viewing {viewingTechnician?.userId?.firstName} {viewingTechnician?.userId?.lastName}'s profile. 
+                  This is read-only mode for support and monitoring purposes.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/admin/technicians')}
+                className="ml-auto bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
+              >
+                Back to Technicians
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Admin Self-View Banner */}
+        {user?.role === 'admin' && !id && (
+          <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <Eye className="w-6 h-6 text-purple-600" />
+              <div>
+                <p className="text-purple-800 font-semibold">Admin View</p>
+                <p className="text-purple-600 text-sm">
+                  You are viewing your own technician profile. You have full edit access.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
-        {/* Verification Status Banner */}
-        <VerificationBanner status={technicianProfile.verificationStatus} />
+        {/* Header Section */}
+        <Header technicianProfile={currentProfile} isAdminView={isAdminView} />
+
+        {/* Verification Banner */}
+        <VerificationBanner 
+          status={currentProfile?.verificationStatus} 
+          isAdminView={isAdminView}
+          technicianId={currentProfile?._id}
+        />
 
         {/* Profile Completion Bar */}
-        <ProfileCompletionBar percentage={technicianProfile.profileCompletionPercentage} />
+        <ProfileCompletionBar 
+          percentage={currentProfile?.profileCompletionPercentage} 
+          isAdminView={isAdminView}
+        />
 
-        {/* Tabs Navigation */}
+        {/* Tab Navigation */}
         <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        {/* Main Content */}
+        {/* Main Content Area */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
-          {/* Header with Edit Toggle */}
+          
+          {/* Tab Header with Edit/Cancel Button */}
           <div className="bg-gray-50 px-6 py-5 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-800 hover:text-red-600 transition-colors duration-200 cursor-pointer">
+            <h2 className="text-2xl font-bold text-gray-800">
               {activeTab === 'profile' && 'Professional Information'}
               {activeTab === 'services' && 'Services & Pricing'}
               {activeTab === 'portfolio' && 'Work Portfolio'}
@@ -328,26 +507,49 @@ const TechnicianDashboard = () => {
               {activeTab === 'business' && 'Business Details'}
               {activeTab === 'settings' && 'Account Settings'}
             </h2>
-            {!isEditing ? (
+            
+            {/* Edit/Cancel Button - Hidden for admin view mode */}
+            {!isAdminView && user?.role === 'technician' && (
+              !isEditing ? (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-red-600 transition-all duration-200 flex items-center space-x-2"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>Edit Profile</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-red-600 hover:text-white transition-all duration-200 flex items-center space-x-2"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Cancel</span>
+                </button>
+              )
+            )}
+            
+            {/* Admin Edit Button (for their own profile only) */}
+            {user?.role === 'admin' && !id && !isEditing && (
               <button
                 onClick={() => setIsEditing(true)}
                 className="bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-red-600 transition-all duration-200 flex items-center space-x-2"
               >
                 <Edit className="w-4 h-4" />
-                <span>Edit Profile</span>
+                <span>Edit Profile (Admin)</span>
               </button>
-            ) : (
-              <button
-                onClick={() => setIsEditing(false)}
-                className="bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-red-600 hover:text-white transition-all duration-200 flex items-center space-x-2"
-              >
-                <X className="w-4 h-4" />
-                <span>Cancel</span>
-              </button>
+            )}
+            
+            {/* Read-only indicator for admin view */}
+            {isAdminView && (
+              <div className="flex items-center gap-2 text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
+                <Eye className="w-4 h-4" />
+                <span className="text-sm">Read-Only Mode</span>
+              </div>
             )}
           </div>
 
-          {/* Error Message */}
+          {/* Error Message Display */}
           {error && (
             <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
               {error}
@@ -356,12 +558,14 @@ const TechnicianDashboard = () => {
 
           {/* Profile Form */}
           <form onSubmit={handleSubmit} className="p-6">
-            {/* Render active tab */}
+            
+            {/* Conditional Rendering of Active Tab Content */}
             {activeTab === 'profile' && (
               <ProfileTab 
                 formData={formData}
                 setFormData={setFormData}
-                isEditing={isEditing}
+                isEditing={canEdit}
+                isReadOnly={isReadOnly}
                 handleInputChange={handleInputChange}
               />
             )}
@@ -370,7 +574,8 @@ const TechnicianDashboard = () => {
               <ServicesTab 
                 formData={formData}
                 setFormData={setFormData}
-                isEditing={isEditing}
+                isEditing={canEdit}
+                isReadOnly={isReadOnly}
                 handleInputChange={handleInputChange}
               />
             )}
@@ -379,7 +584,8 @@ const TechnicianDashboard = () => {
               <PortfolioTab 
                 formData={formData}
                 setFormData={setFormData}
-                isEditing={isEditing}
+                isEditing={canEdit}
+                isReadOnly={isReadOnly}
               />
             )}
             
@@ -387,7 +593,8 @@ const TechnicianDashboard = () => {
               <CredentialsTab 
                 formData={formData}
                 setFormData={setFormData}
-                isEditing={isEditing}
+                isEditing={canEdit}
+                isReadOnly={isReadOnly}
                 handleInputChange={handleInputChange}
               />
             )}
@@ -396,7 +603,8 @@ const TechnicianDashboard = () => {
               <AvailabilityTab 
                 formData={formData}
                 setFormData={setFormData}
-                isEditing={isEditing}
+                isEditing={canEdit}
+                isReadOnly={isReadOnly}
                 handleInputChange={handleInputChange}
               />
             )}
@@ -405,7 +613,8 @@ const TechnicianDashboard = () => {
               <BusinessTab 
                 formData={formData}
                 setFormData={setFormData}
-                isEditing={isEditing}
+                isEditing={canEdit}
+                isReadOnly={isReadOnly}
                 handleInputChange={handleInputChange}
               />
             )}
@@ -414,14 +623,15 @@ const TechnicianDashboard = () => {
               <SettingsTab 
                 formData={formData}
                 setFormData={setFormData}
-                isEditing={isEditing}
+                isEditing={canEdit}
+                isReadOnly={isReadOnly}
                 handleInputChange={handleInputChange}
-                user={user}
+                user={isAdminView ? viewingTechnician?.userId : user}
               />
             )}
 
-            {/* Submit Button */}
-            {isEditing && (
+            {/* Submit Button - Only show when in edit mode and not admin viewing */}
+            {canEdit && (
               <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end">
                 <button
                   type="submit"
