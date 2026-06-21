@@ -31,7 +31,7 @@ const {
 } = require('../controllers/authcontroller');
 const { validateRegistration, validateLogin } = require('../middleware/validation');
 const {auth} = require('../middleware/auth');
-const adminAuth = require('../middleware/adminAuth');
+const adminAuth = require('../middleware/AdminAuth');
 
 // ==================== PUBLIC ROUTES ====================
 router.post('/register', validateRegistration, register);
