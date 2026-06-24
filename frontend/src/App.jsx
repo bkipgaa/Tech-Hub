@@ -16,7 +16,7 @@ import CreateTechnicianProfile from './pages/CreateTechnicianProfile';
 import AdminLogin from './pages/Admin/AdminLogin';
 import AdminRegister from './pages/Admin/AdminRegister';
 import TechnicianDashboard from './components/technician/TechnicianDashboard';
-import SubscriptionManager from './components/technician/subscriptionManager';
+import SubscriptionManager from './components/technician/SubscriptionManager';
 import AdminDashboard from './components/admin/adminDashboard';
 import TechnicianList from './components/admin/TechnicianList';
 import TechnicianDetails from './components/admin/TechnicianDetails';
