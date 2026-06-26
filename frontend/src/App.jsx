@@ -25,7 +25,7 @@ import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import TechnicianRoute from './components/TechnicianRoute';
 
-import JobsPage from './pages/JobsPage';
+import JobsPage from './pages/jobsPage';
 import PostJob from './components/jobs/PostJob';
 import MyJobs from './components/jobs/MyJobs';
 import JobDetails from './components/jobs/JobDetails';
