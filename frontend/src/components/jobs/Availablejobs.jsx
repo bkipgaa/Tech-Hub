@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import JobCard from './JobCard';
-import JobSearch from './JobSearch';
+import JobCard from './jobCard';
+import JobSearch from './jobSearch';
 import jobService from '../../services/jobService';
 import { useAuth } from '../../context/AuthContext';
 
