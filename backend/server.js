@@ -79,12 +79,13 @@ app.use(helmet());
 
 // CORS configuration - controls which domains can access the API
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true, // Allow cookies/auth headers
+  origin: process.env.FRONTEND_URL 
+    ? [process.env.FRONTEND_URL, 'https://tech-hub-frontend-lime.vercel.app']
+    : ['http://localhost:3000', 'http://localhost:5173'],
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-
 // Body parsing middleware - converts request bodies to JavaScript objects
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
