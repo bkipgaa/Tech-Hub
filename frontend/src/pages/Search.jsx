@@ -14,27 +14,76 @@ const planConfig = {
   trial: { label: 'Trial', color: 'text-green-600', bg: 'bg-green-100', border: 'border-green-200', icon: Clock }
 };
 
+// Categories from Job model
+const MAIN_CATEGORIES = [
+  'IT & Networking',
+  'Electrical Services',
+  'Mechanical Services',
+  'Plumbing',
+  'Programming & AI',
+  'Hairdressing & Beauty',
+  'Carpentry & Furniture',
+  'Laundry & Dry Cleaning',
+  'Cleaning Services',
+  'Painting & Decorating',
+  'Welding & Fabrication',
+  'Automotive Repair',
+  'Tutoring & Training',
+  'Photography & Videography',
+  'Event Planning',
+  'Construction & Renovation',
+  'HVAC Services',
+  'Appliance Repair',
+  'Moving & Logistics',
+  'Gardening & Landscaping'
+];
+
+// Sample service categories (you can expand these)
+const SERVICE_CATEGORIES = {
+  'IT & Networking': ['Network Setup', 'IT Support', 'Cybersecurity', 'Cloud Services', 'Data Recovery'],
+  'Electrical Services': ['Wiring', 'Repair', 'Installation', 'Lighting', 'Circuit Breakers'],
+  'Plumbing': ['Pipe Repair', 'Installation', 'Drain Cleaning', 'Water Heater', 'Leak Detection'],
+  'Programming & AI': ['Web Development', 'Mobile Apps', 'AI Solutions', 'Data Analysis', 'Machine Learning'],
+  'Hairdressing & Beauty': ['Haircut', 'Styling', 'Coloring', 'Makeup', 'Nail Art'],
+  'Carpentry & Furniture': ['Custom Furniture', 'Repair', 'Installation', 'Restoration', 'Cabinetry'],
+  'Cleaning Services': ['Home Cleaning', 'Office Cleaning', 'Deep Cleaning', 'Carpet Cleaning', 'Window Cleaning'],
+  'Painting & Decorating': ['Interior Painting', 'Exterior Painting', 'Wallpaper', 'Decorative Finishes'],
+  'Automotive Repair': ['Engine Repair', 'Brake Service', 'Oil Change', 'Tire Service', 'Diagnostics'],
+  'Construction & Renovation': ['Building', 'Renovation', 'Roofing', 'Flooring', 'Tiling'],
+  'HVAC Services': ['AC Repair', 'Heating', 'Ventilation', 'Installation', 'Maintenance'],
+  'Appliance Repair': ['Refrigerator', 'Washing Machine', 'Oven', 'Dishwasher', 'Microwave'],
+  'Moving & Logistics': ['Local Moving', 'Long Distance', 'Packing', 'Storage', 'Delivery'],
+  'Gardening & Landscaping': ['Garden Design', 'Lawn Care', 'Tree Service', 'Irrigation', 'Landscaping']
+};
+
+// Sample sub-services (you can expand these)
+const SUB_SERVICES = {
+  'Network Setup': ['Home Network', 'Office Network', 'WiFi Setup', 'Cabling', 'Router Configuration'],
+  'IT Support': ['Hardware Support', 'Software Support', 'Troubleshooting', 'Maintenance', 'Help Desk'],
+  'Cybersecurity': ['Security Audit', 'Firewall Setup', 'Antivirus', 'Data Protection', 'Penetration Testing'],
+  // Add more sub-services as needed
+};
+
 const SearchPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [technicians, setTechnicians] = useState([]);
-  const [availableCategories, setAvailableCategories] = useState([]);
+  const [availableCategories, setAvailableCategories] = useState(MAIN_CATEGORIES);
   const [userLocation, setUserLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   
-  // Search filters - UPDATED to match backend (category instead of mainCategory)
+  // Search filters - MATCH JOB MODEL
   const [filters, setFilters] = useState({
-    category: '',           // Changed from mainCategory
+    mainCategory: '',        // Changed from category to mainCategory
     serviceCategory: '',
     subService: '',
-    radius: 50,            // Default 50km
+    radius: 50,
     minRating: '',
     maxHourlyRate: '',
-    minHourlyRate: ''      // Added min price filter
+    minHourlyRate: ''
   });
   
-  // Available options for dropdowns
   const [serviceCategories, setServiceCategories] = useState([]);
   const [subServices, setSubServices] = useState([]);
   const [allTechniciansData, setAllTechniciansData] = useState([]);
@@ -44,62 +93,43 @@ const SearchPage = () => {
     fetchAvailableCategories();
   }, []);
   
-  // Update service categories when category changes
+  // Update service categories when main category changes
   useEffect(() => {
-    if (filters.category) {
-      // Find technicians with this category to get their service categories
-      const techsInCategory = allTechniciansData.filter(tech => tech.category === filters.category);
-      const uniqueServiceCategories = [...new Set(
-        techsInCategory.flatMap(tech => 
-          tech.serviceCategories?.map(sc => sc.categoryName) || []
-        )
-      )];
-      setServiceCategories(uniqueServiceCategories);
+    if (filters.mainCategory) {
+      // Get service categories from the mapping
+      const services = SERVICE_CATEGORIES[filters.mainCategory] || [];
+      setServiceCategories(services);
       setFilters(prev => ({ ...prev, serviceCategory: '', subService: '' }));
       setSubServices([]);
     }
-  }, [filters.category, allTechniciansData]);
+  }, [filters.mainCategory]);
   
   // Update sub-services when service category changes
   useEffect(() => {
-    if (filters.serviceCategory && filters.category) {
-      const techsInCategory = allTechniciansData.filter(tech => tech.category === filters.category);
-      const uniqueSubServices = [...new Set(
-        techsInCategory.flatMap(tech => 
-          tech.serviceCategories
-            ?.filter(sc => sc.categoryName === filters.serviceCategory)
-            .flatMap(sc => sc.subServices || []) || []
-        )
-      )];
-      setSubServices(uniqueSubServices);
+    if (filters.serviceCategory) {
+      // Get sub-services from the mapping
+      const subs = SUB_SERVICES[filters.serviceCategory] || [];
+      setSubServices(subs);
       setFilters(prev => ({ ...prev, subService: '' }));
     }
-  }, [filters.serviceCategory, filters.category, allTechniciansData]);
+  }, [filters.serviceCategory]);
   
   const fetchAvailableCategories = async () => {
     try {
-      // Fetch all technicians to get unique categories
-      const response = await api.get('/search/technicians');
-      if (response.data.success && response.data.data) {
-        setAllTechniciansData(response.data.data);
-        const uniqueCategories = [...new Set(response.data.data.map(tech => tech.category))];
-        setAvailableCategories(uniqueCategories.filter(c => c));
+      // Try to get categories from API
+      const response = await api.get('/search/categories');
+      if (response.data.success && response.data.categories.length > 0) {
+        setAvailableCategories(response.data.categories);
+        console.log('Categories loaded from API:', response.data.categories);
+        return;
       }
     } catch (error) {
-      console.error('Failed to load categories:', error);
-      // Fallback: try to get categories from a different endpoint if available
-      try {
-        const response = await api.get('/search/suggestions?q=');
-        if (response.data.suggestions) {
-          const categories = response.data.suggestions
-            .filter(s => s.type === 'category')
-            .map(s => s.value);
-          setAvailableCategories(categories);
-        }
-      } catch (err) {
-        console.error('Failed to load categories from suggestions:', err);
-      }
+      console.log('Could not fetch categories from API, using defaults');
     }
+    
+    // Use default categories from Job model
+    setAvailableCategories(MAIN_CATEGORIES);
+    console.log('Using default categories from Job model');
   };
   
   const getCurrentLocation = () => {
@@ -118,7 +148,6 @@ const SearchPage = () => {
         };
         setUserLocation(location);
         setGettingLocation(false);
-        // Auto-search after getting location
         performSearch(location.lat, location.lng);
       },
       (error) => {
@@ -138,7 +167,6 @@ const SearchPage = () => {
         }
         alert(errorMessage);
         setGettingLocation(false);
-        // Search without location
         performSearch();
       }
     );
@@ -149,8 +177,8 @@ const SearchPage = () => {
     try {
       const params = new URLSearchParams();
       
-      // UPDATED: Use 'category' instead of 'mainCategory'
-      if (filters.category) params.append('category', filters.category);
+      // Use mainCategory instead of category
+      if (filters.mainCategory) params.append('mainCategory', filters.mainCategory);
       if (filters.serviceCategory) params.append('serviceCategory', filters.serviceCategory);
       if (filters.subService) params.append('subService', filters.subService);
       if (filters.radius) params.append('radius', filters.radius);
@@ -166,6 +194,8 @@ const SearchPage = () => {
         params.append('lng', userLocation.lng);
       }
       
+      console.log('Searching with params:', params.toString());
+      
       const response = await api.get(`/search/technicians?${params.toString()}`);
       if (response.data.success) {
         setTechnicians(response.data.data || []);
@@ -174,7 +204,12 @@ const SearchPage = () => {
       }
     } catch (error) {
       console.error('Search failed:', error);
-      alert('Search failed. Please try again.');
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+        alert(`Search failed: ${error.response.data.message || 'Please try again.'}`);
+      } else {
+        alert('Search failed. Please try again.');
+      }
       setTechnicians([]);
     } finally {
       setLoading(false);
@@ -196,7 +231,7 @@ const SearchPage = () => {
   
   const clearFilters = () => {
     setFilters({
-      category: '',
+      mainCategory: '',
       serviceCategory: '',
       subService: '',
       radius: 50,
@@ -206,7 +241,6 @@ const SearchPage = () => {
     });
     setServiceCategories([]);
     setSubServices([]);
-    // Re-search if location exists
     if (userLocation) {
       performSearch(userLocation.lat, userLocation.lng);
     } else {
@@ -244,14 +278,14 @@ const SearchPage = () => {
         {/* Search Form */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <form onSubmit={handleSearch} className="space-y-4">
-            {/* Service Selection Row - UPDATED field names */}
+            {/* Service Selection Row - MATCH JOB MODEL */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <select
-                value={filters.category}
-                onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+                value={filters.mainCategory}
+                onChange={(e) => setFilters({ ...filters, mainCategory: e.target.value })}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none bg-white"
               >
-                <option value="">Select Category</option>
+                <option value="">Select Main Category</option>
                 {availableCategories.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
@@ -260,7 +294,7 @@ const SearchPage = () => {
               <select
                 value={filters.serviceCategory}
                 onChange={(e) => setFilters({ ...filters, serviceCategory: e.target.value })}
-                disabled={!filters.category}
+                disabled={!filters.mainCategory}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none disabled:bg-gray-100 bg-white"
               >
                 <option value="">Select Service Category</option>
@@ -345,7 +379,7 @@ const SearchPage = () => {
               </div>
             </div>
             
-            {/* Advanced Filters (Collapsible) */}
+            {/* Advanced Filters */}
             {showFilters && (
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
