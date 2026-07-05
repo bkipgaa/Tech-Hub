@@ -1,18 +1,9 @@
 /**
- * TechnicianProfile Component
- * ===========================
+ * TechnicianProfile.js
+ * ====================
+ * Public technician profile view - Updated for three-level hierarchy
  * 
- * PURPOSE:
- * - Displays detailed information about a specific technician
- * - Shows profile, skills, services offered, portfolio, location, and contact info
- * - Allows clients to view technician's full profile and contact them
- * 
- * FLOW:
- * 1. User clicks "View Profile" on a technician card
- * 2. Navigates to /technician/:id
- * 3. Fetches technician data from backend using the ID
- * 4. Displays full profile information
- * 5. User can contact technician (if contact info is shared)
+ * @version 2.0.0
  */
 
 import React, { useState, useEffect } from 'react';
@@ -102,15 +93,12 @@ const TechnicianProfile = () => {
           Back to Search Results
         </button>
 
-        {/* ========== PROFILE HEADER - Single Unified Section ========== */}
+        {/* ========== PROFILE HEADER ========== */}
         <div className="bg-gradient-to-r from-green-700 to-green-900 rounded-xl shadow-sm overflow-hidden mb-6">
-          {/* Cover Image Area */}
           <div className="h-24"></div>
           
           <div className="px-6 pb-6">
-            {/* Profile Image and Basic Info - Integrated together */}
             <div className="flex flex-col md:flex-row gap-6 -mt-12 mb-4">
-              {/* Profile Image */}
               <div className="flex-shrink-0">
                 {technician.userId?.profileImage ? (
                   <img 
@@ -127,7 +115,6 @@ const TechnicianProfile = () => {
                 )}
               </div>
               
-              {/* Name, Headline and Rating - All in one place */}
               <div className="flex-1 mt-2 md:mt-0">
                 <div className="flex flex-wrap justify-between items-start gap-2">
                   <div>
@@ -135,6 +122,12 @@ const TechnicianProfile = () => {
                       {technician.userId?.firstName} {technician.userId?.lastName}
                     </h1>
                     <p className="text-green-100 mt-1">{technician.profileHeadline}</p>
+                    {/* UPDATED: Show mainCategory */}
+                    {technician.mainCategory && (
+                      <span className="inline-block mt-2 bg-white/20 text-white text-xs px-3 py-1 rounded-full">
+                        {technician.mainCategory}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 bg-yellow-500 px-3 py-1.5 rounded-full">
                     <Star className="w-5 h-5 text-white fill-current" />
@@ -143,7 +136,6 @@ const TechnicianProfile = () => {
                   </div>
                 </div>
                 
-                {/* Contact Buttons - Both with white background */}
                 <div className="flex gap-3 mt-4">
                   <button
                     onClick={handleContact}
@@ -158,7 +150,6 @@ const TechnicianProfile = () => {
                   </button>
                 </div>
                 
-                {/* Contact Info (revealed when clicking Contact) */}
                 {showContact && (
                   <div className="mt-4 p-4 bg-white rounded-lg shadow-md">
                     <p className="text-sm font-medium text-gray-700 mb-2">Contact Information:</p>
@@ -221,17 +212,28 @@ const TechnicianProfile = () => {
           </div>
         </div>
 
-        {/* ========== SERVICES OFFERED SECTION ========== */}
+        {/* ========== SERVICES OFFERED - UPDATED ========== */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
             <Wrench className="w-5 h-5 text-green-600" />
             Services Offered
           </h2>
+          {/* UPDATED: Show mainCategory */}
+          {technician.mainCategory && (
+            <div className="mb-4">
+              <span className="text-sm text-gray-500">Main Category:</span>
+              <span className="ml-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                {technician.mainCategory}
+              </span>
+            </div>
+          )}
+          {/* UPDATED: Show serviceCategories with subServices */}
           {technician.serviceCategories?.length > 0 ? (
             <div className="space-y-4">
               {technician.serviceCategories.map((cat, idx) => (
                 <div key={idx} className="border-b border-gray-100 pb-3 last:border-0">
                   <h3 className="font-semibold text-gray-800 text-left">{cat.categoryName}</h3>
+                  {cat.description && <p className="text-sm text-gray-600 mt-1">{cat.description}</p>}
                   <div className="flex flex-wrap gap-2 mt-2 justify-start">
                     {cat.subServices?.map((sub, subIdx) => (
                       <span key={subIdx} className="text-sm bg-green-50 text-green-700 px-3 py-1 rounded-full hover:bg-green-500 hover:text-white transition-colors">

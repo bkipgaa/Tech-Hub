@@ -3,6 +3,10 @@
  * ==========================================
  * Handles public-facing technician profile requests
  * No authentication required - for clients viewing technician profiles
+ * Updated for three-level service hierarchy
+ * 
+ * @version 2.0.0
+ * @author Weba-Hub Team
  */
 
 const Technician = require('../../models/Technician');
@@ -45,7 +49,9 @@ exports.getPublicProfile = async (req, res) => {
         aboutMe: technician.aboutMe,
         profileHeadline: technician.profileHeadline,
         skills: technician.skills,
-        category: technician.category,
+        // UPDATED: Use mainCategory instead of category
+        mainCategory: technician.mainCategory,
+        // UPDATED: Full service categories with sub-services
         serviceCategories: technician.serviceCategories,
         pricing: technician.pricing,
         education: technician.education,
@@ -67,6 +73,7 @@ exports.getPublicProfile = async (req, res) => {
         settings: technician.settings,
         isAvailable: technician.isAvailable,
         verificationStatus: technician.verificationStatus,
+        profileCompletionPercentage: technician.profileCompletionPercentage,
         createdAt: technician.createdAt
       }
     });
@@ -91,7 +98,9 @@ exports.getAllPublicProfiles = async (req, res) => {
   try {
     // Extract query parameters for filtering
     const { 
-      category, 
+      mainCategory,      // UPDATED: Changed from category to mainCategory
+      serviceCategory,   // NEW: Filter by service category
+      subService,        // NEW: Filter by sub-service
       isAvailable, 
       minRating,
       maxHourlyRate,
@@ -107,9 +116,19 @@ exports.getAllPublicProfiles = async (req, res) => {
     filter.isActive = true;
     filter.verificationStatus = { $in: ['verified', 'pending'] };
     
-    // Apply optional filters
-    if (category) {
-      filter.category = category;
+    // Apply optional filters - UPDATED for three-level hierarchy
+    if (mainCategory) {
+      filter.mainCategory = mainCategory;
+    }
+    
+    // Filter by service category (Level 2)
+    if (serviceCategory) {
+      filter['serviceCategories.categoryName'] = serviceCategory;
+    }
+    
+    // Filter by sub-service (Level 3)
+    if (subService) {
+      filter['serviceCategories.subServices'] = subService;
     }
     
     if (isAvailable !== undefined) {
@@ -138,7 +157,7 @@ exports.getAllPublicProfiles = async (req, res) => {
       .sort({ createdAt: -1 }) // Newest first
       .skip(skip)
       .limit(limitNum)
-      .lean(); // Use lean() for better performance with read-only data
+      .lean();
     
     // Get total count for pagination
     const total = await Technician.countDocuments(filter);
@@ -154,11 +173,13 @@ exports.getAllPublicProfiles = async (req, res) => {
         aboutMe: tech.aboutMe,
         profileHeadline: tech.profileHeadline,
         skills: tech.skills,
-        category: tech.category,
+        // UPDATED: Use mainCategory
+        mainCategory: tech.mainCategory,
+        // UPDATED: Full service categories
         serviceCategories: tech.serviceCategories,
         pricing: tech.pricing,
         yearsOfExperience: tech.yearsOfExperience,
-        portfolio: tech.portfolio?.slice(0, 3), // Only first 3 portfolio items
+        portfolio: tech.portfolio?.slice(0, 3),
         location: tech.location,
         serviceRadius: tech.serviceRadius,
         languages: tech.languages,
@@ -185,6 +206,12 @@ exports.getAllPublicProfiles = async (req, res) => {
         hasNextPage: skip + limitNum < total,
         hasPrevPage: parseInt(page) > 1
       },
+      // UPDATED: Include filter info in response
+      filters: {
+        mainCategory: mainCategory || null,
+        serviceCategory: serviceCategory || null,
+        subService: subService || null
+      },
       data: sanitizedTechnicians
     });
     
@@ -199,17 +226,17 @@ exports.getAllPublicProfiles = async (req, res) => {
 };
 
 /**
- * Get technicians by category
- * @route   GET /api/technician/public/category/:category
+ * Get technicians by main category (Level 1)
+ * @route   GET /api/technician/public/category/:mainCategory
  * @access  Public
  */
 exports.getTechniciansByCategory = async (req, res) => {
   try {
-    const { category } = req.params;
+    const { mainCategory } = req.params; // UPDATED: Changed from category to mainCategory
     const { limit = 20 } = req.query;
     
     const technicians = await Technician.find({
-      category: decodeURIComponent(category),
+      mainCategory: decodeURIComponent(mainCategory), // UPDATED: Use mainCategory
       isActive: true,
       verificationStatus: { $in: ['verified', 'pending'] }
     })
@@ -233,6 +260,74 @@ exports.getTechniciansByCategory = async (req, res) => {
 };
 
 /**
+ * Get technicians by service category (Level 2)
+ * @route   GET /api/technician/public/service-category/:serviceCategory
+ * @access  Public
+ */
+exports.getTechniciansByServiceCategory = async (req, res) => {
+  try {
+    const { serviceCategory } = req.params;
+    const { limit = 20 } = req.query;
+    
+    const technicians = await Technician.find({
+      'serviceCategories.categoryName': decodeURIComponent(serviceCategory),
+      isActive: true,
+      verificationStatus: { $in: ['verified', 'pending'] }
+    })
+      .populate('userId', 'firstName lastName profileImage')
+      .limit(parseInt(limit))
+      .sort({ 'rating.average': -1 });
+    
+    res.json({
+      success: true,
+      count: technicians.length,
+      data: technicians
+    });
+    
+  } catch (error) {
+    console.error('Error in getTechniciansByServiceCategory:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+};
+
+/**
+ * Get technicians by sub-service (Level 3)
+ * @route   GET /api/technician/public/sub-service/:subService
+ * @access  Public
+ */
+exports.getTechniciansBySubService = async (req, res) => {
+  try {
+    const { subService } = req.params;
+    const { limit = 20 } = req.query;
+    
+    const technicians = await Technician.find({
+      'serviceCategories.subServices': decodeURIComponent(subService),
+      isActive: true,
+      verificationStatus: { $in: ['verified', 'pending'] }
+    })
+      .populate('userId', 'firstName lastName profileImage')
+      .limit(parseInt(limit))
+      .sort({ 'rating.average': -1 });
+    
+    res.json({
+      success: true,
+      count: technicians.length,
+      data: technicians
+    });
+    
+  } catch (error) {
+    console.error('Error in getTechniciansBySubService:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+};
+
+/**
  * Get technician statistics summary
  * @route   GET /api/technician/public/stats/summary
  * @access  Public
@@ -248,10 +343,12 @@ exports.getTechnicianStats = async (req, res) => {
       },
       {
         $group: {
-          _id: '$category',
+          _id: '$mainCategory', // UPDATED: Use mainCategory instead of category
           count: { $sum: 1 },
           avgRating: { $avg: '$rating.average' },
-          avgHourlyRate: { $avg: '$pricing.hourlyRate' }
+          avgHourlyRate: { $avg: '$pricing.hourlyRate' },
+          // UPDATED: Get unique service categories
+          serviceCategories: { $addToSet: '$serviceCategories.categoryName' }
         }
       },
       {
@@ -259,15 +356,52 @@ exports.getTechnicianStats = async (req, res) => {
       }
     ]);
     
+    // Get total count of active technicians
     const totalTechnicians = await Technician.countDocuments({
       isActive: true,
       verificationStatus: { $in: ['verified', 'pending'] }
     });
     
+    // Get unique service categories across all technicians
+    const allServiceCategories = await Technician.distinct('serviceCategories.categoryName', {
+      isActive: true,
+      verificationStatus: { $in: ['verified', 'pending'] }
+    });
+    
+    // Get unique sub-services across all technicians
+    const allSubServices = await Technician.aggregate([
+      {
+        $match: {
+          isActive: true,
+          verificationStatus: { $in: ['verified', 'pending'] }
+        }
+      },
+      {
+        $unwind: '$serviceCategories'
+      },
+      {
+        $unwind: '$serviceCategories.subServices'
+      },
+      {
+        $group: {
+          _id: '$serviceCategories.subServices'
+        }
+      }
+    ]).then(results => results.map(r => r._id));
+    
     res.json({
       success: true,
       totalTechnicians,
-      categories: stats,
+      // UPDATED: Include more statistics
+      categories: stats.map(stat => ({
+        mainCategory: stat._id,
+        count: stat.count,
+        avgRating: Math.round(stat.avgRating * 10) / 10 || 0,
+        avgHourlyRate: Math.round(stat.avgHourlyRate) || 0,
+        serviceCategories: stat.serviceCategories || []
+      })),
+      serviceCategories: allServiceCategories,
+      subServices: allSubServices,
       lastUpdated: new Date()
     });
     

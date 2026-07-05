@@ -25,6 +25,7 @@ const { updateSkills } = require('../controllers/technician/profile/updateSkills
 const { updateSocialLinks } = require('../controllers/technician/profile/updateSocialLinks');
 const { getPublicProfile } = require('../controllers/technician/publicController');
 
+
 // ==================== PUBLIC ROUTES ====================
 // No authentication or only basic auth required
 router.get('/public/:id', getPublicProfile);

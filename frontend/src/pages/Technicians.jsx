@@ -1,10 +1,9 @@
 /**
- * Technicians Page Component - FIXED RADIUS ISSUE
- * ==========================
+ * Technicians.js
+ * ==============
+ * Search results page - Updated for three-level hierarchy
  * 
- * IMPORTANT: The backend already filters technicians based on their subscription
- * visibility radius AND the client's search radius (taking the MINIMUM of both).
- * The frontend should NOT re-filter or double-apply radius rules.
+ * @version 2.0.0
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -16,23 +15,19 @@ const Technicians = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // State for technicians data and search status
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // State for user location
   const [userLocation, setUserLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
   
-  // Filter state
   const [radius, setRadius] = useState(50);
   const [showFilters, setShowFilters] = useState(false);
   const [minRating, setMinRating] = useState('');
   const [maxHourlyRate, setMaxHourlyRate] = useState('');
   
-  // Search metadata
   const [searchMetadata, setSearchMetadata] = useState({
     totalCount: 0,
     searchRadiusUsed: null,
@@ -40,15 +35,12 @@ const Technicians = () => {
     paidTechsVisible: 0
   });
   
-  // Get query parameters from URL
+  // Get query parameters from URL - UPDATED
   const queryParams = new URLSearchParams(location.search);
   const mainCategory = queryParams.get('mainCategory');
   const serviceCategory = queryParams.get('serviceCategory');
   const subService = queryParams.get('subService');
 
-  /**
-   * Get user's current location
-   */
   const getCurrentLocation = useCallback(() => {
     setGettingLocation(true);
     setLocationPermissionDenied(false);
@@ -82,12 +74,17 @@ const Technicians = () => {
     );
   }, []);
 
-  /**
-   * Search for technicians using backend API
-   * Backend automatically applies subscription visibility rules
-   * IMPORTANT: Backend uses MIN(technician.visibilityRadius, client.searchRadius)
-   * So a Premium tech (50km radius) will only be visible if client searches within 50km
-   */
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
   const searchTechnicians = useCallback(async () => {
     if (!userLocation) return;
     
@@ -97,26 +94,19 @@ const Technicians = () => {
     try {
       const params = new URLSearchParams();
       
-      // Add service filters from URL
+      // UPDATED: Use mainCategory
       if (mainCategory) params.append('mainCategory', mainCategory);
       if (serviceCategory) params.append('serviceCategory', serviceCategory);
       if (subService) params.append('subService', subService);
       
-      // Add location parameters
       params.append('lat', userLocation.lat);
       params.append('lng', userLocation.lng);
-      
-      // Add radius filter (client's search radius)
-      // BACKEND will take MIN(radius, technician.visibilityRadius)
       if (radius) params.append('radius', radius);
-      
-      // Add optional filters
       if (minRating) params.append('minRating', minRating);
       if (maxHourlyRate) params.append('maxHourlyRate', maxHourlyRate);
       
       const response = await api.get(`/search/technicians?${params.toString()}`);
       
-      // Calculate actual distance for display (NOT for filtering)
       const techniciansWithDistance = response.data.data.map(tech => {
         if (userLocation && tech.location?.coordinates) {
           const distance = calculateDistance(
@@ -125,13 +115,11 @@ const Technicians = () => {
             tech.location.coordinates[1],
             tech.location.coordinates[0]
           );
-          // Round to 1 decimal place for display
           return { ...tech, distance: parseFloat(distance).toFixed(1) };
         }
         return tech;
       });
       
-      // Sort by distance (closest first)
       techniciansWithDistance.sort((a, b) => {
         const distA = a.distance ? parseFloat(a.distance) : Infinity;
         const distB = b.distance ? parseFloat(b.distance) : Infinity;
@@ -140,7 +128,6 @@ const Technicians = () => {
       
       setTechnicians(techniciansWithDistance);
       
-      // Count by subscription type for metadata display
       const freeCount = techniciansWithDistance.filter(t => t.subscriptionPlan === 'free').length;
       const paidCount = techniciansWithDistance.filter(t => t.subscriptionPlan !== 'free').length;
       
@@ -159,27 +146,6 @@ const Technicians = () => {
     }
   }, [userLocation, mainCategory, serviceCategory, subService, radius, minRating, maxHourlyRate]);
 
-  /**
-   * Calculate distance between two coordinates using Haversine formula
-   * This returns the ACTUAL distance in kilometers
-   */
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-    
-    // Return exact distance without any modification
-    return distance;
-  };
-
-  /**
-   * Format distance for display
-   */
   const formatDistance = (distance) => {
     if (!distance) return 'Distance unknown';
     const dist = parseFloat(distance);
@@ -189,9 +155,6 @@ const Technicians = () => {
     return `${dist.toFixed(1)}km away`;
   };
 
-  /**
-   * Get subscription plan badge color
-   */
   const getPlanBadgeColor = (plan, isTrial) => {
     if (isTrial) return 'bg-purple-100 text-purple-700 border-purple-200';
     switch(plan) {
@@ -206,9 +169,6 @@ const Technicians = () => {
     }
   };
 
-  /**
-   * Get visibility description - Shows the ACTUAL visibility radius
-   */
   const getVisibilityDescription = (plan, visibilityRadius, isTrial) => {
     if (isTrial) return `🔬 Trial: Visible within ${visibilityRadius}km radius`;
     if (plan === 'free') return `📍 Free Plan: Visible within ${visibilityRadius}km radius`;
@@ -224,16 +184,10 @@ const Technicians = () => {
     return `🌟 ${planName}: Visible within ${visibilityRadius}km radius`;
   };
 
-  /**
-   * Handle view profile button click
-   */
   const handleViewProfile = (technicianId) => {
     navigate(`/technician/${technicianId}`);
   };
 
-  /**
-   * Handle request booking
-   */
   const handleRequestBooking = (technician) => {
     navigate(`/booking/new`, {
       state: {
@@ -246,26 +200,17 @@ const Technicians = () => {
     });
   };
 
-  /**
-   * Reset all filters
-   */
   const resetFilters = () => {
     setRadius(50);
     setMinRating('');
     setMaxHourlyRate('');
   };
 
-  /**
-   * Apply filters and search
-   */
   const applyFilters = () => {
     searchTechnicians();
     setShowFilters(false);
   };
 
-  /**
-   * Get radius display text - Shows what radius the CLIENT is searching within
-   */
   const getRadiusText = () => {
     const r = parseInt(radius);
     if (r <= 10) return `${r} km (Local search)`;
@@ -276,19 +221,16 @@ const Technicians = () => {
     return `${r} km (National search)`;
   };
 
-  // Get location on mount
   useEffect(() => {
     getCurrentLocation();
   }, [getCurrentLocation]);
 
-  // Search when location is available
   useEffect(() => {
     if (userLocation) {
       searchTechnicians();
     }
   }, [userLocation, searchTechnicians]);
 
-  // Loading state
   if (loading && !technicians.length) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -304,28 +246,41 @@ const Technicians = () => {
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         
-        {/* ========== PAGE HEADER ========== */}
+        {/* Page Header - UPDATED */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
             {subService || serviceCategory || mainCategory || 'Technicians'} Near You
           </h1>
+          {mainCategory && (
+            <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm mr-2">
+              {mainCategory}
+            </span>
+          )}
+          {serviceCategory && (
+            <span className="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm mr-2">
+              {serviceCategory}
+            </span>
+          )}
+          {subService && (
+            <span className="inline-block bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">
+              {subService}
+            </span>
+          )}
           {userLocation && (
-            <p className="text-gray-500 text-sm flex items-center gap-1">
+            <p className="text-gray-500 text-sm flex items-center gap-1 mt-2">
               <MapPin className="w-3 h-3" />
               Showing technicians within your search radius of {radius}km (subject to their plan limits)
             </p>
           )}
         </div>
 
-        {/* ========== LOCATION PERMISSION SECTION ========== */}
+        {/* Location Permission Section - keep same */}
         {!userLocation && !gettingLocation && !locationPermissionDenied && (
           <div className="mb-5 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <Navigation className="w-5 h-5 text-blue-600" />
-                <span className="text-blue-800 text-sm">
-                  Enable location to find technicians near you
-                </span>
+                <span className="text-blue-800 text-sm">Enable location to find technicians near you</span>
               </div>
               <button
                 onClick={getCurrentLocation}
@@ -338,7 +293,6 @@ const Technicians = () => {
           </div>
         )}
 
-        {/* ========== LOCATION DENIED MESSAGE ========== */}
         {locationPermissionDenied && !userLocation && (
           <div className="mb-5 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -357,7 +311,6 @@ const Technicians = () => {
           </div>
         )}
 
-        {/* ========== LOCATION LOADING STATE ========== */}
         {gettingLocation && (
           <div className="mb-5 bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto mb-2"></div>
@@ -365,7 +318,7 @@ const Technicians = () => {
           </div>
         )}
 
-        {/* ========== VISIBILITY INFO BANNER ========== */}
+        {/* Visibility Info Banner - keep same */}
         {userLocation && (
           <div className="mb-5 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg p-3">
             <div className="flex items-start gap-2">
@@ -380,14 +333,13 @@ const Technicians = () => {
                   <li>• <span className="font-medium">Business plan</span> technicians: Visible within <span className="font-bold">300km</span></li>
                   <li>• <span className="font-medium">Enterprise plan</span> technicians: Visible within <span className="font-bold">600km</span></li>
                   <li>• <span className="font-medium">Unlimited plan</span> technicians: Visible within <span className="font-bold">1000km</span></li>
-                  <li>• <span className="font-medium">Trial</span> technicians: Visible within <span className="font-bold">10km</span></li>
                 </ul>
               </div>
             </div>
           </div>
         )}
 
-        {/* ========== FILTERS SECTION ========== */}
+        {/* Filters Section - keep same */}
         {userLocation && (
           <>
             <button
@@ -406,17 +358,14 @@ const Technicians = () => {
             {showFilters && (
               <div className="mb-5 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
                 <div className="space-y-4">
-                  {/* Radius Filter - Client's search radius */}
+                  {/* Radius Filter */}
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-medium text-gray-700">
-                        Your Search Radius
-                      </label>
+                      <label className="text-sm font-medium text-gray-700">Your Search Radius</label>
                       <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
                         {getRadiusText()}
                       </span>
                     </div>
-                    
                     <input
                       type="range"
                       value={radius}
@@ -426,7 +375,6 @@ const Technicians = () => {
                       step="10"
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                     />
-                    
                     <div className="flex justify-between text-xs text-gray-500 mt-2">
                       <span>1km</span>
                       <span className="font-medium">10km<br/>(Free/Basic)</span>
@@ -436,16 +384,10 @@ const Technicians = () => {
                       <span>600km<br/>(Enterprise)</span>
                       <span>1000km<br/>(Unlimited)</span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-2">
-                      Note: Technicians will only appear if they're within BOTH your search radius AND their plan's visibility radius
-                    </p>
                   </div>
 
-                  {/* Rating Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Minimum Rating
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Rating</label>
                     <select
                       value={minRating}
                       onChange={(e) => setMinRating(e.target.value)}
@@ -459,11 +401,8 @@ const Technicians = () => {
                     </select>
                   </div>
 
-                  {/* Hourly Rate Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Max Hourly Rate (KES)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Max Hourly Rate (KES)</label>
                     <input
                       type="number"
                       value={maxHourlyRate}
@@ -473,7 +412,6 @@ const Technicians = () => {
                     />
                   </div>
 
-                  {/* Filter Actions */}
                   <div className="flex gap-3 pt-2">
                     <button
                       onClick={applyFilters}
@@ -494,29 +432,21 @@ const Technicians = () => {
           </>
         )}
 
-        {/* ========== ERROR MESSAGE ========== */}
+        {/* Error Message */}
         {error && (
           <div className="mb-5 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-sm">
             {error}
-            <button
-              onClick={searchTechnicians}
-              className="ml-3 underline hover:no-underline"
-            >
-              Try Again
-            </button>
+            <button onClick={searchTechnicians} className="ml-3 underline hover:no-underline">Try Again</button>
           </div>
         )}
 
-        {/* ========== NO RESULTS STATE ========== */}
+        {/* No Results */}
         {technicians.length === 0 && !loading && userLocation && !error && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-700 mb-2">No Technicians Found</h3>
             <p className="text-gray-500 text-sm max-w-md mx-auto">
               No technicians found for {subService || 'this service'} within your search radius of {radius}km.
-            </p>
-            <p className="text-gray-400 text-xs mt-2">
-              Note: Technicians are only visible if they're within BOTH your search radius AND their plan's visibility radius.
             </p>
             {radius < 1000 && (
               <button
@@ -532,10 +462,9 @@ const Technicians = () => {
           </div>
         )}
 
-        {/* ========== TECHNICIANS LIST ========== */}
+        {/* Technicians List */}
         {technicians.length > 0 && (
           <>
-            {/* Result metadata */}
             <div className="mb-4 bg-white px-4 py-3 rounded-lg border border-gray-200">
               <div className="flex flex-wrap justify-between items-center text-sm">
                 <div className="text-gray-600">
@@ -543,17 +472,12 @@ const Technicians = () => {
                   {searchMetadata.searchRadiusUsed && ` within ${searchMetadata.searchRadiusUsed}km`}
                 </div>
                 <div className="flex gap-3 text-xs">
-                  <span className="text-gray-500">
-                    📍 Free/Basic: {searchMetadata.freeTechsVisible}
-                  </span>
-                  <span className="text-gray-500">
-                    🌟 Premium+: {searchMetadata.paidTechsVisible}
-                  </span>
+                  <span className="text-gray-500">📍 Free/Basic: {searchMetadata.freeTechsVisible}</span>
+                  <span className="text-gray-500">🌟 Premium+: {searchMetadata.paidTechsVisible}</span>
                 </div>
               </div>
             </div>
             
-            {/* Technicians Grid */}
             <div className="space-y-4">
               {technicians.map((tech) => (
                 <div
@@ -574,7 +498,7 @@ const Technicians = () => {
                       </div>
                     </div>
                     
-                    {/* Technician Info */}
+                    {/* Technician Info - UPDATED */}
                     <div className="flex-1">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
@@ -582,7 +506,6 @@ const Technicians = () => {
                             {tech.userId?.firstName} {tech.userId?.lastName}
                           </h3>
                           <div className="flex flex-wrap items-center gap-2 mt-1">
-                            {/* Rating */}
                             <div className="flex items-center">
                               <Star className="w-4 h-4 text-yellow-400 fill-current" />
                               <span className="text-sm font-medium ml-1">
@@ -592,15 +515,18 @@ const Technicians = () => {
                                 ({tech.rating?.count || 0} reviews)
                               </span>
                             </div>
-                            
-                            {/* Subscription Plan Badge */}
+                            {/* UPDATED: Show mainCategory */}
+                            {tech.mainCategory && (
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                {tech.mainCategory}
+                              </span>
+                            )}
                             <span className={`text-xs px-2 py-0.5 rounded-full border ${getPlanBadgeColor(tech.subscriptionPlan, tech.isTrial)}`}>
                               {tech.isTrial ? '🔬 Trial' : (tech.subscriptionPlan === 'basicPlus' ? 'Basic-Plus' : (tech.subscriptionPlan?.charAt(0).toUpperCase() + tech.subscriptionPlan?.slice(1)))}
                             </span>
                           </div>
                         </div>
                         
-                        {/* Pricing */}
                         <div className="text-right">
                           <div className="text-xl font-bold text-green-600">
                             KES {tech.pricing?.hourlyRate?.toLocaleString()}
@@ -613,17 +539,29 @@ const Technicians = () => {
                         </div>
                       </div>
                       
-                      {/* Bio */}
                       <p className="text-gray-600 text-sm mt-2 line-clamp-2">
                         {tech.bio || 'Professional technician ready to help with your service needs.'}
                       </p>
                       
-                      {/* Visibility Info - Shows ACTUAL radius */}
+                      {/* UPDATED: Show service categories and sub-services */}
+                      {tech.serviceCategories && tech.serviceCategories.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {tech.serviceCategories.slice(0, 2).map((cat, idx) => (
+                            <span key={idx} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                              {cat.categoryName}
+                              {cat.subServices && cat.subServices.length > 0 && ` (${cat.subServices.length})`}
+                            </span>
+                          ))}
+                          {tech.serviceCategories.length > 2 && (
+                            <span className="text-xs text-gray-400">+{tech.serviceCategories.length - 2} more</span>
+                          )}
+                        </div>
+                      )}
+                      
                       <div className="mt-2 text-xs text-gray-400">
                         {getVisibilityDescription(tech.subscriptionPlan, tech.visibilityRadius, tech.isTrial)}
                       </div>
                       
-                      {/* Action Buttons */}
                       <div className="flex gap-3 mt-4">
                         <button
                           onClick={() => handleViewProfile(tech._id)}
