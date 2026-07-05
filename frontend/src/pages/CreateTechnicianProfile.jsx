@@ -2,10 +2,11 @@
  * CreateTechnicianProfile.js
  * ===========================
  * Technician profile creation form
- * Updated to match backend three-level service hierarchy:
- * Level 1: mainCategory
- * Level 2: serviceCategories (with categoryName)
- * Level 3: subServices
+ * Updated to load from service-catalog API endpoints
+ * 
+ * Level 1: mainCategory (from /api/service-catalog/main-categories)
+ * Level 2: serviceCategories (from /api/service-catalog/:mainCategory/service-categories)
+ * Level 3: subServices (from /api/service-catalog/:mainCategory/:serviceCategory/sub-services)
  * 
  * @version 2.0.0
  */
@@ -29,14 +30,13 @@ const CreateTechnicianProfile = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Service catalog data
+  // Service catalog data - loaded from backend APIs
   const [mainCategories, setMainCategories] = useState([]);
   const [serviceCategoriesMap, setServiceCategoriesMap] = useState({});
   const [subServicesMap, setSubServicesMap] = useState({});
   const [catalogLoading, setCatalogLoading] = useState(true);
 
   // Temporary selections for adding a service category
-  const [tempMainCategory, setTempMainCategory] = useState('');
   const [tempServiceCategory, setTempServiceCategory] = useState('');
   const [tempSubServices, setTempSubServices] = useState([]);
   const [availableServiceCategories, setAvailableServiceCategories] = useState([]);
@@ -46,14 +46,12 @@ const CreateTechnicianProfile = () => {
   const proficiencyLevels = ['Basic', 'Conversational', 'Fluent', 'Native'];
   const skillLevels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 
-  // Form state - UPDATED for new structure
+  // Form state
   const [formData, setFormData] = useState({
     aboutMe: '',
     profileHeadline: '',
     skills: [],
-    // UPDATED: Changed from 'category' to 'mainCategory'
     mainCategory: '',
-    // UPDATED: serviceCategories with categoryName and subServices
     serviceCategories: [],
     pricing: {
       hourlyRate: 0,
@@ -186,62 +184,107 @@ const CreateTechnicianProfile = () => {
     settings: false
   });
 
-  // --- Fetch main categories on mount ---
+  /**
+   * Fetch catalog data from service-catalog API
+   * This loads all three levels: mainCategory -> serviceCategories -> subServices
+   */
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
         setCatalogLoading(true);
-        const response = await api.get('/service-catalog');
         
-        if (response.data.success && response.data.data) {
-          const catalog = response.data.data;
-          
-          // Extract main categories
-          const mainCats = catalog.map(item => item.mainCategory);
+        // Step 1: Get main categories
+        const mainResponse = await api.get('/service-catalog/main-categories');
+        
+        if (mainResponse.data.success) {
+          const mainCats = mainResponse.data.data.map(cat => cat.name);
           setMainCategories(mainCats);
           
-          // Build maps for quick lookups
+          // Step 2: For each main category, fetch its service categories and sub-services
           const servicesMap = {};
           const subsMap = {};
           
-          catalog.forEach(item => {
-            servicesMap[item.mainCategory] = item.serviceCategories.map(sc => sc.name);
-            item.serviceCategories.forEach(sc => {
-              subsMap[sc.name] = sc.subServices.map(sub => sub.name);
-            });
-          });
+          for (const mainCat of mainCats) {
+            try {
+              // Fetch service categories for this main category
+              const serviceResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCat)}/service-categories`);
+              
+              if (serviceResponse.data.success) {
+                const services = serviceResponse.data.data;
+                servicesMap[mainCat] = services.map(s => s.name);
+                
+                // Fetch sub-services for each service category
+                for (const service of services) {
+                  try {
+                    const subResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCat)}/${encodeURIComponent(service.name)}/sub-services`);
+                    
+                    if (subResponse.data.success) {
+                      const subs = subResponse.data.data.subServices || [];
+                      subsMap[service.name] = subs.map(s => s.name);
+                    }
+                  } catch (subError) {
+                    console.error(`Failed to fetch sub-services for ${service.name}:`, subError);
+                    subsMap[service.name] = [];
+                  }
+                }
+              }
+            } catch (serviceError) {
+              console.error(`Failed to fetch service categories for ${mainCat}:`, serviceError);
+              servicesMap[mainCat] = [];
+            }
+          }
           
           setServiceCategoriesMap(servicesMap);
           setSubServicesMap(subsMap);
+          
+          console.log('✅ Catalog loaded from service-catalog API:', {
+            mainCategories: mainCats.length,
+            serviceCategories: Object.keys(servicesMap).length,
+            subServices: Object.keys(subsMap).length
+          });
+        } else {
+          // Fallback to default categories
+          useDefaultCategories();
         }
       } catch (err) {
         console.error('Failed to load catalog:', err);
-        // Fallback categories
-        const fallbackCategories = [
-          'IT & Networking',
-          'Electrical Services',
-          'Plumbing',
-          'Mechanical Services',
-          'Cleaning Services'
-        ];
-        setMainCategories(fallbackCategories);
-        setServiceCategoriesMap({
-          'IT & Networking': ['Internet Services', 'CCTV & Security Systems'],
-          'Electrical Services': ['Residential Electrical', 'Commercial Electrical'],
-          'Plumbing': ['General Plumbing', 'Drainage & Sewer']
-        });
-        setSubServicesMap({
-          'Internet Services': ['WiFi Setup', 'Network Troubleshooting'],
-          'Residential Electrical': ['House Wiring', 'Lighting Installation'],
-          'General Plumbing': ['Leak Detection', 'Faucet Installation']
-        });
+        useDefaultCategories();
         setError('Could not load service catalog. Using default categories.');
       } finally {
         setCatalogLoading(false);
       }
     };
+    
     fetchCatalog();
   }, []);
+
+  /**
+   * Use default categories when API fails
+   */
+  const useDefaultCategories = () => {
+    const fallbackCategories = [
+      'IT & Networking',
+      'Electrical Services',
+      'Plumbing',
+      'Mechanical Services',
+      'Cleaning Services'
+    ];
+    setMainCategories(fallbackCategories);
+    setServiceCategoriesMap({
+      'IT & Networking': ['Internet Services', 'CCTV & Security Systems', 'Computer Repair & Maintenance'],
+      'Electrical Services': ['Residential Electrical', 'Commercial Electrical'],
+      'Plumbing': ['General Plumbing', 'Drainage & Sewer'],
+      'Mechanical Services': ['HVAC Services', 'General Mechanical'],
+      'Cleaning Services': ['Residential Cleaning', 'Commercial Cleaning']
+    });
+    setSubServicesMap({
+      'Internet Services': ['WiFi Setup & Configuration', 'Network Troubleshooting', 'Fiber Optic Installation'],
+      'Residential Electrical': ['House Wiring & Rewiring', 'Lighting Installation', 'Ceiling Fan Installation'],
+      'General Plumbing': ['Leak Detection & Repair', 'Faucet Installation & Repair', 'Toilet Repair & Installation'],
+      'CCTV & Security Systems': ['CCTV Camera Installation', 'Security System Maintenance'],
+      'Computer Repair & Maintenance': ['Hardware Repair', 'Virus & Malware Removal', 'Data Recovery']
+    });
+  };
 
   // --- When main category changes, update available service categories ---
   useEffect(() => {
@@ -499,7 +542,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- UPDATED: Service categories management (with three-level hierarchy) ---
+  // --- Service categories management (with three-level hierarchy) ---
   const addServiceCategory = () => {
     if (!tempServiceCategory) {
       setError('Please select a service category');
@@ -564,7 +607,6 @@ const CreateTechnicianProfile = () => {
     setError('');
     setLoading(true);
 
-    // UPDATED: Validate mainCategory instead of category
     if (!formData.mainCategory) {
       setError('Please select a main category');
       setLoading(false);
@@ -581,11 +623,9 @@ const CreateTechnicianProfile = () => {
       return;
     }
 
-    // Prepare submission data - UPDATED structure
     const submitData = {
       ...formData,
       yearsOfExperience: Number(formData.yearsOfExperience),
-      // Ensure serviceCategories have the correct structure
       serviceCategories: formData.serviceCategories.map(sc => ({
         categoryName: sc.categoryName,
         subServices: sc.subServices,
@@ -713,7 +753,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== SERVICES OFFERED (UPDATED: Three-level hierarchy) ========== */}
+            {/* ========== SERVICES OFFERED (Three-level hierarchy) ========== */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -932,7 +972,6 @@ const CreateTechnicianProfile = () => {
                       className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                     />
                   </div>
-                  {/* Add experience form - keep the same as before */}
                   <div className="bg-gray-50 p-4 rounded-lg mb-4">
                     <h3 className="font-semibold text-gray-800 mb-4">Add Work Experience</h3>
                     <div className="space-y-4">
@@ -1039,9 +1078,841 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* The remaining sections (Education, Certifications, Portfolio, Languages, Location, Pricing, Availability, Social Links, Settings) 
-                follow the same pattern - keeping them concise here but they should all use the toggle pattern */}
-            {/* ... (other sections follow the same pattern) ... */}
+            {/* ========== EDUCATION ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('education')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <BookOpen className="w-5 h-5 mr-2 text-green-600" />
+                  Education
+                </h2>
+                {expandedSections.education ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.education && (
+                <div className="p-6">
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                    <div className="space-y-4">
+                      <input
+                        type="text"
+                        value={newEducation.institution}
+                        onChange={(e) => setNewEducation({...newEducation, institution: e.target.value})}
+                        placeholder="Institution"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="text"
+                        value={newEducation.degree}
+                        onChange={(e) => setNewEducation({...newEducation, degree: e.target.value})}
+                        placeholder="Degree"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="text"
+                        value={newEducation.fieldOfStudy}
+                        onChange={(e) => setNewEducation({...newEducation, fieldOfStudy: e.target.value})}
+                        placeholder="Field of Study"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="date"
+                          value={newEducation.startDate}
+                          onChange={(e) => setNewEducation({...newEducation, startDate: e.target.value})}
+                          className="p-3 border-2 border-gray-300 rounded-lg"
+                        />
+                        <input
+                          type="date"
+                          value={newEducation.endDate}
+                          onChange={(e) => setNewEducation({...newEducation, endDate: e.target.value})}
+                          disabled={newEducation.isCurrent}
+                          className="p-3 border-2 border-gray-300 rounded-lg"
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={newEducation.isCurrent}
+                          onChange={(e) => setNewEducation({...newEducation, isCurrent: e.target.checked})}
+                          className="h-4 w-4 text-green-600 rounded"
+                        />
+                        <label className="ml-2 text-sm text-gray-700">Currently studying</label>
+                      </div>
+                      <textarea
+                        value={newEducation.description}
+                        onChange={(e) => setNewEducation({...newEducation, description: e.target.value})}
+                        placeholder="Description"
+                        rows="3"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="text"
+                        value={newEducation.grade}
+                        onChange={(e) => setNewEducation({...newEducation, grade: e.target.value})}
+                        placeholder="Grade (optional)"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <button type="button" onClick={addEducation} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                        Add Education
+                      </button>
+                    </div>
+                  </div>
+                  {formData.education.map((edu, index) => (
+                    <div key={index} className="bg-gray-50 p-4 rounded-lg mb-3">
+                      <div className="flex justify-between">
+                        <div>
+                          <h4 className="font-semibold">{edu.degree} in {edu.fieldOfStudy}</h4>
+                          <p className="text-gray-600">{edu.institution}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(edu.startDate).toLocaleDateString()} - {edu.isCurrent ? 'Present' : new Date(edu.endDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <button type="button" onClick={() => removeEducation(index)} className="text-red-500 hover:text-red-700">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ========== CERTIFICATIONS ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('certifications')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <Certificate className="w-5 h-5 mr-2 text-green-600" />
+                  Certifications
+                </h2>
+                {expandedSections.certifications ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.certifications && (
+                <div className="p-6">
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                    <div className="space-y-4">
+                      <input
+                        type="text"
+                        value={newCertification.name}
+                        onChange={(e) => setNewCertification({...newCertification, name: e.target.value})}
+                        placeholder="Certification Name"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="text"
+                        value={newCertification.issuingOrganization}
+                        onChange={(e) => setNewCertification({...newCertification, issuingOrganization: e.target.value})}
+                        placeholder="Issuing Organization"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="date"
+                          value={newCertification.issueDate}
+                          onChange={(e) => setNewCertification({...newCertification, issueDate: e.target.value})}
+                          className="p-3 border-2 border-gray-300 rounded-lg"
+                        />
+                        <input
+                          type="date"
+                          value={newCertification.expiryDate}
+                          onChange={(e) => setNewCertification({...newCertification, expiryDate: e.target.value})}
+                          disabled={newCertification.doesNotExpire}
+                          className="p-3 border-2 border-gray-300 rounded-lg"
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={newCertification.doesNotExpire}
+                          onChange={(e) => setNewCertification({...newCertification, doesNotExpire: e.target.checked})}
+                          className="h-4 w-4 text-green-600 rounded"
+                        />
+                        <label className="ml-2 text-sm text-gray-700">This certification does not expire</label>
+                      </div>
+                      <input
+                        type="text"
+                        value={newCertification.credentialId}
+                        onChange={(e) => setNewCertification({...newCertification, credentialId: e.target.value})}
+                        placeholder="Credential ID"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="url"
+                        value={newCertification.credentialUrl}
+                        onChange={(e) => setNewCertification({...newCertification, credentialUrl: e.target.value})}
+                        placeholder="Credential URL"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <button type="button" onClick={addCertification} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                        Add Certification
+                      </button>
+                    </div>
+                  </div>
+                  {formData.certifications.map((cert, index) => (
+                    <div key={index} className="bg-gray-50 p-4 rounded-lg mb-3">
+                      <div className="flex justify-between">
+                        <div>
+                          <h4 className="font-semibold">{cert.name}</h4>
+                          <p className="text-gray-600">{cert.issuingOrganization}</p>
+                          <p className="text-sm text-gray-500">
+                            Issued: {new Date(cert.issueDate).toLocaleDateString()}
+                            {!cert.doesNotExpire && cert.expiryDate && ` • Expires: ${new Date(cert.expiryDate).toLocaleDateString()}`}
+                          </p>
+                          {cert.credentialId && <p className="text-sm text-gray-500">ID: {cert.credentialId}</p>}
+                        </div>
+                        <button type="button" onClick={() => removeCertification(index)} className="text-red-500 hover:text-red-700">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ========== PORTFOLIO ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('portfolio')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <Image className="w-5 h-5 mr-2 text-green-600" />
+                  Portfolio
+                </h2>
+                {expandedSections.portfolio ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.portfolio && (
+                <div className="p-6">
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                    <div className="space-y-4">
+                      <input
+                        type="text"
+                        value={newPortfolio.title}
+                        onChange={(e) => setNewPortfolio({...newPortfolio, title: e.target.value})}
+                        placeholder="Project Title"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <textarea
+                        value={newPortfolio.description}
+                        onChange={(e) => setNewPortfolio({...newPortfolio, description: e.target.value})}
+                        placeholder="Project Description"
+                        rows="3"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <select
+                          value={newPortfolio.mediaType}
+                          onChange={(e) => setNewPortfolio({...newPortfolio, mediaType: e.target.value})}
+                          className="p-3 border-2 border-gray-300 rounded-lg"
+                        >
+                          <option value="image">Image</option>
+                          <option value="video">Video</option>
+                          <option value="document">Document</option>
+                        </select>
+                        <input
+                          type="text"
+                          value={newPortfolio.category}
+                          onChange={(e) => setNewPortfolio({...newPortfolio, category: e.target.value})}
+                          placeholder="Category"
+                          className="p-3 border-2 border-gray-300 rounded-lg"
+                        />
+                      </div>
+                      <input
+                        type="url"
+                        value={newPortfolio.mediaUrl}
+                        onChange={(e) => setNewPortfolio({...newPortfolio, mediaUrl: e.target.value})}
+                        placeholder="Media URL"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="url"
+                        value={newPortfolio.thumbnailUrl}
+                        onChange={(e) => setNewPortfolio({...newPortfolio, thumbnailUrl: e.target.value})}
+                        placeholder="Thumbnail URL (optional)"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="text"
+                        value={newPortfolio.clientName}
+                        onChange={(e) => setNewPortfolio({...newPortfolio, clientName: e.target.value})}
+                        placeholder="Client Name"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="date"
+                        value={newPortfolio.completionDate}
+                        onChange={(e) => setNewPortfolio({...newPortfolio, completionDate: e.target.value})}
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                        <div className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={newTag}
+                            onChange={(e) => setNewTag(e.target.value)}
+                            placeholder="Add tag"
+                            className="flex-1 p-2 border-2 border-gray-300 rounded-lg"
+                          />
+                          <button type="button" onClick={addTag} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {newPortfolio.tags.map((tag, idx) => (
+                            <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm flex items-center">
+                              {tag}
+                              <button type="button" onClick={() => removeTag(idx)} className="ml-1 text-blue-500 hover:text-blue-700">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={newPortfolio.isFeatured}
+                          onChange={(e) => setNewPortfolio({...newPortfolio, isFeatured: e.target.checked})}
+                          className="h-4 w-4 text-green-600 rounded"
+                        />
+                        <label className="ml-2 text-sm text-gray-700">Feature this item</label>
+                      </div>
+                      <button type="button" onClick={addPortfolio} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                        Add to Portfolio
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {formData.portfolio.map((item, index) => (
+                      <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h4 className="font-semibold">{item.title}</h4>
+                            <p className="text-sm text-gray-600">{item.category}</p>
+                            {item.mediaType === 'image' && <Image className="w-4 h-4 text-gray-500 mt-1" />}
+                            {item.mediaType === 'video' && <Video className="w-4 h-4 text-gray-500 mt-1" />}
+                            {item.isFeatured && <Star className="w-4 h-4 text-yellow-500 mt-1" />}
+                          </div>
+                          <button type="button" onClick={() => removePortfolio(index)} className="text-red-500 hover:text-red-700">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ========== LANGUAGES ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('languages')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <Languages className="w-5 h-5 mr-2 text-green-600" />
+                  Languages
+                </h2>
+                {expandedSections.languages ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.languages && (
+                <div className="p-6">
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <input
+                        type="text"
+                        value={newLanguage.name}
+                        onChange={(e) => setNewLanguage({...newLanguage, name: e.target.value})}
+                        placeholder="Language"
+                        className="p-3 border-2 border-gray-300 rounded-lg"
+                      />
+                      <select
+                        value={newLanguage.proficiency}
+                        onChange={(e) => setNewLanguage({...newLanguage, proficiency: e.target.value})}
+                        className="p-3 border-2 border-gray-300 rounded-lg"
+                      >
+                        {proficiencyLevels.map(level => (
+                          <option key={level} value={level}>{level}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={addLanguage} className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700">
+                        Add Language
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.languages.map((lang, index) => (
+                      <span key={index} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center">
+                        {lang.name} ({lang.proficiency})
+                        <button type="button" onClick={() => removeLanguage(index)} className="ml-2 text-red-500 hover:text-red-700">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ========== LOCATION ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('location')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <MapPin className="w-5 h-5 mr-2 text-green-600" />
+                  Location
+                </h2>
+                {expandedSections.location ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.location && (
+                <div className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
+                      <input
+                        type="text"
+                        name="address.street"
+                        value={formData.address.street}
+                        onChange={handleInputChange}
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        placeholder="Street address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        name="address.city"
+                        value={formData.address.city}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        placeholder="City"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        name="address.state"
+                        value={formData.address.state}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        placeholder="State"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code</label>
+                      <input
+                        type="text"
+                        name="address.zipCode"
+                        value={formData.address.zipCode}
+                        onChange={handleInputChange}
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        placeholder="ZIP Code"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+                      <input
+                        type="text"
+                        name="address.country"
+                        value={formData.address.country}
+                        onChange={handleInputChange}
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        placeholder="Country"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Service Radius (km)</label>
+                      <input
+                        type="number"
+                        name="serviceRadius"
+                        value={formData.serviceRadius}
+                        onChange={handleInputChange}
+                        min="1"
+                        max="100"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ========== PRICING ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('pricing')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <DollarSign className="w-5 h-5 mr-2 text-green-600" />
+                  Pricing
+                </h2>
+                {expandedSections.pricing ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.pricing && (
+                <div className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Hourly Rate (KES)</label>
+                      <input
+                        type="number"
+                        name="pricing.hourlyRate"
+                        value={formData.pricing.hourlyRate}
+                        onChange={handleInputChange}
+                        min="0"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Fixed Price (KES)</label>
+                      <input
+                        type="number"
+                        name="pricing.fixedPrice"
+                        value={formData.pricing.fixedPrice}
+                        onChange={handleInputChange}
+                        min="0"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Consultation Fee (KES)</label>
+                      <input
+                        type="number"
+                        name="pricing.consultationFee"
+                        value={formData.pricing.consultationFee}
+                        onChange={handleInputChange}
+                        min="0"
+                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Payment Methods</label>
+                    <div className="flex gap-2 mb-3">
+                      <input
+                        type="text"
+                        value={newPaymentMethod}
+                        onChange={(e) => setNewPaymentMethod(e.target.value)}
+                        placeholder="Add payment method"
+                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      />
+                      <button type="button" onClick={addPaymentMethod} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700">
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.pricing.paymentMethods.map((method, index) => (
+                        <span key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
+                          {method}
+                          <button type="button" onClick={() => removePaymentMethod(method)} className="ml-2 text-red-500 hover:text-red-700">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ========== AVAILABILITY ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('availability')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <Calendar className="w-5 h-5 mr-2 text-green-600" />
+                  Availability
+                </h2>
+                {expandedSections.availability ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.availability && (
+                <div className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                      <div key={day} className="bg-gray-50 p-4 rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="font-medium text-gray-700 capitalize">{day}</label>
+                          <input
+                            type="checkbox"
+                            checked={formData.availability[day].enabled}
+                            onChange={(e) => {
+                              setFormData(prev => ({
+                                ...prev,
+                                availability: {
+                                  ...prev.availability,
+                                  [day]: {
+                                    ...prev.availability[day],
+                                    enabled: e.target.checked,
+                                    hours: e.target.checked ? [{ start: '09:00', end: '17:00' }] : []
+                                  }
+                                }
+                              }));
+                            }}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
+                        </div>
+                        {formData.availability[day].enabled && (
+                          <div>
+                            {formData.availability[day].hours.map((hour, idx) => (
+                              <div key={idx} className="flex items-center space-x-2 mt-2">
+                                <input
+                                  type="time"
+                                  value={hour.start}
+                                  onChange={(e) => {
+                                    const updated = [...formData.availability[day].hours];
+                                    updated[idx] = { ...updated[idx], start: e.target.value };
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      availability: {
+                                        ...prev.availability,
+                                        [day]: { ...prev.availability[day], hours: updated }
+                                      }
+                                    }));
+                                  }}
+                                  className="p-2 border-2 border-gray-300 rounded-lg"
+                                />
+                                <span>to</span>
+                                <input
+                                  type="time"
+                                  value={hour.end}
+                                  onChange={(e) => {
+                                    const updated = [...formData.availability[day].hours];
+                                    updated[idx] = { ...updated[idx], end: e.target.value };
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      availability: {
+                                        ...prev.availability,
+                                        [day]: { ...prev.availability[day], hours: updated }
+                                      }
+                                    }));
+                                  }}
+                                  className="p-2 border-2 border-gray-300 rounded-lg"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        name="emergencyAvailable"
+                        checked={formData.emergencyAvailable}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-green-600 rounded"
+                      />
+                      <label className="ml-2 text-gray-700">Available for emergency services</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        name="remoteServiceAvailable"
+                        checked={formData.remoteServiceAvailable}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-green-600 rounded"
+                      />
+                      <label className="ml-2 text-gray-700">Available for remote services</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        name="weekendAvailable"
+                        checked={formData.weekendAvailable}
+                        onChange={handleInputChange}
+                        className="h-4 w-4 text-green-600 rounded"
+                      />
+                      <label className="ml-2 text-gray-700">Available on weekends</label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ========== SOCIAL LINKS ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('social')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <Globe className="w-5 h-5 mr-2 text-green-600" />
+                  Social Links
+                </h2>
+                {expandedSections.social ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.social && (
+                <div className="p-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Globe className="w-5 h-5 text-gray-500" />
+                      <input
+                        type="url"
+                        name="socialLinks.website"
+                        value={formData.socialLinks.website}
+                        onChange={handleInputChange}
+                        placeholder="Website URL"
+                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Facebook className="w-5 h-5 text-blue-600" />
+                      <input
+                        type="url"
+                        name="socialLinks.facebook"
+                        value={formData.socialLinks.facebook}
+                        onChange={handleInputChange}
+                        placeholder="Facebook URL"
+                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Twitter className="w-5 h-5 text-blue-400" />
+                      <input
+                        type="url"
+                        name="socialLinks.twitter"
+                        value={formData.socialLinks.twitter}
+                        onChange={handleInputChange}
+                        placeholder="Twitter URL"
+                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Linkedin className="w-5 h-5 text-blue-700" />
+                      <input
+                        type="url"
+                        name="socialLinks.linkedin"
+                        value={formData.socialLinks.linkedin}
+                        onChange={handleInputChange}
+                        placeholder="LinkedIn URL"
+                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Instagram className="w-5 h-5 text-pink-600" />
+                      <input
+                        type="url"
+                        name="socialLinks.instagram"
+                        value={formData.socialLinks.instagram}
+                        onChange={handleInputChange}
+                        placeholder="Instagram URL"
+                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Youtube className="w-5 h-5 text-red-600" />
+                      <input
+                        type="url"
+                        name="socialLinks.youtube"
+                        value={formData.socialLinks.youtube}
+                        onChange={handleInputChange}
+                        placeholder="YouTube URL"
+                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ========== SETTINGS ========== */}
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleSection('settings')}
+                className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 flex justify-between items-center"
+              >
+                <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                  <Settings className="w-5 h-5 mr-2 text-green-600" />
+                  Settings
+                </h2>
+                {expandedSections.settings ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              {expandedSections.settings && (
+                <div className="p-6">
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="font-semibold text-gray-800 mb-4">Privacy Settings</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Show email on profile</label>
+                          <input type="checkbox" name="settings.showEmail" checked={formData.settings.showEmail} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Show phone on profile</label>
+                          <input type="checkbox" name="settings.showPhone" checked={formData.settings.showPhone} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="font-semibold text-gray-800 mb-4">Booking Settings</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Allow instant booking</label>
+                          <input type="checkbox" name="settings.instantBooking" checked={formData.settings.instantBooking} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Require approval for bookings</label>
+                          <input type="checkbox" name="settings.requiresApproval" checked={formData.settings.requiresApproval} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Auto-accept jobs</label>
+                          <input type="checkbox" name="settings.autoAcceptJobs" checked={formData.settings.autoAcceptJobs} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="font-semibold text-gray-800 mb-4">Notification Settings</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Email notifications</label>
+                          <input type="checkbox" name="settings.notifications.email" checked={formData.settings.notifications.email} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">SMS notifications</label>
+                          <input type="checkbox" name="settings.notifications.sms" checked={formData.settings.notifications.sms} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Push notifications</label>
+                          <input type="checkbox" name="settings.notifications.push" checked={formData.settings.notifications.push} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label className="text-gray-700">Job reminders</label>
+                          <input type="checkbox" name="settings.jobReminders" checked={formData.settings.jobReminders} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Submit Button */}
             <button

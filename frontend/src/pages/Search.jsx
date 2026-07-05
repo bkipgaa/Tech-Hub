@@ -14,68 +14,25 @@ const planConfig = {
   trial: { label: 'Trial', color: 'text-green-600', bg: 'bg-green-100', border: 'border-green-200', icon: Clock }
 };
 
-// Categories from Job model
-const MAIN_CATEGORIES = [
-  'IT & Networking',
-  'Electrical Services',
-  'Mechanical Services',
-  'Plumbing',
-  'Programming & AI',
-  'Hairdressing & Beauty',
-  'Carpentry & Furniture',
-  'Laundry & Dry Cleaning',
-  'Cleaning Services',
-  'Painting & Decorating',
-  'Welding & Fabrication',
-  'Automotive Repair',
-  'Tutoring & Training',
-  'Photography & Videography',
-  'Event Planning',
-  'Construction & Renovation',
-  'HVAC Services',
-  'Appliance Repair',
-  'Moving & Logistics',
-  'Gardening & Landscaping'
-];
-
-// Sample service categories (you can expand these)
-const SERVICE_CATEGORIES = {
-  'IT & Networking': ['Network Setup', 'IT Support', 'Cybersecurity', 'Cloud Services', 'Data Recovery'],
-  'Electrical Services': ['Wiring', 'Repair', 'Installation', 'Lighting', 'Circuit Breakers'],
-  'Plumbing': ['Pipe Repair', 'Installation', 'Drain Cleaning', 'Water Heater', 'Leak Detection'],
-  'Programming & AI': ['Web Development', 'Mobile Apps', 'AI Solutions', 'Data Analysis', 'Machine Learning'],
-  'Hairdressing & Beauty': ['Haircut', 'Styling', 'Coloring', 'Makeup', 'Nail Art'],
-  'Carpentry & Furniture': ['Custom Furniture', 'Repair', 'Installation', 'Restoration', 'Cabinetry'],
-  'Cleaning Services': ['Home Cleaning', 'Office Cleaning', 'Deep Cleaning', 'Carpet Cleaning', 'Window Cleaning'],
-  'Painting & Decorating': ['Interior Painting', 'Exterior Painting', 'Wallpaper', 'Decorative Finishes'],
-  'Automotive Repair': ['Engine Repair', 'Brake Service', 'Oil Change', 'Tire Service', 'Diagnostics'],
-  'Construction & Renovation': ['Building', 'Renovation', 'Roofing', 'Flooring', 'Tiling'],
-  'HVAC Services': ['AC Repair', 'Heating', 'Ventilation', 'Installation', 'Maintenance'],
-  'Appliance Repair': ['Refrigerator', 'Washing Machine', 'Oven', 'Dishwasher', 'Microwave'],
-  'Moving & Logistics': ['Local Moving', 'Long Distance', 'Packing', 'Storage', 'Delivery'],
-  'Gardening & Landscaping': ['Garden Design', 'Lawn Care', 'Tree Service', 'Irrigation', 'Landscaping']
-};
-
-// Sample sub-services (you can expand these)
-const SUB_SERVICES = {
-  'Network Setup': ['Home Network', 'Office Network', 'WiFi Setup', 'Cabling', 'Router Configuration'],
-  'IT Support': ['Hardware Support', 'Software Support', 'Troubleshooting', 'Maintenance', 'Help Desk'],
-  'Cybersecurity': ['Security Audit', 'Firewall Setup', 'Antivirus', 'Data Protection', 'Penetration Testing'],
-  // Add more sub-services as needed
-};
-
 const SearchPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [technicians, setTechnicians] = useState([]);
-  const [availableCategories, setAvailableCategories] = useState(MAIN_CATEGORIES);
   const [userLocation, setUserLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   
-  // Search filters - MATCH JOB MODEL
+  // ===== CATALOG DATA FROM BACKEND =====
+  const [catalogData, setCatalogData] = useState({
+    mainCategories: [],
+    serviceCategoriesMap: {}, // mainCategory -> array of service categories
+    subServicesMap: {} // serviceCategory -> array of sub-services
+  });
+
+  // Search filters
   const [filters, setFilters] = useState({
-    mainCategory: '',        // Changed from category to mainCategory
+    mainCategory: '',
     serviceCategory: '',
     subService: '',
     radius: 50,
@@ -84,54 +41,162 @@ const SearchPage = () => {
     minHourlyRate: ''
   });
   
+  // Dynamic dropdown options
   const [serviceCategories, setServiceCategories] = useState([]);
   const [subServices, setSubServices] = useState([]);
-  const [allTechniciansData, setAllTechniciansData] = useState([]);
   
-  // Load available categories on mount
+  // ===== LOAD CATALOG FROM BACKEND =====
   useEffect(() => {
-    fetchAvailableCategories();
+    fetchCatalogData();
   }, []);
+
+  /**
+   * Fetch complete catalog data from service-catalog API
+   * This includes all three levels: mainCategory -> serviceCategories -> subServices
+   */
+  const fetchCatalogData = async () => {
+    setCatalogLoading(true);
+    try {
+      // Step 1: Get main categories from service-catalog API
+      const mainCategoriesResponse = await api.get('/service-catalog/main-categories');
+      
+      if (mainCategoriesResponse.data.success) {
+        const mainCategories = mainCategoriesResponse.data.data.map(cat => cat.name);
+        
+        // Step 2: For each main category, fetch its service categories and sub-services
+        const serviceCategoriesMap = {};
+        const subServicesMap = {};
+        
+        for (const mainCategory of mainCategories) {
+          try {
+            // Fetch service categories for this main category
+            const serviceResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCategory)}/service-categories`);
+            
+            if (serviceResponse.data.success) {
+              const services = serviceResponse.data.data;
+              serviceCategoriesMap[mainCategory] = services.map(s => s.name);
+              
+              // Fetch sub-services for each service category
+              for (const service of services) {
+                try {
+                  const subResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCategory)}/${encodeURIComponent(service.name)}/sub-services`);
+                  
+                  if (subResponse.data.success) {
+                    const subs = subResponse.data.data.subServices || [];
+                    subServicesMap[service.name] = subs.map(s => s.name);
+                  }
+                } catch (subError) {
+                  console.error(`Failed to fetch sub-services for ${service.name}:`, subError);
+                  subServicesMap[service.name] = [];
+                }
+              }
+            }
+          } catch (serviceError) {
+            console.error(`Failed to fetch service categories for ${mainCategory}:`, serviceError);
+            serviceCategoriesMap[mainCategory] = [];
+          }
+        }
+        
+        setCatalogData({
+          mainCategories,
+          serviceCategoriesMap,
+          subServicesMap
+        });
+        
+        console.log('✅ Catalog loaded from service-catalog API:', {
+          mainCategories: mainCategories.length,
+          serviceCategories: Object.keys(serviceCategoriesMap).length,
+          subServices: Object.keys(subServicesMap).length
+        });
+      } else {
+        // If API returns success: false, use defaults
+        useDefaultCatalog();
+      }
+    } catch (error) {
+      console.error('Failed to load catalog from backend:', error);
+      useDefaultCatalog();
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  /**
+   * Use default catalog data when backend is unavailable
+   */
+  const useDefaultCatalog = () => {
+    const defaultMainCategories = [
+      'IT & Networking',
+      'Electrical Services',
+      'Mechanical Services',
+      'Plumbing',
+      'Programming & AI',
+      'Hairdressing & Beauty',
+      'Carpentry & Furniture',
+      'Laundry & Dry Cleaning',
+      'Cleaning Services',
+      'Painting & Decorating',
+      'Welding & Fabrication',
+      'Automotive Repair',
+      'Tutoring & Training',
+      'Photography & Videography',
+      'Event Planning',
+      'Construction & Renovation',
+      'HVAC Services',
+      'Appliance Repair',
+      'Moving & Logistics',
+      'Gardening & Landscaping'
+    ];
+
+    const defaultServiceCategories = {
+      'IT & Networking': ['Internet Services', 'CCTV & Security Systems', 'Computer Repair & Maintenance'],
+      'Electrical Services': ['Residential Electrical', 'Commercial Electrical'],
+      'Mechanical Services': ['HVAC Services', 'General Mechanical'],
+      'Plumbing': ['General Plumbing', 'Drainage & Sewer'],
+      'Cleaning Services': ['Residential Cleaning', 'Commercial Cleaning']
+    };
+
+    const defaultSubServices = {
+      'Internet Services': ['WiFi Setup & Configuration', 'Network Troubleshooting', 'Fiber Optic Installation'],
+      'Residential Electrical': ['House Wiring & Rewiring', 'Lighting Installation', 'Ceiling Fan Installation'],
+      'General Plumbing': ['Leak Detection & Repair', 'Faucet Installation & Repair', 'Toilet Repair & Installation'],
+      'CCTV & Security Systems': ['CCTV Camera Installation', 'Security System Maintenance'],
+      'Computer Repair & Maintenance': ['Hardware Repair', 'Virus & Malware Removal', 'Data Recovery']
+    };
+
+    setCatalogData({
+      mainCategories: defaultMainCategories,
+      serviceCategoriesMap: defaultServiceCategories,
+      subServicesMap: defaultSubServices
+    });
+  };
+
+  // ===== UPDATE DROPDOWN OPTIONS BASED ON SELECTIONS =====
   
   // Update service categories when main category changes
   useEffect(() => {
     if (filters.mainCategory) {
-      // Get service categories from the mapping
-      const services = SERVICE_CATEGORIES[filters.mainCategory] || [];
+      const services = catalogData.serviceCategoriesMap[filters.mainCategory] || [];
       setServiceCategories(services);
       setFilters(prev => ({ ...prev, serviceCategory: '', subService: '' }));
       setSubServices([]);
+    } else {
+      setServiceCategories([]);
+      setSubServices([]);
     }
-  }, [filters.mainCategory]);
-  
+  }, [filters.mainCategory, catalogData.serviceCategoriesMap]);
+
   // Update sub-services when service category changes
   useEffect(() => {
     if (filters.serviceCategory) {
-      // Get sub-services from the mapping
-      const subs = SUB_SERVICES[filters.serviceCategory] || [];
+      const subs = catalogData.subServicesMap[filters.serviceCategory] || [];
       setSubServices(subs);
       setFilters(prev => ({ ...prev, subService: '' }));
+    } else {
+      setSubServices([]);
     }
-  }, [filters.serviceCategory]);
-  
-  const fetchAvailableCategories = async () => {
-    try {
-      // Try to get categories from API
-      const response = await api.get('/search/categories');
-      if (response.data.success && response.data.categories.length > 0) {
-        setAvailableCategories(response.data.categories);
-        console.log('Categories loaded from API:', response.data.categories);
-        return;
-      }
-    } catch (error) {
-      console.log('Could not fetch categories from API, using defaults');
-    }
-    
-    // Use default categories from Job model
-    setAvailableCategories(MAIN_CATEGORIES);
-    console.log('Using default categories from Job model');
-  };
-  
+  }, [filters.serviceCategory, catalogData.subServicesMap]);
+
+  // ===== LOCATION FUNCTIONS =====
   const getCurrentLocation = () => {
     setGettingLocation(true);
     if (!navigator.geolocation) {
@@ -171,7 +236,8 @@ const SearchPage = () => {
       }
     );
   };
-  
+
+  // ===== SEARCH FUNCTION =====
   const performSearch = async (lat, lng) => {
     setLoading(true);
     try {
@@ -215,7 +281,7 @@ const SearchPage = () => {
       setLoading(false);
     }
   };
-  
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (userLocation) {
@@ -224,11 +290,11 @@ const SearchPage = () => {
       performSearch();
     }
   };
-  
+
   const handleViewProfile = (technicianId) => {
     navigate(`/technician/${technicianId}`);
   };
-  
+
   const clearFilters = () => {
     setFilters({
       mainCategory: '',
@@ -247,8 +313,8 @@ const SearchPage = () => {
       performSearch();
     }
   };
-  
-  // Get radius display text
+
+  // ===== UI HELPER FUNCTIONS =====
   const getRadiusText = () => {
     const radius = parseInt(filters.radius);
     if (radius <= 10) return `${radius} km (Local)`;
@@ -258,8 +324,7 @@ const SearchPage = () => {
     if (radius <= 600) return `${radius} km (National)`;
     return `${radius} km (Nationwide)`;
   };
-  
-  // Get radius color based on value
+
   const getRadiusColor = () => {
     const radius = parseInt(filters.radius);
     if (radius <= 10) return 'bg-gray-100 text-gray-700';
@@ -269,7 +334,20 @@ const SearchPage = () => {
     if (radius <= 600) return 'bg-orange-100 text-orange-700';
     return 'bg-red-100 text-red-700';
   };
-  
+
+  // ===== LOADING STATE =====
+  if (catalogLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading service catalog...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== RENDER =====
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -278,23 +356,25 @@ const SearchPage = () => {
         {/* Search Form */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <form onSubmit={handleSearch} className="space-y-4">
-            {/* Service Selection Row - MATCH JOB MODEL */}
+            {/* Service Selection Row - THREE LEVELS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Level 1: Main Category */}
               <select
                 value={filters.mainCategory}
                 onChange={(e) => setFilters({ ...filters, mainCategory: e.target.value })}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none bg-white"
               >
                 <option value="">Select Main Category</option>
-                {availableCategories.map(cat => (
+                {catalogData.mainCategories.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
               
+              {/* Level 2: Service Category */}
               <select
                 value={filters.serviceCategory}
                 onChange={(e) => setFilters({ ...filters, serviceCategory: e.target.value })}
-                disabled={!filters.mainCategory}
+                disabled={!filters.mainCategory || serviceCategories.length === 0}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none disabled:bg-gray-100 bg-white"
               >
                 <option value="">Select Service Category</option>
@@ -303,10 +383,11 @@ const SearchPage = () => {
                 ))}
               </select>
               
+              {/* Level 3: Sub-Service */}
               <select
                 value={filters.subService}
                 onChange={(e) => setFilters({ ...filters, subService: e.target.value })}
-                disabled={!filters.serviceCategory}
+                disabled={!filters.serviceCategory || subServices.length === 0}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none disabled:bg-gray-100 bg-white"
               >
                 <option value="">Select Sub-Service</option>
@@ -507,6 +588,12 @@ const SearchPage = () => {
                               <h3 className="text-xl font-semibold text-gray-800">
                                 {tech.user?.firstName} {tech.user?.lastName}
                               </h3>
+                              {/* Main Category Badge - NEW */}
+                              {tech.category && (
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                  {tech.category}
+                                </span>
+                              )}
                               {/* Plan Badge */}
                               <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${planInfo.bg} ${planInfo.color}`}>
                                 {PlanIcon && <PlanIcon className="w-3 h-3" />}
@@ -559,11 +646,6 @@ const SearchPage = () => {
                             <span>KES {tech.pricing?.hourlyRate || 0}/hour</span>
                           </div>
                           
-                          <div className="flex items-center gap-1 text-sm text-gray-500">
-                            <Wrench className="w-4 h-4" />
-                            <span>{tech.category}</span>
-                          </div>
-                          
                           {tech.yearsOfExperience > 0 && (
                             <div className="flex items-center gap-1 text-sm text-gray-500">
                               <Briefcase className="w-4 h-4" />
@@ -588,14 +670,29 @@ const SearchPage = () => {
                           </div>
                         )}
                         
-                        {/* Service Categories */}
+                        {/* Service Categories with Sub-Services - UPDATED */}
                         {tech.serviceCategories && tech.serviceCategories.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {tech.serviceCategories.slice(0, 2).map((service, idx) => (
-                              <span key={idx} className="text-xs border border-gray-200 text-gray-500 px-2 py-1 rounded-full">
-                                {service.categoryName}
-                              </span>
-                            ))}
+                          <div className="mt-3">
+                            <div className="flex flex-wrap gap-2">
+                              {tech.serviceCategories.slice(0, 2).map((service, idx) => (
+                                <div key={idx} className="flex flex-wrap items-center gap-1">
+                                  <span className="text-xs border border-gray-200 text-gray-700 px-2 py-1 rounded-full">
+                                    {service.categoryName}
+                                  </span>
+                                  {service.subServices && service.subServices.length > 0 && (
+                                    <span className="text-xs text-gray-400">
+                                      ({service.subServices.slice(0, 2).join(', ')}
+                                      {service.subServices.length > 2 && ` +${service.subServices.length - 2} more`})
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                              {tech.serviceCategories.length > 2 && (
+                                <span className="text-xs text-gray-400">
+                                  +{tech.serviceCategories.length - 2} more categories
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>

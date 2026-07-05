@@ -332,9 +332,9 @@ exports.searchTechnicians = async (req, res) => {
 
     // ===== SERVICE FILTERS (MATCHING JOB MODEL) =====
     
-    // Filter by mainCategory (matches Job model's mainCategory)
+    // FIXED: Filter by mainCategory (matches Job model's mainCategory)
     if (mainCategory) {
-      query.category = { $regex: new RegExp(`^${mainCategory}$`, 'i') };
+      query.mainCategory = { $regex: new RegExp(`^${mainCategory}$`, 'i') };
     }
 
     // Filter by serviceCategory and subService
@@ -359,7 +359,7 @@ exports.searchTechnicians = async (req, res) => {
       const searchRegex = new RegExp(searchTerm, 'i');
       query.$or = [
         { businessName: searchRegex },
-        { category: searchRegex },
+        { mainCategory: searchRegex }, // FIXED: Use mainCategory
         { 'serviceCategories.categoryName': searchRegex },
         { 'serviceCategories.subServices': searchRegex },
         { aboutMe: searchRegex },
@@ -517,7 +517,7 @@ exports.searchTechnicians = async (req, res) => {
     const formattedResults = paginatedResults.map(tech => ({
       _id: tech._id,
       businessName: tech.businessName,
-      category: tech.category,
+      mainCategory: tech.mainCategory, // FIXED: Use mainCategory
       serviceCategories: tech.serviceCategories,
       aboutMe: tech.aboutMe,
       profileHeadline: tech.profileHeadline,
@@ -663,6 +663,38 @@ exports.getTechniciansBySubService = async (req, res) => {
       visibleTechnicians.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
     }
 
+    // Format response with mainCategory
+    const formattedResults = visibleTechnicians.map(tech => ({
+      _id: tech._id,
+      businessName: tech.businessName,
+      mainCategory: tech.mainCategory,
+      serviceCategories: tech.serviceCategories,
+      aboutMe: tech.aboutMe,
+      profileHeadline: tech.profileHeadline,
+      skills: tech.skills,
+      pricing: tech.pricing,
+      rating: tech.rating,
+      yearsOfExperience: tech.yearsOfExperience,
+      distance: tech.distance,
+      visibilityRadius: tech.visibilityRadius,
+      subscriptionPlan: tech.subscription?.plan || 'trial',
+      isTrial: tech.subscription?.isTrial || tech.subscription?.plan === 'trial',
+      isAvailable: tech.isAvailable,
+      verificationStatus: tech.verificationStatus,
+      location: tech.location,
+      address: tech.address,
+      user: tech.userId ? {
+        _id: tech.userId._id,
+        firstName: tech.userId.firstName,
+        lastName: tech.userId.lastName,
+        profileImage: tech.userId.profileImage,
+        phone: tech.userId.phone,
+        email: tech.userId.email
+      } : null,
+      portfolio: tech.portfolio?.slice(0, 3),
+      createdAt: tech.createdAt
+    }));
+
     res.json({
       success: true,
       count: visibleTechnicians.length,
@@ -670,7 +702,7 @@ exports.getTechniciansBySubService = async (req, res) => {
       page: pageNum,
       limit: limitNum,
       totalPages: Math.ceil(total / limitNum),
-      data: visibleTechnicians
+      data: formattedResults
     });
 
   } catch (error) {
@@ -757,6 +789,38 @@ exports.getNearbyTechnicians = async (req, res) => {
     const total = visibleTechnicians.length;
     const paginatedResults = visibleTechnicians.slice(skip, skip + limitNum);
 
+    // Format response with mainCategory
+    const formattedResults = paginatedResults.map(tech => ({
+      _id: tech._id,
+      businessName: tech.businessName,
+      mainCategory: tech.mainCategory,
+      serviceCategories: tech.serviceCategories,
+      aboutMe: tech.aboutMe,
+      profileHeadline: tech.profileHeadline,
+      skills: tech.skills,
+      pricing: tech.pricing,
+      rating: tech.rating,
+      yearsOfExperience: tech.yearsOfExperience,
+      distance: tech.distance,
+      visibilityRadius: tech.visibilityRadius,
+      subscriptionPlan: tech.subscriptionPlan,
+      isTrial: tech.isTrial,
+      isAvailable: tech.isAvailable,
+      verificationStatus: tech.verificationStatus,
+      location: tech.location,
+      address: tech.address,
+      user: tech.userId ? {
+        _id: tech.userId._id,
+        firstName: tech.userId.firstName,
+        lastName: tech.userId.lastName,
+        profileImage: tech.userId.profileImage,
+        phone: tech.userId.phone,
+        email: tech.userId.email
+      } : null,
+      portfolio: tech.portfolio?.slice(0, 3),
+      createdAt: tech.createdAt
+    }));
+
     res.json({
       success: true,
       count: paginatedResults.length,
@@ -765,7 +829,7 @@ exports.getNearbyTechnicians = async (req, res) => {
       limit: limitNum,
       totalPages: Math.ceil(total / limitNum),
       searchRadius: searchRadius,
-      data: paginatedResults
+      data: formattedResults
     });
 
   } catch (error) {
@@ -813,12 +877,13 @@ exports.getSearchSuggestions = async (req, res) => {
       isActive: true
     })
     .limit(limitNum)
-    .select('businessName category')
+    .select('businessName mainCategory') // FIXED: Use mainCategory
     .lean();
     
     // ===== GET CATEGORY SUGGESTIONS =====
-    const categories = await Technician.distinct('category', {
-      category: searchRegex,
+    // FIXED: Use mainCategory instead of category
+    const categories = await Technician.distinct('mainCategory', {
+      mainCategory: searchRegex,
       isActive: true
     });
     
@@ -862,7 +927,7 @@ exports.getSearchSuggestions = async (req, res) => {
     
     // ===== COMBINE ALL SUGGESTIONS =====
     const suggestions = [
-      ...businesses.map(b => ({ type: 'business', value: b.businessName, category: b.category })),
+      ...businesses.map(b => ({ type: 'business', value: b.businessName, category: b.mainCategory })),
       ...categories.map(c => ({ type: 'category', value: c })),
       ...Array.from(servicesSet).map(s => ({ type: 'service', value: s })),
       ...Array.from(subServicesSet).map(s => ({ type: 'subservice', value: s }))
@@ -886,7 +951,7 @@ exports.getSearchSuggestions = async (req, res) => {
 /**
  * GET AVAILABLE CATEGORIES
  * 
- * Fetches all available main categories from the Job model.
+ * Fetches all available main categories from the Technician model.
  * Used to populate the category dropdown in the search interface.
  * 
  * @route   GET /api/search/categories
@@ -900,15 +965,13 @@ exports.getSearchSuggestions = async (req, res) => {
  */
 exports.getCategories = async (req, res) => {
   try {
-    // Try to get distinct categories from Job model
-    const Job = require('../models/Job');
-    
-    // Get categories from approved jobs
-    const categories = await Job.distinct('mainCategory', {
-      status: 'approved'
+    // FIXED: Get distinct categories from Technician model using mainCategory
+    const categories = await Technician.distinct('mainCategory', {
+      isActive: true,
+      verificationStatus: { $in: ['verified', 'pending'] }
     });
     
-    // If no jobs found, return the full list from Job model enum
+    // If no categories found, return the full list
     const defaultCategories = [
       'IT & Networking',
       'Electrical Services',
@@ -970,6 +1033,98 @@ exports.getCategories = async (req, res) => {
   }
 };
 
+/**
+ * GET CATEGORIES WITH FULL HIERARCHY
+ * 
+ * Fetches the complete three-level hierarchy:
+ * mainCategory -> serviceCategories -> subServices
+ * Used by the frontend SearchPage to populate all three dropdowns.
+ * 
+ * @route   GET /api/search/categories/full
+ * @param   {Object} req - Express request object
+ * @param   {Object} res - Express response object
+ * @returns {Object} Complete category hierarchy
+ * 
+ * @example
+ * GET /api/search/categories/full
+ * // Returns: { success: true, categories: [{ mainCategory: 'Plumbing', serviceCategories: [...] }] }
+ */
+exports.getFullCategories = async (req, res) => {
+  try {
+    // Get all active technicians with their service categories
+    const technicians = await Technician.find({
+      isActive: true,
+      verificationStatus: { $in: ['verified', 'pending'] }
+    })
+    .select('mainCategory serviceCategories')
+    .lean();
+
+    // Build the hierarchy
+    const categoryMap = {};
+
+    technicians.forEach(tech => {
+      if (!tech.mainCategory) return;
+      
+      if (!categoryMap[tech.mainCategory]) {
+        categoryMap[tech.mainCategory] = {
+          mainCategory: tech.mainCategory,
+          serviceCategories: []
+        };
+      }
+
+      // Add service categories
+      if (tech.serviceCategories && tech.serviceCategories.length > 0) {
+        tech.serviceCategories.forEach(sc => {
+          // Check if this service category already exists
+          let existing = categoryMap[tech.mainCategory].serviceCategories.find(
+            s => s.name === sc.categoryName
+          );
+          
+          if (!existing) {
+            existing = {
+              name: sc.categoryName,
+              subServices: []
+            };
+            categoryMap[tech.mainCategory].serviceCategories.push(existing);
+          }
+          
+          // Add sub-services
+          if (sc.subServices && sc.subServices.length > 0) {
+            sc.subServices.forEach(sub => {
+              if (!existing.subServices.includes(sub)) {
+                existing.subServices.push(sub);
+              }
+            });
+          }
+        });
+      }
+    });
+
+    // Convert map to array and sort
+    const categories = Object.values(categoryMap);
+    
+    // Sort service categories and sub-services
+    categories.forEach(cat => {
+      cat.serviceCategories.sort((a, b) => a.name.localeCompare(b.name));
+      cat.serviceCategories.forEach(sc => {
+        sc.subServices.sort();
+      });
+    });
+
+    res.json({
+      success: true,
+      categories: categories
+    });
+
+  } catch (error) {
+    console.error('Error fetching full categories:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 // ===========================================
 // EXPORT ALL CONTROLLER FUNCTIONS
 // ===========================================
@@ -980,7 +1135,8 @@ module.exports = {
   getTechniciansBySubService,
   getNearbyTechnicians,
   getSearchSuggestions,
-  getCategories, // New function for category dropdown
+  getCategories,
+  getFullCategories, // New function for full hierarchy
   
   // Helper functions (exported for testing and reuse)
   getVisibilityRadius,
