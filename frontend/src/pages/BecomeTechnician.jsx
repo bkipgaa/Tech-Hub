@@ -1,5 +1,5 @@
 // src/pages/BecomeTechnician.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Wrench, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
@@ -11,14 +11,15 @@ const BecomeTechnician = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
+  // ✅ FIX: Redirect if already technician
+  useEffect(() => {
+    if (user && user.role === 'technician') {
+      navigate('/create-technician-profile');
+    }
+  }, [user, navigate]);
+
   if (!user) {
     navigate('/login');
-    return null;
-  }
-
-  // If already technician, redirect to create profile or dashboard
-  if (user.role === 'technician') {
-    navigate('/create-technician-profile');
     return null;
   }
 
@@ -26,18 +27,22 @@ const BecomeTechnician = () => {
     setLoading(true);
     setError('');
     
-    const result = await becomeTechnician();
-    
-    setLoading(false);
-    
-    if (result.success) {
-      setSuccess(true);
-      // Redirect to create profile page after 2 seconds
-      setTimeout(() => {
-        navigate('/create-technician-profile');
-      }, 2000);
-    } else {
-      setError(result.error);
+    try {
+      const result = await becomeTechnician();
+      
+      if (result.success) {
+        setSuccess(true);
+        // Redirect to create profile page after 2 seconds
+        setTimeout(() => {
+          navigate('/create-technician-profile');
+        }, 2000);
+      } else {
+        setError(result.error || 'Failed to become technician');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 

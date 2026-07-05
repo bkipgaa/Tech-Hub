@@ -10,19 +10,10 @@
  * - Technician profile management
  * - Admin user management
  * - Token-based authentication
- * 
- * Admin Features Added:
- * - Fetch all technicians (for admin panel)
- * - Get technician by ID (for admin viewing)
- * - Verify/reject technicians
- * - Update technician subscriptions (admin override)
- * - Fetch subscription statistics
- * 
- * IMPORTANT: All API endpoints now include /api prefix to match backend routes
  */
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import api from '../services/api'; // your configured axios instance
+import api from '../services/api';
 
 // Create the authentication context
 const AuthContext = createContext();
@@ -50,19 +41,14 @@ export const AuthProvider = ({ children }) => {
   }
 
   // ==================== PROFILE FETCH FUNCTIONS ====================
-  // These are defined FIRST so they're available when called by other functions
 
   /**
    * Fetch technician profile for current user
    * Admins can also have technician profiles
-   * 
-   * IMPORTANT: Using /api/technician/profile (with /api prefix)
-   * Returns 404 if no profile exists - this is handled gracefully
    */
   const fetchTechnicianProfile = async () => {
     try {
-      // ✅ FIX: Added /api prefix to match backend route
-      const response = await api.get('/auth/technician-profile');
+      const response = await api.get('/technician/profile');
       setTechnicianProfile(response.data.technician);
       return response.data.technician;
     } catch (error) {
@@ -81,16 +67,20 @@ export const AuthProvider = ({ children }) => {
    */
   const fetchUserProfile = async () => {
     try {
-      const response = await api.get('/auth/technician-profile');
-      setUser(response.data.user);
+      const response = await api.get('/auth/profile');
+      const userData = response.data.user || response.data;
+      setUser(userData);
 
       // Fetch technician profile for technicians and admins
-      if (response.data.user.role === 'technician' || response.data.user.role === 'admin') {
+      if (userData.role === 'technician' || userData.role === 'admin') {
         await fetchTechnicianProfile();
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      logout();
+      // If token is invalid, logout
+      if (error.response?.status === 401) {
+        logout();
+      }
     } finally {
       setLoading(false);
     }
@@ -100,7 +90,6 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Register new user (client role by default)
-   * @param {Object} userData - User registration data (name, email, password, etc.)
    */
   const register = async (userData) => {
     try {
@@ -123,18 +112,26 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Upgrade client to technician role
-   * This changes the user's role from 'client' to 'technician'
+   * ✅ FIXED: Properly handles role change and state updates
    */
   const becomeTechnician = async () => {
     try {
       const response = await api.put('/auth/become-technician');
-      setUser(response.data.user);
       
-      // Fetch technician profile after upgrade
+      // Update user with the new role data from response
+      const updatedUser = response.data.user;
+      setUser(updatedUser);
+      
+      // Fetch technician profile after role upgrade
       await fetchTechnicianProfile();
       
-      return { success: true, user: response.data.user, message: response.data.message };
+      return { 
+        success: true, 
+        user: updatedUser, 
+        message: response.data.message 
+      };
     } catch (error) {
+      console.error('Become technician error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to upgrade to technician',
@@ -144,8 +141,6 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Login user with email and password
-   * @param {string} email - User's email address
-   * @param {string} password - User's password
    */
   const login = async (email, password) => {
     try {
@@ -186,7 +181,6 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Update user profile information
-   * @param {Object} userData - Updated user data
    */
   const updateUserProfile = async (userData) => {
     try {
@@ -202,20 +196,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ==================== TECHNICIAN PROFILE MANAGEMENT ====================
-  // All endpoints use /api/technician/profile with /api prefix
 
   /**
    * Create new technician profile
-   * @param {Object} profileData - Technician profile data
    */
   const createTechnicianProfile = async (profileData) => {
     try {
-      // ✅ FIX: Added /api prefix
       const response = await api.post('/technician/profile', profileData);
       setTechnicianProfile(response.data.technician);
 
       // Update user role if needed
-      if (user.role !== 'technician') {
+      if (user && user.role !== 'technician') {
         setUser({ ...user, role: 'technician' });
       }
 
@@ -230,12 +221,10 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Update entire technician profile
-   * @param {Object} profileData - Complete technician profile data
    */
   const updateTechnicianProfile = async (profileData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile', profileData);
+      const response = await api.put('/technician/profile', profileData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -248,7 +237,6 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Get technician profile by ID (Admin only)
-   * @param {string} technicianId - Technician's user ID
    */
   const getTechnicianById = async (technicianId) => {
     try {
@@ -263,16 +251,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ==================== SECTION-SPECIFIC UPDATES ====================
-  // All endpoints use /api/technician/profile with /api prefix
 
-  /**
-   * Update basic information section
-   * @param {Object} data - Basic info data (firstName, lastName, aboutMe, etc.)
-   */
   const updateBasicInfo = async (data) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/basic', data);
+      const response = await api.put('/technician/profile/basic', data);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -280,14 +262,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update skills section
-   * @param {Array} skills - Array of skill objects with name, level, yearsOfExperience
-   */
   const updateSkills = async (skills) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/skills', { skills });
+      const response = await api.put('/technician/profile/skills', { skills });
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -295,14 +272,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update languages section
-   * @param {Array} languages - Array of language objects with name and proficiency
-   */
   const updateLanguages = async (languages) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/languages', { languages });
+      const response = await api.put('/technician/profile/languages', { languages });
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -310,14 +282,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update location information
-   * @param {Object} locationData - Address and coordinates
-   */
   const updateLocation = async (locationData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/location', locationData);
+      const response = await api.put('/technician/profile/location', locationData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -325,14 +292,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update pricing information
-   * @param {Object} pricingData - Hourly rate, fixed price, currency, etc.
-   */
   const updatePricing = async (pricingData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/pricing', pricingData);
+      const response = await api.put('/technician/profile/pricing', pricingData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -340,14 +302,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Add a service category
-   * @param {Object} categoryData - Category with sub-services, pricing, etc.
-   */
   const addServiceCategory = async (categoryData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.post('/api/technician/profile/service-category', categoryData);
+      const response = await api.post('/technician/profile/service-category', categoryData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -355,14 +312,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Remove a service category
-   * @param {string} categoryName - Name of category to remove
-   */
   const removeServiceCategory = async (categoryName) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.delete(`/api/technician/profile/service-category/${encodeURIComponent(categoryName)}`);
+      const response = await api.delete(`/technician/profile/service-category/${encodeURIComponent(categoryName)}`);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -370,14 +322,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Add portfolio item
-   * @param {Object} itemData - Portfolio item details
-   */
   const addPortfolioItem = async (itemData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.post('/api/technician/profile/portfolio', itemData);
+      const response = await api.post('/technician/profile/portfolio', itemData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -385,14 +332,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Remove portfolio item
-   * @param {string} itemId - Portfolio item ID to remove
-   */
   const removePortfolioItem = async (itemId) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.delete(`/api/technician/profile/portfolio/${itemId}`);
+      const response = await api.delete(`/technician/profile/portfolio/${itemId}`);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -400,14 +342,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Add education entry
-   * @param {Object} educationData - Education details
-   */
   const addEducation = async (educationData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.post('/api/technician/profile/education', educationData);
+      const response = await api.post('/technician/profile/education', educationData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -415,14 +352,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Add certification
-   * @param {Object} certData - Certification details
-   */
   const addCertification = async (certData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.post('/api/technician/profile/certifications', certData);
+      const response = await api.post('/technician/profile/certifications', certData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -430,14 +362,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Add work experience entry
-   * @param {Object} expData - Experience details
-   */
   const addExperience = async (expData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.post('/api/technician/profile/experience', expData);
+      const response = await api.post('/technician/profile/experience', expData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -445,14 +372,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update availability schedule
-   * @param {Object} scheduleData - Weekly schedule with hours
-   */
   const updateAvailabilitySchedule = async (scheduleData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/availability', scheduleData);
+      const response = await api.put('/technician/profile/availability', scheduleData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -460,13 +382,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Toggle technician availability status (online/offline)
-   */
   const toggleAvailability = async () => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.patch('/api/technician/profile/status', { 
+      const response = await api.patch('/technician/profile/status', { 
         isAvailable: !technicianProfile?.isAvailable 
       });
       setTechnicianProfile(response.data.technician);
@@ -476,14 +394,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update business information
-   * @param {Object} businessData - Business name, registration, insurance
-   */
   const updateBusinessInfo = async (businessData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/business', businessData);
+      const response = await api.put('/technician/profile/business', businessData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -491,14 +404,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update social media links
-   * @param {Object} socialData - Social media URLs
-   */
   const updateSocialLinks = async (socialData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/social-links', socialData);
+      const response = await api.put('/technician/profile/social-links', socialData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -506,14 +414,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update privacy and notification settings
-   * @param {Object} privacyData - Settings for visibility and notifications
-   */
   const updatePrivacySettings = async (privacyData) => {
     try {
-      // ✅ FIX: Added /api prefix
-      const response = await api.put('/api/technician/profile/settings', privacyData);
+      const response = await api.put('/technician/profile/settings', privacyData);
       setTechnicianProfile(response.data.technician);
       return { success: true, technician: response.data.technician };
     } catch (error) {
@@ -522,12 +425,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ==================== ADMIN FUNCTIONS ====================
-  // These endpoints already have the correct paths (no /api prefix needed as they're absolute)
 
-  /**
-   * Get all technicians with filters (Admin only)
-   * @param {Object} filters - Status, subscription plan, search term, pagination
-   */
   const getAllTechnicians = async (filters = {}) => {
     try {
       const params = new URLSearchParams(filters).toString();
@@ -546,11 +444,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Verify a technician (Admin only)
-   * @param {string} technicianId - Technician ID to verify
-   * @param {string} remarks - Optional verification remarks
-   */
   const verifyTechnician = async (technicianId, remarks = '') => {
     try {
       const response = await api.put(`/admin/technicians/${technicianId}/verify`, { remarks });
@@ -563,11 +456,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Reject a technician's verification (Admin only)
-   * @param {string} technicianId - Technician ID to reject
-   * @param {string} reason - Rejection reason
-   */
   const rejectTechnician = async (technicianId, reason) => {
     try {
       const response = await api.put(`/admin/technicians/${technicianId}/reject`, { reason });
@@ -580,11 +468,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Update technician subscription (Admin override)
-   * @param {string} technicianId - Technician ID
-   * @param {Object} subscriptionData - Plan ID, duration, trial status
-   */
   const updateTechnicianSubscription = async (technicianId, subscriptionData) => {
     try {
       const response = await api.put(`/admin/technicians/${technicianId}/subscription`, subscriptionData);
@@ -597,9 +480,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Get subscription statistics (Admin only)
-   */
   const getSubscriptionStats = async () => {
     try {
       const response = await api.get('/admin/subscription/stats');
@@ -615,9 +495,6 @@ export const AuthProvider = ({ children }) => {
 
   // ==================== SUBSCRIPTION FUNCTIONS ====================
 
-  /**
-   * Get available subscription plans
-   */
   const getSubscriptionPlans = async () => {
     try {
       const response = await api.get('/subscription/plans');
@@ -630,9 +507,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Get current technician's subscription
-   */
   const getCurrentSubscription = async () => {
     try {
       const response = await api.get('/subscription/current');
@@ -645,9 +519,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Activate free trial for technician
-   */
   const activateTrial = async () => {
     try {
       const response = await api.post('/subscription/trial');
@@ -660,11 +531,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Upgrade subscription to paid plan
-   * @param {string} planId - Plan identifier (basic, premium, etc.)
-   * @param {boolean} autoRenew - Whether to auto-renew
-   */
   const upgradeSubscription = async (planId, autoRenew = false) => {
     try {
       const response = await api.post('/subscription/upgrade', { planId, autoRenew });
@@ -677,9 +543,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Cancel auto-renewal for subscription
-   */
   const cancelAutoRenew = async () => {
     try {
       const response = await api.put('/subscription/cancel-auto-renew');
@@ -694,9 +557,6 @@ export const AuthProvider = ({ children }) => {
 
   // ==================== UTILITY FUNCTIONS ====================
 
-  /**
-   * Toggle display of JWT token (for debugging)
-   */
   const toggleTokenDisplay = () => {
     setShowToken(!showToken);
   };
@@ -711,7 +571,6 @@ export const AuthProvider = ({ children }) => {
   
   /**
    * On component mount or token change, fetch user profile
-   * This effect runs once when the component mounts and whenever token changes
    */
   useEffect(() => {
     if (token) {
@@ -720,75 +579,75 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]); // Only re-run if token changes
+  }, [token]);
 
   // ==================== CONTEXT VALUE ====================
   
   const value = {
     // User state
-    user,                      // Current authenticated user object
-    technicianProfile,         // Technician profile (if user is technician/admin)
-    token,                     // JWT token for authentication
-    loading,                   // Loading state for async operations
-    showToken,                 // Whether to show token in UI (debug)
+    user,
+    technicianProfile,
+    token,
+    loading,
+    showToken,
     
-    // Role checks (convenience properties)
-    isAdmin,                   // True if user has admin role
-    isTechnician,              // True if user has technician role
-    isClient,                  // True if user has client role
+    // Role checks
+    isAdmin,
+    isTechnician,
+    isClient,
     
     // Admin state
-    technicians,               // List of all technicians (admin only)
-    adminStats,                // Subscription statistics (admin only)
+    technicians,
+    adminStats,
     
     // Authentication functions
-    register,                  // Register new user
-    login,                     // Login existing user
-    logout,                    // Logout current user
-    becomeTechnician,          // Upgrade from client to technician
-    updateUserProfile,         // Update user profile info
+    register,
+    login,
+    logout,
+    becomeTechnician,
+    updateUserProfile,
     
     // Technician profile functions
-    createTechnicianProfile,   // Create new technician profile
-    updateTechnicianProfile,   // Update entire technician profile
-    fetchTechnicianProfile,    // Fetch technician profile
-    getTechnicianById,         // Get technician by ID (admin only)
+    createTechnicianProfile,
+    updateTechnicianProfile,
+    fetchTechnicianProfile,
+    getTechnicianById,
     
     // Section-specific update functions
-    updateBasicInfo,           // Update basic information section
-    updateSkills,              // Update skills section
-    updateLanguages,           // Update languages section
-    updateLocation,            // Update location information
-    updatePricing,             // Update pricing information
-    addServiceCategory,        // Add a service category
-    removeServiceCategory,     // Remove a service category
-    addPortfolioItem,          // Add portfolio item
-    removePortfolioItem,       // Remove portfolio item
-    addEducation,              // Add education entry
-    addCertification,          // Add certification
-    addExperience,             // Add work experience
-    updateAvailabilitySchedule,// Update availability schedule
-    toggleAvailability,        // Toggle online/offline status
-    updateBusinessInfo,        // Update business information
-    updateSocialLinks,         // Update social media links
-    updatePrivacySettings,     // Update privacy settings
+    updateBasicInfo,
+    updateSkills,
+    updateLanguages,
+    updateLocation,
+    updatePricing,
+    addServiceCategory,
+    removeServiceCategory,
+    addPortfolioItem,
+    removePortfolioItem,
+    addEducation,
+    addCertification,
+    addExperience,
+    updateAvailabilitySchedule,
+    toggleAvailability,
+    updateBusinessInfo,
+    updateSocialLinks,
+    updatePrivacySettings,
     
     // Admin functions
-    getAllTechnicians,         // Get all technicians with filters
-    verifyTechnician,          // Verify a technician
-    rejectTechnician,          // Reject technician verification
-    updateTechnicianSubscription, // Update technician subscription (admin)
-    getSubscriptionStats,      // Get subscription statistics
+    getAllTechnicians,
+    verifyTechnician,
+    rejectTechnician,
+    updateTechnicianSubscription,
+    getSubscriptionStats,
     
-    // Subscription functions (for technicians)
-    getSubscriptionPlans,      // Get available subscription plans
-    getCurrentSubscription,    // Get current subscription
-    activateTrial,             // Activate free trial
-    upgradeSubscription,       // Upgrade to paid plan
-    cancelAutoRenew,           // Cancel auto-renewal
+    // Subscription functions
+    getSubscriptionPlans,
+    getCurrentSubscription,
+    activateTrial,
+    upgradeSubscription,
+    cancelAutoRenew,
     
     // Utility functions
-    toggleTokenDisplay,        // Toggle token display (debug)
+    toggleTokenDisplay,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
