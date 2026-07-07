@@ -39,7 +39,7 @@ router.post('/register-admin', registerAdmin); // Secure admin registration
 router.post('/login', validateLogin, login);
 
 // ==================== PROTECTED ROUTES (Any authenticated user) ====================
-router.get('/technician-profile', auth, getProfile);
+router.get('/profile', auth, getProfile);
 router.put('/profile', auth, updateProfile);
 router.put('/become-technician', auth, becomeTechnician);
 
