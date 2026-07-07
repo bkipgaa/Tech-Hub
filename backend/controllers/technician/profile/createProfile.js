@@ -157,7 +157,7 @@ const TechnicianDashboard = () => {
   const [newPortfolio, setNewPortfolio] = useState({
     title: '',
     description: '',
-    category: '',
+    mainCategory: '',
     mediaType: 'image',
     mediaUrl: '',
     thumbnailUrl: '',
@@ -477,7 +477,7 @@ const TechnicianDashboard = () => {
       setNewPortfolio({
         title: '',
         description: '',
-        category: '',
+        mainCategory: '',
         mediaType: 'image',
         mediaUrl: '',
         thumbnailUrl: '',
