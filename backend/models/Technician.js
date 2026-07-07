@@ -174,7 +174,7 @@ const TechnicianSchema = new Schema({
   portfolio: [{
     title: { type: String, required: true },
     description: String,
-    category: String,
+    mainCategory: String,
     mediaType: { 
       type: String, 
       enum: ['image', 'video', 'document'],
