@@ -46,13 +46,13 @@ const CreateTechnicianProfile = () => {
   const proficiencyLevels = ['Basic', 'Conversational', 'Fluent', 'Native'];
   const skillLevels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 
-  // Form state
+  // Form state - ✅ UPDATED with proper three-level hierarchy
   const [formData, setFormData] = useState({
     aboutMe: '',
     profileHeadline: '',
     skills: [],
-    mainCategory: '',
-    serviceCategories: [],
+    mainCategory: '', // Level 1: Main Category
+    serviceCategories: [], // Level 2 & 3: [{ categoryName: '...', subServices: ['...'] }]
     pricing: {
       hourlyRate: 0,
       fixedPrice: 0,
@@ -186,34 +186,29 @@ const CreateTechnicianProfile = () => {
 
   /**
    * Fetch catalog data from service-catalog API
-   * This loads all three levels: mainCategory -> serviceCategories -> subServices
    */
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
         setCatalogLoading(true);
         
-        // Step 1: Get main categories
         const mainResponse = await api.get('/service-catalog/main-categories');
         
         if (mainResponse.data.success) {
           const mainCats = mainResponse.data.data.map(cat => cat.name);
           setMainCategories(mainCats);
           
-          // Step 2: For each main category, fetch its service categories and sub-services
           const servicesMap = {};
           const subsMap = {};
           
           for (const mainCat of mainCats) {
             try {
-              // Fetch service categories for this main category
               const serviceResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCat)}/service-categories`);
               
               if (serviceResponse.data.success) {
                 const services = serviceResponse.data.data;
                 servicesMap[mainCat] = services.map(s => s.name);
                 
-                // Fetch sub-services for each service category
                 for (const service of services) {
                   try {
                     const subResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCat)}/${encodeURIComponent(service.name)}/sub-services`);
@@ -237,13 +232,12 @@ const CreateTechnicianProfile = () => {
           setServiceCategoriesMap(servicesMap);
           setSubServicesMap(subsMap);
           
-          console.log('✅ Catalog loaded from service-catalog API:', {
+          console.log('✅ Catalog loaded:', {
             mainCategories: mainCats.length,
             serviceCategories: Object.keys(servicesMap).length,
             subServices: Object.keys(subsMap).length
           });
         } else {
-          // Fallback to default categories
           useDefaultCategories();
         }
       } catch (err) {
@@ -258,9 +252,6 @@ const CreateTechnicianProfile = () => {
     fetchCatalog();
   }, []);
 
-  /**
-   * Use default categories when API fails
-   */
   const useDefaultCategories = () => {
     const fallbackCategories = [
       'IT & Networking',
@@ -542,7 +533,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Service categories management (with three-level hierarchy) ---
+  // --- Service categories management with three-level hierarchy ---
   const addServiceCategory = () => {
     if (!tempServiceCategory) {
       setError('Please select a service category');
@@ -558,18 +549,14 @@ const CreateTechnicianProfile = () => {
       return;
     }
     
+    // ✅ FIXED: Store as serviceCategories array with categoryName and subServices
     setFormData(prev => ({
       ...prev,
       serviceCategories: [
         ...prev.serviceCategories,
         { 
           categoryName: tempServiceCategory, 
-          subServices: [...tempSubServices],
-          description: '',
-          basePrice: 0,
-          estimatedDuration: '',
-          isActive: true,
-          displayOrder: prev.serviceCategories.length
+          subServices: [...tempSubServices]
         }
       ]
     }));
@@ -607,35 +594,37 @@ const CreateTechnicianProfile = () => {
     setError('');
     setLoading(true);
 
+    // ✅ Validate Level 1: mainCategory
     if (!formData.mainCategory) {
       setError('Please select a main category');
       setLoading(false);
       return;
     }
+    
+    // ✅ Validate Level 2 & 3: serviceCategories with subServices
     if (formData.serviceCategories.length === 0) {
       setError('Please add at least one service category with sub-services');
       setLoading(false);
       return;
     }
+    
     if (!formData.address.city || !formData.address.state) {
       setError('City and state are required');
       setLoading(false);
       return;
     }
 
+    // ✅ Format data correctly for backend
     const submitData = {
       ...formData,
       yearsOfExperience: Number(formData.yearsOfExperience),
       serviceCategories: formData.serviceCategories.map(sc => ({
         categoryName: sc.categoryName,
-        subServices: sc.subServices,
-        description: sc.description || '',
-        basePrice: sc.basePrice || 0,
-        estimatedDuration: sc.estimatedDuration || '',
-        isActive: true,
-        displayOrder: sc.displayOrder || 0
+        subServices: sc.subServices
       }))
     };
+
+    console.log('📦 Submitting profile data:', submitData);
 
     const result = await createTechnicianProfile(submitData);
     setLoading(false);
@@ -785,6 +774,9 @@ const CreateTechnicianProfile = () => {
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Level 1: Choose your primary area of expertise
+                    </p>
                   </div>
 
                   {/* Level 2 & 3: Service Categories with Sub-Services */}
@@ -808,6 +800,9 @@ const CreateTechnicianProfile = () => {
                             <option key={cat} value={cat}>{cat}</option>
                           ))}
                         </select>
+                        <p className="text-xs text-gray-500">
+                          Level 2: Select a specific service category
+                        </p>
 
                         {/* Level 3: Sub-services checkboxes */}
                         {tempServiceCategory && availableSubServices.length > 0 && (
@@ -817,7 +812,7 @@ const CreateTechnicianProfile = () => {
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2 border border-gray-200 rounded-lg bg-white">
                               {availableSubServices.map(sub => (
-                                <label key={sub} className="flex items-center space-x-2">
+                                <label key={sub} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
                                   <input
                                     type="checkbox"
                                     checked={tempSubServices.includes(sub)}
@@ -829,7 +824,7 @@ const CreateTechnicianProfile = () => {
                               ))}
                             </div>
                             <p className="text-xs text-gray-500 mt-1">
-                              Selected: {tempSubServices.length} sub-service(s)
+                              Level 3: Selected {tempSubServices.length} sub-service(s)
                             </p>
                           </div>
                         )}
@@ -855,7 +850,7 @@ const CreateTechnicianProfile = () => {
                       </label>
                       <div className="space-y-2">
                         {formData.serviceCategories.map((sc, idx) => (
-                          <div key={idx} className="bg-green-50 p-3 rounded-lg flex justify-between items-start">
+                          <div key={idx} className="bg-green-50 p-3 rounded-lg flex justify-between items-start border border-green-200">
                             <div>
                               <p className="font-semibold text-green-800">{sc.categoryName}</p>
                               <div className="flex flex-wrap gap-1 mt-1">
