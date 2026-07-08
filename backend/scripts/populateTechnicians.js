@@ -1,7 +1,13 @@
 /**
  * Populate Technicians Script
+ * ===========================
  * Creates test technicians across different Kenyan towns
- * Categories: IT & Networking, Electrical Services, Plumbing
+ * Updated to use three-level service hierarchy:
+ * Level 1: mainCategory
+ * Level 2: serviceCategories (with categoryName)
+ * Level 3: subServices
+ * 
+ * @version 2.0.0
  */
 
 const mongoose = require('mongoose');
@@ -20,13 +26,13 @@ const towns = {
   nairobi: { name: 'Nairobi', coords: [36.5177334, -1.3031874], state: 'Nairobi' }
 };
 
-// Service categories and sub-services from your catalog
+// Service categories and sub-services - THREE LEVEL HIERARCHY
 const serviceData = {
   'IT & Networking': {
-    categories: [
+    serviceCategories: [
       {
         name: 'Internet Services',
-        subServices: ['WiFi Setup & Configuration', 'Network Troubleshooting', 'Fiber Optic Installation']
+        subServices: ['WiFi Setup & Configuration', 'Network Troubleshooting', 'Fiber Optic Installation', 'Mesh Network Installation']
       },
       {
         name: 'CCTV & Security Systems',
@@ -39,7 +45,7 @@ const serviceData = {
     ]
   },
   'Electrical Services': {
-    categories: [
+    serviceCategories: [
       {
         name: 'Residential Electrical',
         subServices: ['House Wiring & Rewiring', 'Lighting Installation', 'Ceiling Fan Installation', 'Circuit Breaker Replacement']
@@ -50,8 +56,20 @@ const serviceData = {
       }
     ]
   },
+  'Mechanical Services': {
+    serviceCategories: [
+      {
+        name: 'HVAC Services',
+        subServices: ['AC Installation & Repair', 'Ventilation System Maintenance', 'Heating System Repair']
+      },
+      {
+        name: 'General Mechanical',
+        subServices: ['Mechanical Repair', 'Equipment Maintenance', 'Industrial Machinery']
+      }
+    ]
+  },
   'Plumbing': {
-    categories: [
+    serviceCategories: [
       {
         name: 'General Plumbing',
         subServices: ['Leak Detection & Repair', 'Faucet Installation & Repair', 'Toilet Repair & Installation']
@@ -61,10 +79,206 @@ const serviceData = {
         subServices: ['Drain Cleaning & Unclogging', 'Sewer Line Inspection']
       }
     ]
+  },
+  'Programming & AI': {
+    serviceCategories: [
+      {
+        name: 'Web Development',
+        subServices: ['Frontend Development', 'Backend Development', 'Full Stack Development']
+      },
+      {
+        name: 'Mobile Development',
+        subServices: ['Android Development', 'iOS Development', 'Cross Platform Development']
+      },
+      {
+        name: 'AI & Machine Learning',
+        subServices: ['Data Analysis', 'ML Model Development', 'AI Solutions']
+      }
+    ]
+  },
+  'Hairdressing & Beauty': {
+    serviceCategories: [
+      {
+        name: 'Hair Services',
+        subServices: ['Haircut', 'Styling', 'Coloring', 'Braiding']
+      },
+      {
+        name: 'Beauty Services',
+        subServices: ['Makeup', 'Nail Art', 'Facials', 'Waxing']
+      }
+    ]
+  },
+  'Carpentry & Furniture': {
+    serviceCategories: [
+      {
+        name: 'Custom Furniture',
+        subServices: ['Custom Furniture Making', 'Furniture Repair', 'Furniture Restoration']
+      },
+      {
+        name: 'Cabinetry',
+        subServices: ['Kitchen Cabinets', 'Wardrobes', 'Storage Units']
+      }
+    ]
+  },
+  'Laundry & Dry Cleaning': {
+    serviceCategories: [
+      {
+        name: 'Laundry Services',
+        subServices: ['Wash & Fold', 'Dry Cleaning', 'Ironing Services']
+      },
+      {
+        name: 'Specialty Cleaning',
+        subServices: ['Wedding Dress Cleaning', 'Leather Cleaning', 'Curtain Cleaning']
+      }
+    ]
+  },
+  'Cleaning Services': {
+    serviceCategories: [
+      {
+        name: 'Residential Cleaning',
+        subServices: ['Deep House Cleaning', 'Standard House Cleaning', 'Move In/Out Cleaning']
+      },
+      {
+        name: 'Commercial Cleaning',
+        subServices: ['Office Cleaning', 'Restaurant Cleaning', 'Industrial Cleaning']
+      }
+    ]
+  },
+  'Painting & Decorating': {
+    serviceCategories: [
+      {
+        name: 'Painting Services',
+        subServices: ['Interior Painting', 'Exterior Painting', 'Spray Painting']
+      },
+      {
+        name: 'Decorating Services',
+        subServices: ['Wallpaper Installation', 'Decorative Finishes', 'Faux Finishing']
+      }
+    ]
+  },
+  'Welding & Fabrication': {
+    serviceCategories: [
+      {
+        name: 'Welding Services',
+        subServices: ['MIG Welding', 'TIG Welding', 'Arc Welding']
+      },
+      {
+        name: 'Fabrication',
+        subServices: ['Metal Fabrication', 'Steel Structures', 'Custom Metal Work']
+      }
+    ]
+  },
+  'Automotive Repair': {
+    serviceCategories: [
+      {
+        name: 'Engine & Mechanical',
+        subServices: ['Engine Diagnostics', 'Brake Service', 'Oil Change', 'Transmission Repair']
+      },
+      {
+        name: 'Body & Paint',
+        subServices: ['Panel Beating', 'Spray Painting', 'Rust Removal']
+      }
+    ]
+  },
+  'Tutoring & Training': {
+    serviceCategories: [
+      {
+        name: 'Academic Tutoring',
+        subServices: ['Mathematics', 'Science', 'Languages', 'Test Preparation']
+      },
+      {
+        name: 'Professional Training',
+        subServices: ['IT Training', 'Business Skills', 'Soft Skills', 'Leadership Training']
+      }
+    ]
+  },
+  'Photography & Videography': {
+    serviceCategories: [
+      {
+        name: 'Photography',
+        subServices: ['Wedding Photography', 'Event Photography', 'Portrait Photography', 'Product Photography']
+      },
+      {
+        name: 'Videography',
+        subServices: ['Event Videography', 'Wedding Videography', 'Corporate Video', 'Drone Videography']
+      }
+    ]
+  },
+  'Event Planning': {
+    serviceCategories: [
+      {
+        name: 'Event Planning',
+        subServices: ['Wedding Planning', 'Corporate Events', 'Birthday Parties', 'Conferences']
+      },
+      {
+        name: 'Event Services',
+        subServices: ['Catering', 'Decorations', 'Entertainment', 'Event Photography']
+      }
+    ]
+  },
+  'Construction & Renovation': {
+    serviceCategories: [
+      {
+        name: 'Construction',
+        subServices: ['Building Construction', 'Roofing', 'Flooring', 'Tiling']
+      },
+      {
+        name: 'Renovation',
+        subServices: ['Home Renovation', 'Kitchen Remodeling', 'Bathroom Renovation', 'Basement Finishing']
+      }
+    ]
+  },
+  'HVAC Services': {
+    serviceCategories: [
+      {
+        name: 'HVAC Installation',
+        subServices: ['AC Installation', 'Heating Installation', 'Ventilation Installation']
+      },
+      {
+        name: 'HVAC Maintenance',
+        subServices: ['AC Repair', 'Heating Repair', 'Filter Replacement', 'System Maintenance']
+      }
+    ]
+  },
+  'Appliance Repair': {
+    serviceCategories: [
+      {
+        name: 'Kitchen Appliances',
+        subServices: ['Refrigerator Repair', 'Oven Repair', 'Dishwasher Repair', 'Microwave Repair']
+      },
+      {
+        name: 'Laundry Appliances',
+        subServices: ['Washing Machine Repair', 'Dryer Repair', 'Washer/Dryer Combo']
+      }
+    ]
+  },
+  'Moving & Logistics': {
+    serviceCategories: [
+      {
+        name: 'Moving Services',
+        subServices: ['Local Moving', 'Long Distance Moving', 'Packing Services', 'Unpacking Services']
+      },
+      {
+        name: 'Logistics',
+        subServices: ['Storage Services', 'Delivery Services', 'Freight Services']
+      }
+    ]
+  },
+  'Gardening & Landscaping': {
+    serviceCategories: [
+      {
+        name: 'Gardening',
+        subServices: ['Lawn Care', 'Tree Services', 'Irrigation Systems', 'Garden Design']
+      },
+      {
+        name: 'Landscaping',
+        subServices: ['Landscape Design', 'Hardscaping', 'Planting Services', 'Landscape Maintenance']
+      }
+    ]
   }
 };
 
-// Technician profiles to create
+// Technician profiles to create - UPDATED with mainCategory
 const technicianProfiles = [
   // ========== MALINDI (2 technicians) ==========
   {
@@ -73,7 +287,7 @@ const technicianProfiles = [
     lastName: 'Mwangi',
     email: 'john.mwangi@example.com',
     phone: '+254712345001',
-    category: 'IT & Networking',
+    mainCategory: 'IT & Networking',
     serviceCategory: 'Internet Services',
     subServices: ['WiFi Setup & Configuration', 'Network Troubleshooting'],
     aboutMe: 'Certified network engineer with 8 years experience in ISP and enterprise networks.',
@@ -92,7 +306,7 @@ const technicianProfiles = [
     lastName: 'Odhiambo',
     email: 'peter.odhiambo@example.com',
     phone: '+254712345002',
-    category: 'Electrical Services',
+    mainCategory: 'Electrical Services',
     serviceCategory: 'Residential Electrical',
     subServices: ['House Wiring & Rewiring', 'Lighting Installation', 'Ceiling Fan Installation'],
     aboutMe: 'Licensed electrician with 10 years experience in residential and commercial installations.',
@@ -113,7 +327,7 @@ const technicianProfiles = [
     lastName: 'Wanjiku',
     email: 'mary.wanjiku@example.com',
     phone: '+254712345003',
-    category: 'Plumbing',
+    mainCategory: 'Plumbing',
     serviceCategory: 'General Plumbing',
     subServices: ['Leak Detection & Repair', 'Faucet Installation & Repair', 'Toilet Repair & Installation'],
     aboutMe: 'Professional plumber with 7 years experience in residential and commercial plumbing.',
@@ -132,7 +346,7 @@ const technicianProfiles = [
     lastName: 'Kariuki',
     email: 'james.kariuki@example.com',
     phone: '+254712345004',
-    category: 'IT & Networking',
+    mainCategory: 'IT & Networking',
     serviceCategory: 'CCTV & Security Systems',
     subServices: ['CCTV Camera Installation', 'Security System Maintenance'],
     aboutMe: 'Security systems expert with 6 years experience in CCTV and access control.',
@@ -153,7 +367,7 @@ const technicianProfiles = [
     lastName: 'Atieno',
     email: 'grace.atieno@example.com',
     phone: '+254712345005',
-    category: 'Electrical Services',
+    mainCategory: 'Electrical Services',
     serviceCategory: 'Commercial Electrical',
     subServices: ['Three-Phase Wiring', 'Electrical Panel Upgrades'],
     aboutMe: 'Commercial electrician specializing in industrial and business electrical systems.',
@@ -172,7 +386,7 @@ const technicianProfiles = [
     lastName: 'Omondi',
     email: 'david.omondi@example.com',
     phone: '+254712345006',
-    category: 'Plumbing',
+    mainCategory: 'Plumbing',
     serviceCategory: 'Drainage & Sewer',
     subServices: ['Drain Cleaning & Unclogging', 'Sewer Line Inspection'],
     aboutMe: 'Drainage and sewer specialist with 5 years experience in pipe inspection and cleaning.',
@@ -193,7 +407,7 @@ const technicianProfiles = [
     lastName: 'Hassan',
     email: 'sarah.hassan@example.com',
     phone: '+254712345007',
-    category: 'IT & Networking',
+    mainCategory: 'IT & Networking',
     serviceCategory: 'Computer Repair & Maintenance',
     subServices: ['Hardware Repair', 'Virus & Malware Removal', 'Data Recovery'],
     aboutMe: 'IT support specialist with 6 years experience in computer repair and data recovery.',
@@ -212,7 +426,7 @@ const technicianProfiles = [
     lastName: 'Mbuvi',
     email: 'michael.mbuvi@example.com',
     phone: '+254712345008',
-    category: 'Electrical Services',
+    mainCategory: 'Electrical Services',
     serviceCategory: 'Residential Electrical',
     subServices: ['House Wiring & Rewiring', 'Circuit Breaker Replacement', 'Lighting Installation'],
     aboutMe: 'Residential electrician with 12 years experience serving Mombasa and coastal region.',
@@ -233,7 +447,7 @@ const technicianProfiles = [
     lastName: 'Kipkirui',
     email: 'brian.kipkirui@example.com',
     phone: '+254712345009',
-    category: 'IT & Networking',
+    mainCategory: 'IT & Networking',
     serviceCategory: 'Internet Services',
     subServices: ['Fiber Optic Installation', 'WiFi Setup & Configuration', 'Network Troubleshooting'],
     aboutMe: 'Network engineer specializing in fiber optic installations and enterprise networks.',
@@ -252,7 +466,7 @@ const technicianProfiles = [
     lastName: 'Wambui',
     email: 'lucy.wambui@example.com',
     phone: '+254712345010',
-    category: 'Plumbing',
+    mainCategory: 'Plumbing',
     serviceCategory: 'General Plumbing',
     subServices: ['Leak Detection & Repair', 'Faucet Installation & Repair', 'Toilet Repair & Installation'],
     aboutMe: 'Professional plumber serving Nairobi with 8 years experience in residential plumbing.',
@@ -313,24 +527,28 @@ async function populateTechnicians() {
         continue;
       }
 
-      // Get the service category data
-      const serviceCatData = serviceData[profile.category].categories.find(
+      // Get the service category data - UPDATED to use serviceCategories
+      const serviceCatData = serviceData[profile.mainCategory]?.serviceCategories?.find(
         c => c.name === profile.serviceCategory
       );
 
-      // Create technician profile
+      // Create technician profile with THREE-LEVEL HIERARCHY
       const technician = new Technician({
         userId: user._id,
         aboutMe: profile.aboutMe,
         profileHeadline: profile.headline,
         skills: profile.skills,
-        category: profile.category,
+        // ✅ Level 1: mainCategory (changed from category)
+        mainCategory: profile.mainCategory,
+        // ✅ Level 2 & 3: serviceCategories with categoryName and subServices
         serviceCategories: [{
           categoryName: profile.serviceCategory,
           subServices: profile.subServices,
           description: `${profile.serviceCategory} services for ${town.name} area`,
           basePrice: profile.hourlyRate * 2,
-          estimatedDuration: '2-4 hours'
+          estimatedDuration: '2-4 hours',
+          isActive: true,
+          displayOrder: 0
         }],
         pricing: {
           hourlyRate: profile.hourlyRate,
@@ -347,7 +565,7 @@ async function populateTechnicians() {
             location: town.name,
             startDate: new Date(new Date().setFullYear(new Date().getFullYear() - profile.yearsOfExperience)),
             isCurrent: true,
-            description: `Providing ${profile.category} services in ${town.name} and surrounding areas.`
+            description: `Providing ${profile.mainCategory} services in ${town.name} and surrounding areas.`
           }
         ],
         address: {
@@ -379,7 +597,7 @@ async function populateTechnicians() {
         emergencyAvailable: true,
         remoteServiceAvailable: true,
         weekendAvailable: true,
-        businessName: `${profile.firstName} ${profile.lastName} ${profile.category}`,
+        businessName: `${profile.firstName} ${profile.lastName} ${profile.mainCategory}`,
         verificationStatus: 'verified',
         isActive: true,
         isAvailable: true,
@@ -390,7 +608,7 @@ async function populateTechnicians() {
       });
 
       await technician.save();
-      console.log(`  ✓ Created technician: ${profile.firstName} ${profile.lastName} - ${profile.category} (${town.name})`);
+      console.log(`  ✓ Created technician: ${profile.firstName} ${profile.lastName} - ${profile.mainCategory} (${town.name})`);
     }
 
     console.log('\n✅ Population complete!');
@@ -410,7 +628,7 @@ async function populateTechnicians() {
     console.log('\n📂 Categories breakdown:');
     const byCategory = {};
     for (const profile of technicianProfiles) {
-      byCategory[profile.category] = (byCategory[profile.category] || 0) + 1;
+      byCategory[profile.mainCategory] = (byCategory[profile.mainCategory] || 0) + 1;
     }
     for (const [category, count] of Object.entries(byCategory)) {
       console.log(`   - ${category}: ${count} technician(s)`);
