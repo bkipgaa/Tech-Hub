@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       console.log('🔍 Fetching technician profile...');
-      const response = await api.get('/technicians/profile');
+      const response = await api.get('/technician/profile');
       
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
