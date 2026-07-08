@@ -300,7 +300,7 @@ export const AuthProvider = ({ children }) => {
    */
   const createTechnicianProfile = async (profileData) => {
     try {
-      const response = await api.post('/technicians/profile', profileData);
+      const response = await api.post('/technician/profile', profileData);
       
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
@@ -333,7 +333,7 @@ export const AuthProvider = ({ children }) => {
    */
   const updateTechnicianProfile = async (profileData) => {
     try {
-      const response = await api.put('/technicians/profile', profileData);
+      const response = await api.put('/technician/profile', profileData);
       
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
@@ -358,7 +358,7 @@ export const AuthProvider = ({ children }) => {
    */
   const getTechnicianById = async (technicianId) => {
     try {
-      const response = await api.get(`/technicians/${technicianId}`);
+      const response = await api.get(`/technician/${technicianId}`);
       
       if (response.data.success) {
         return { success: true, data: response.data.data };
@@ -381,7 +381,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateBasicInfo = async (data) => {
     try {
-      const response = await api.put('/technicians/profile/basic', data);
+      const response = await api.put('/technician/profile/basic', data);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -394,7 +394,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateSkills = async (skills) => {
     try {
-      const response = await api.put('/technicians/profile/skills', { skills });
+      const response = await api.put('/technician/profile/skills', { skills });
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -407,7 +407,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateLanguages = async (languages) => {
     try {
-      const response = await api.put('/technicians/profile/languages', { languages });
+      const response = await api.put('/technician/profile/languages', { languages });
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -420,7 +420,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateLocation = async (locationData) => {
     try {
-      const response = await api.put('/technicians/profile/location', locationData);
+      const response = await api.put('/technician/profile/location', locationData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -433,7 +433,7 @@ export const AuthProvider = ({ children }) => {
 
   const updatePricing = async (pricingData) => {
     try {
-      const response = await api.put('/technicians/profile/pricing', pricingData);
+      const response = await api.put('/technician/profile/pricing', pricingData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -446,7 +446,7 @@ export const AuthProvider = ({ children }) => {
 
   const addServiceCategory = async (categoryData) => {
     try {
-      const response = await api.post('/technicians/profile/service-category', categoryData);
+      const response = await api.post('/technician/profile/service-category', categoryData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -459,7 +459,7 @@ export const AuthProvider = ({ children }) => {
 
   const removeServiceCategory = async (categoryName) => {
     try {
-      const response = await api.delete(`/technicians/profile/service-category/${encodeURIComponent(categoryName)}`);
+      const response = await api.delete(`/technician/profile/service-category/${encodeURIComponent(categoryName)}`);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -472,7 +472,7 @@ export const AuthProvider = ({ children }) => {
 
   const addPortfolioItem = async (itemData) => {
     try {
-      const response = await api.post('/technicians/profile/portfolio', itemData);
+      const response = await api.post('/technician/profile/portfolio', itemData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -485,7 +485,7 @@ export const AuthProvider = ({ children }) => {
 
   const removePortfolioItem = async (itemId) => {
     try {
-      const response = await api.delete(`/technicians/profile/portfolio/${itemId}`);
+      const response = await api.delete(`/technician/profile/portfolio/${itemId}`);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -498,7 +498,7 @@ export const AuthProvider = ({ children }) => {
 
   const addEducation = async (educationData) => {
     try {
-      const response = await api.post('/technicians/profile/education', educationData);
+      const response = await api.post('/technician/profile/education', educationData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -511,7 +511,7 @@ export const AuthProvider = ({ children }) => {
 
   const addCertification = async (certData) => {
     try {
-      const response = await api.post('/technicians/profile/certifications', certData);
+      const response = await api.post('/technician/profile/certifications', certData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -524,7 +524,7 @@ export const AuthProvider = ({ children }) => {
 
   const addExperience = async (expData) => {
     try {
-      const response = await api.post('/technicians/profile/experience', expData);
+      const response = await api.post('/technician/profile/experience', expData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -537,7 +537,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateAvailabilitySchedule = async (scheduleData) => {
     try {
-      const response = await api.put('/technicians/profile/availability', scheduleData);
+      const response = await api.put('/technician/profile/availability', scheduleData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -550,7 +550,7 @@ export const AuthProvider = ({ children }) => {
 
   const toggleAvailability = async () => {
     try {
-      const response = await api.patch('/technicians/profile/status', { 
+      const response = await api.patch('/technician/profile/status', { 
         isAvailable: !technicianProfile?.isAvailable 
       });
       if (response.data.success) {
@@ -565,7 +565,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateBusinessInfo = async (businessData) => {
     try {
-      const response = await api.put('/technicians/profile/business', businessData);
+      const response = await api.put('/technician/profile/business', businessData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -578,7 +578,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateSocialLinks = async (socialData) => {
     try {
-      const response = await api.put('/technicians/profile/social-links', socialData);
+      const response = await api.put('/technician/profile/social-links', socialData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -591,7 +591,7 @@ export const AuthProvider = ({ children }) => {
 
   const updatePrivacySettings = async (privacyData) => {
     try {
-      const response = await api.put('/technicians/profile/settings', privacyData);
+      const response = await api.put('/technician/profile/settings', privacyData);
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
         return { success: true, technician: response.data.data };
@@ -607,7 +607,7 @@ export const AuthProvider = ({ children }) => {
   const getAllTechnicians = async (filters = {}) => {
     try {
       const params = new URLSearchParams(filters).toString();
-      const response = await api.get(`/admin/technicians${params ? `?${params}` : ''}`);
+      const response = await api.get(`/admin/technician${params ? `?${params}` : ''}`);
       setTechnicians(response.data.data);
       return { 
         success: true, 
@@ -624,7 +624,7 @@ export const AuthProvider = ({ children }) => {
 
   const verifyTechnician = async (technicianId, remarks = '') => {
     try {
-      const response = await api.put(`/admin/technicians/${technicianId}/verify`, { remarks });
+      const response = await api.put(`/admin/technician/${technicianId}/verify`, { remarks });
       return { success: true, data: response.data.data };
     } catch (error) {
       return {
@@ -636,7 +636,7 @@ export const AuthProvider = ({ children }) => {
 
   const rejectTechnician = async (technicianId, reason) => {
     try {
-      const response = await api.put(`/admin/technicians/${technicianId}/reject`, { reason });
+      const response = await api.put(`/admin/technician/${technicianId}/reject`, { reason });
       return { success: true, data: response.data.data };
     } catch (error) {
       return {
@@ -648,7 +648,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateTechnicianSubscription = async (technicianId, subscriptionData) => {
     try {
-      const response = await api.put(`/admin/technicians/${technicianId}/subscription`, subscriptionData);
+      const response = await api.put(`/admin/technician/${technicianId}/subscription`, subscriptionData);
       return { success: true, data: response.data.data };
     } catch (error) {
       return {
