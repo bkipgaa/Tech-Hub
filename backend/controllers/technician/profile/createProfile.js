@@ -1,282 +1,120 @@
-// backend/models/Technician.js
-const mongoose = require('mongoose');
+// backend/controllers/technician/profile/createProfile.js
+const User = require('../../../models/User');
+const Technician = require('../../../models/Technician');
+const { updateCompletionStats } = require('./helpers');
 
-const technicianSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    unique: true
-  },
-  // ✅ Only mainCategory - removed category field
-  mainCategory: {
-    type: String,
-    required: true,
-    trim: true,
-    index: true
-  },
-  aboutMe: {
-    type: String,
-    maxlength: 2000
-  },
-  profileHeadline: {
-    type: String,
-    maxlength: 200
-  },
-  skills: [{
-    name: {
-      type: String,
-      required: true
-    },
-    level: {
-      type: String,
-      enum: ['Beginner', 'Intermediate', 'Advanced', 'Expert'],
-      default: 'Intermediate'
-    },
-    yearsOfExperience: {
-      type: Number,
-      default: 0,
-      min: 0
+exports.createProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (user.role !== 'technician') return res.status(403).json({ success: false, message: 'Please become a technician first' });
+
+    const existing = await Technician.findOne({ userId: req.user.userId });
+    if (existing) return res.status(400).json({ success: false, message: 'Profile already exists' });
+
+    // ✅ Updated to support both 'category' and 'mainCategory'
+    // This allows backward compatibility while supporting the new structure
+    const mainCategory = req.body.mainCategory || req.body.category;
+
+    const technicianData = {
+      userId: req.user.userId,
+      aboutMe: req.body.aboutMe || '',
+      profileHeadline: req.body.profileHeadline || '',
+      skills: req.body.skills || [],
+      // ✅ Support both field names
+      category: mainCategory,
+      mainCategory: mainCategory, // Store both for compatibility
+      serviceCategories: req.body.serviceCategories || [],
+      pricing: {
+        hourlyRate: req.body.pricing?.hourlyRate || 0,
+        fixedPrice: req.body.pricing?.fixedPrice || 0,
+        consultationFee: req.body.pricing?.consultationFee || 0,
+        currency: req.body.pricing?.currency || 'KES',
+        paymentMethods: req.body.pricing?.paymentMethods || ['Cash', 'M-Pesa']
+      },
+      education: req.body.education || [],
+      certifications: req.body.certifications || [],
+      yearsOfExperience: req.body.yearsOfExperience || 0,
+      experience: req.body.experience || [],
+      portfolio: req.body.portfolio || [],
+      address: {
+        street: req.body.address?.street || '',
+        city: req.body.address?.city || '',
+        state: req.body.address?.state || '',
+        zipCode: req.body.address?.zipCode || '',
+        country: req.body.address?.country || 'Kenya'
+      },
+      location: {
+        type: 'Point',
+        coordinates: req.body.location?.coordinates || [0, 0],
+        formattedAddress: req.body.location?.formattedAddress || '',
+        placeId: req.body.location?.placeId || ''
+      },
+      serviceRadius: req.body.serviceRadius || 10,
+      languages: req.body.languages || [{ name: 'English', proficiency: 'Fluent' }],
+      availability: req.body.availability || {
+        monday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
+        tuesday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
+        wednesday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
+        thursday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
+        friday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
+        saturday: { enabled: false, hours: [] },
+        sunday: { enabled: false, hours: [] }
+      },
+      emergencyAvailable: req.body.emergencyAvailable || false,
+      remoteServiceAvailable: req.body.remoteServiceAvailable || false,
+      weekendAvailable: req.body.weekendAvailable || false,
+      businessName: req.body.businessName || '',
+      businessRegistrationNumber: req.body.businessRegistrationNumber || '',
+      socialLinks: req.body.socialLinks || {},
+      settings: {
+        showEmail: req.body.settings?.showEmail || false,
+        showPhone: req.body.settings?.showPhone !== undefined ? req.body.settings.showPhone : true,
+        instantBooking: req.body.settings?.instantBooking !== undefined ? req.body.settings.instantBooking : true,
+        requiresApproval: req.body.settings?.requiresApproval || false,
+        autoAcceptJobs: req.body.settings?.autoAcceptJobs || false,
+        jobReminders: req.body.settings?.jobReminders !== undefined ? req.body.settings.jobReminders : true,
+        notifications: {
+          email: req.body.settings?.notifications?.email !== undefined ? req.body.settings.notifications.email : true,
+          sms: req.body.settings?.notifications?.sms !== undefined ? req.body.settings.notifications.sms : true,
+          push: req.body.settings?.notifications?.push !== undefined ? req.body.settings.notifications.push : true
+        }
+      },
+      isAvailable: req.body.isAvailable !== undefined ? req.body.isAvailable : true,
+      lastActive: new Date()
+    };
+
+    // ✅ Updated validation to check both field names
+    if (!technicianData.category && !technicianData.mainCategory) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Main category (mainCategory or category) is required' 
+      });
     }
-  }],
-  // ✅ Three-level hierarchy
-  serviceCategories: [{
-    categoryName: {
-      type: String,
-      required: true
-    },
-    subServices: [{
-      type: String,
-      required: true
-    }],
-    description: String,
-    basePrice: {
-      type: Number,
-      default: 0
-    },
-    estimatedDuration: String,
-    isActive: {
-      type: Boolean,
-      default: true
-    },
-    displayOrder: {
-      type: Number,
-      default: 0
+    
+    if (!technicianData.address.city || !technicianData.address.state) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'City and state are required' 
+      });
     }
-  }],
-  pricing: {
-    hourlyRate: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    fixedPrice: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    consultationFee: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    currency: {
-      type: String,
-      default: 'KES'
-    },
-    paymentMethods: [{
-      type: String,
-      enum: ['Cash', 'M-Pesa', 'Bank Transfer', 'Credit Card', 'Debit Card', 'PayPal']
-    }]
-  },
-  education: [{
-    institution: String,
-    degree: String,
-    fieldOfStudy: String,
-    startDate: Date,
-    endDate: Date,
-    isCurrent: Boolean,
-    description: String,
-    grade: String
-  }],
-  certifications: [{
-    name: String,
-    issuingOrganization: String,
-    issueDate: Date,
-    expiryDate: Date,
-    credentialId: String,
-    credentialUrl: String,
-    doesNotExpire: Boolean
-  }],
-  yearsOfExperience: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  experience: [{
-    title: String,
-    company: String,
-    location: String,
-    startDate: Date,
-    endDate: Date,
-    isCurrent: Boolean,
-    description: String,
-    achievements: [String]
-  }],
-  portfolio: [{
-    title: String,
-    description: String,
-    category: String,
-    mediaType: {
-      type: String,
-      enum: ['image', 'video', 'document'],
-      default: 'image'
-    },
-    mediaUrl: String,
-    thumbnailUrl: String,
-    clientName: String,
-    completionDate: Date,
-    tags: [String],
-    isFeatured: Boolean
-  }],
-  address: {
-    street: String,
-    city: {
-      type: String,
-      required: true
-    },
-    state: {
-      type: String,
-      required: true
-    },
-    zipCode: String,
-    country: {
-      type: String,
-      default: 'Kenya'
-    }
-  },
-  location: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number],
-      default: [0, 0],
-      index: '2dsphere'
-    },
-    formattedAddress: String,
-    placeId: String
-  },
-  serviceRadius: {
-    type: Number,
-    default: 10,
-    min: 0
-  },
-  languages: [{
-    name: String,
-    proficiency: {
-      type: String,
-      enum: ['Basic', 'Conversational', 'Fluent', 'Native'],
-      default: 'Fluent'
-    }
-  }],
-  availability: {
-    monday: { enabled: Boolean, hours: [{ start: String, end: String }] },
-    tuesday: { enabled: Boolean, hours: [{ start: String, end: String }] },
-    wednesday: { enabled: Boolean, hours: [{ start: String, end: String }] },
-    thursday: { enabled: Boolean, hours: [{ start: String, end: String }] },
-    friday: { enabled: Boolean, hours: [{ start: String, end: String }] },
-    saturday: { enabled: Boolean, hours: [{ start: String, end: String }] },
-    sunday: { enabled: Boolean, hours: [{ start: String, end: String }] }
-  },
-  emergencyAvailable: {
-    type: Boolean,
-    default: false
-  },
-  remoteServiceAvailable: {
-    type: Boolean,
-    default: false
-  },
-  weekendAvailable: {
-    type: Boolean,
-    default: false
-  },
-  businessName: String,
-  businessRegistrationNumber: String,
-  socialLinks: {
-    website: String,
-    facebook: String,
-    twitter: String,
-    linkedin: String,
-    instagram: String,
-    youtube: String,
-    tiktok: String
-  },
-  settings: {
-    showEmail: Boolean,
-    showPhone: Boolean,
-    instantBooking: Boolean,
-    requiresApproval: Boolean,
-    autoAcceptJobs: Boolean,
-    jobReminders: Boolean,
-    notifications: {
-      email: Boolean,
-      sms: Boolean,
-      push: Boolean
-    }
-  },
-  isAvailable: {
-    type: Boolean,
-    default: true
-  },
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-  rating: {
-    average: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 5
-    },
-    count: {
-      type: Number,
-      default: 0
-    }
-  },
-  profileCompletionPercentage: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 100
-  },
-  verificationStatus: {
-    type: String,
-    enum: ['pending', 'verified', 'rejected', 'not_submitted'],
-    default: 'not_submitted'
-  },
-  verificationRemarks: String,
-  verifiedAt: Date,
-  lastActive: Date,
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+
+    const technician = new Technician(technicianData);
+    await technician.save();
+    await updateCompletionStats(technician);
+    await technician.populate('userId', 'email firstName lastName phone profileImage');
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Technician profile created successfully', 
+      technician 
+    });
+  } catch (error) {
+    console.error('Create profile error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error during profile creation', 
+      error: error.message 
+    });
   }
-}, {
-  timestamps: true
-});
-
-// ✅ Index for mainCategory
-technicianSchema.index({ mainCategory: 1 });
-
-// ✅ Index for location queries
-technicianSchema.index({ location: '2dsphere' });
-
-module.exports = mongoose.model('Technician', technicianSchema);
+};
