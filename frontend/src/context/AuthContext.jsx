@@ -143,29 +143,43 @@ export const AuthProvider = ({ children }) => {
   /**
    * Login user with email and password
    */
-  const login = async (email, password) => {
-    try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.post('/auth/login', { email, password });
-      const { token, user } = response.data;
-
-      setAuthToken(token);
-      setUser(user);
-
-      // Fetch technician profile for technicians and admins
-      if (user.role === 'technician' || user.role === 'admin') {
-        await fetchTechnicianProfile();
+  // context/AuthContext.js - Login function
+const login = async (email, password) => {
+  try {
+    const response = await api.post('/auth/login', { email, password });
+    
+    if (response.data.success) {
+      // ✅ Store token in localStorage
+      const token = response.data.token;
+      localStorage.setItem('token', token);
+      
+      // ✅ Store user data
+      const userData = response.data.user;
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      setUser(userData);
+      
+      // If user is technician, fetch their profile
+      if (userData.role === 'technician') {
+        await getTechnicianProfile();
       }
-
-      return { success: true, user, token };
-    } catch (error) {
-      console.error('Login error:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Login failed',
+      
+      return { 
+        success: true, 
+        token: token,
+        user: userData,
+        data: response.data
       };
     }
-  };
+    return { success: false, error: 'Login failed' };
+  } catch (error) {
+    console.error('Login error:', error);
+    return { 
+      success: false, 
+      error: error.response?.data?.message || 'Login failed' 
+    };
+  }
+};
 
   /**
    * Logout user - clear all stored data and reset state
