@@ -55,32 +55,40 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Initialize auth token on app load
-   */
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setAuthToken(storedToken);
-    }
-  }, []);
-
   // ==================== PROFILE FETCH FUNCTIONS ====================
 
   /**
    * Fetch technician profile for current user
+   * Uses /technicians/profile endpoint (plural)
    */
   const fetchTechnicianProfile = async () => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.get('/technician/profile');
-      setTechnicianProfile(response.data.technician);
-      return response.data.technician;
-    } catch (error) {
-      // 404 means no profile yet – that's fine
-      if (error.response?.status !== 404) {
-        console.error('Error fetching technician profile:', error);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log('No token found, skipping technician profile fetch');
+        return null;
       }
+
+      console.log('🔍 Fetching technician profile...');
+      const response = await api.get('/technicians/profile');
+      
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        console.log('✅ Technician profile fetched successfully');
+        return response.data.data;
+      } else {
+        console.warn('⚠️ Could not fetch technician profile:', response.data.message);
+        setTechnicianProfile(null);
+        return null;
+      }
+    } catch (error) {
+      // 404 means no profile yet – that's fine for new technicians
+      if (error.response?.status === 404) {
+        console.log('ℹ️ No technician profile found (user may not have created one yet)');
+        setTechnicianProfile(null);
+        return null;
+      }
+      console.error('❌ Error fetching technician profile:', error);
       setTechnicianProfile(null);
       return null;
     }
@@ -88,14 +96,20 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Fetch current user profile from backend
+   * Uses /auth/profile endpoint
    */
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
       setAuthError(null);
       
-      // ✅ No /api prefix - api.js interceptor adds it
+      console.log('🔍 Fetching user profile...');
+      
+      // ✅ FIXED: Complete the API call with response variable
       const response = await api.get('/auth/profile');
+      
+      console.log('📦 User profile response:', response.data);
+      
       const userData = response.data.user || response.data;
       setUser(userData);
 
@@ -103,14 +117,17 @@ export const AuthProvider = ({ children }) => {
       if (userData.role === 'technician' || userData.role === 'admin') {
         await fetchTechnicianProfile();
       }
+      
+      return userData;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('❌ Error fetching user profile:', error);
       setAuthError(error.response?.data?.message || 'Failed to fetch profile');
       
       // If token is invalid, logout
       if (error.response?.status === 401) {
         logout();
       }
+      return null;
     } finally {
       setLoading(false);
     }
@@ -123,7 +140,6 @@ export const AuthProvider = ({ children }) => {
    */
   const register = async (userData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.post('/auth/register', userData);
       const { token, user } = response.data;
 
@@ -132,7 +148,7 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true, user };
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('❌ Registration error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Registration failed',
@@ -142,44 +158,73 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Login user with email and password
+   * ✅ FIXED: Properly stores token and user data
    */
-  // context/AuthContext.js - Login function
-const login = async (email, password) => {
-  try {
-    const response = await api.post('/auth/login', { email, password });
-    
-    if (response.data.success) {
-      // ✅ Store token in localStorage
-      const token = response.data.token;
-      localStorage.setItem('token', token);
+  const login = async (email, password) => {
+    try {
+      console.log('🔄 Attempting login...');
       
-      // ✅ Store user data
-      const userData = response.data.user;
-      localStorage.setItem('user', JSON.stringify(userData));
+      const response = await api.post('/auth/login', { email, password });
       
-      setUser(userData);
+      console.log('📦 Login response:', response.data);
       
-      // If user is technician, fetch their profile
-      if (userData.role === 'technician') {
-        await getTechnicianProfile();
+      if (response.data.success) {
+        // ✅ Extract token and user from response
+        const token = response.data.token;
+        const userData = response.data.user;
+        
+        if (!userData) {
+          console.error('❌ No user data in response');
+          return { 
+            success: false, 
+            error: 'No user data received from server' 
+          };
+        }
+        
+        // ✅ Store token in localStorage
+        localStorage.setItem('token', token);
+        
+        // ✅ Store user data in localStorage
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        // ✅ Set token in axios headers
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        setToken(token);
+        
+        // ✅ Set user in state
+        setUser(userData);
+        
+        console.log('✅ Login successful!');
+        console.log('  - Token stored:', !!localStorage.getItem('token'));
+        console.log('  - User stored:', !!localStorage.getItem('user'));
+        console.log('  - User role:', userData.role);
+        console.log('  - User email:', userData.email);
+        
+        // ✅ Fetch technician profile if needed
+        if (userData.role === 'technician' || userData.role === 'admin') {
+          await fetchTechnicianProfile();
+        }
+        
+        return { 
+          success: true, 
+          token: token,
+          user: userData,
+          data: response.data 
+        };
       }
       
       return { 
-        success: true, 
-        token: token,
-        user: userData,
-        data: response.data
+        success: false, 
+        error: response.data.message || 'Login failed' 
+      };
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Login failed. Please try again.' 
       };
     }
-    return { success: false, error: 'Login failed' };
-  } catch (error) {
-    console.error('Login error:', error);
-    return { 
-      success: false, 
-      error: error.response?.data?.message || 'Login failed' 
-    };
-  }
-};
+  };
 
   /**
    * Logout user - clear all stored data and reset state
@@ -198,12 +243,14 @@ const login = async (email, password) => {
    */
   const becomeTechnician = async () => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.put('/auth/become-technician');
       
       // Update user with the new role data from response
       const updatedUser = response.data.user;
       setUser(updatedUser);
+      
+      // Update localStorage
+      localStorage.setItem('user', JSON.stringify(updatedUser));
       
       // Fetch technician profile after role upgrade
       await fetchTechnicianProfile();
@@ -214,7 +261,7 @@ const login = async (email, password) => {
         message: response.data.message 
       };
     } catch (error) {
-      console.error('Become technician error:', error);
+      console.error('❌ Become technician error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to upgrade to technician',
@@ -227,12 +274,11 @@ const login = async (email, password) => {
    */
   const updateUserProfile = async (userData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.put('/users/profile', userData);
       setUser(response.data.user);
       return { success: true, user: response.data.user };
     } catch (error) {
-      console.error('Update profile error:', error);
+      console.error('❌ Update profile error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Update failed',
@@ -243,23 +289,10 @@ const login = async (email, password) => {
   // ==================== TECHNICIAN PROFILE MANAGEMENT ====================
 
   /**
-   * Get technician profile
+   * Get technician profile (alias for fetchTechnicianProfile)
    */
   const getTechnicianProfile = async () => {
-    try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.get('/technician/profile');
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
-    } catch (error) {
-      if (error.response?.status !== 404) {
-        console.error('Error fetching technician profile:', error);
-      }
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Profile not found' 
-      };
-    }
+    return await fetchTechnicianProfile();
   };
 
   /**
@@ -267,18 +300,27 @@ const login = async (email, password) => {
    */
   const createTechnicianProfile = async (profileData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.post('/technician/profile', profileData);
-      setTechnicianProfile(response.data.technician);
-
-      // Update user role if needed
-      if (user && user.role !== 'technician') {
-        setUser({ ...user, role: 'technician' });
+      const response = await api.post('/technicians/profile', profileData);
+      
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        
+        // Update user role if needed
+        if (user && user.role !== 'technician') {
+          const updatedUser = { ...user, role: 'technician' };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+        
+        return { success: true, technician: response.data.data };
       }
-
-      return { success: true, technician: response.data.technician };
+      
+      return { 
+        success: false, 
+        error: response.data.message || 'Failed to create technician profile' 
+      };
     } catch (error) {
-      console.error('Create profile error:', error);
+      console.error('❌ Create profile error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to create technician profile',
@@ -291,12 +333,19 @@ const login = async (email, password) => {
    */
   const updateTechnicianProfile = async (profileData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile', profileData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile', profileData);
+      
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      
+      return { 
+        success: false, 
+        error: response.data.message || 'Failed to update technician profile' 
+      };
     } catch (error) {
-      console.error('Update profile error:', error);
+      console.error('❌ Update profile error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to update technician profile',
@@ -309,10 +358,18 @@ const login = async (email, password) => {
    */
   const getTechnicianById = async (technicianId) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.get(`/admin/technicians/${technicianId}`);
-      return { success: true, data: response.data.data };
+      const response = await api.get(`/technicians/${technicianId}`);
+      
+      if (response.data.success) {
+        return { success: true, data: response.data.data };
+      }
+      
+      return { 
+        success: false, 
+        error: response.data.message || 'Technician not found' 
+      };
     } catch (error) {
+      console.error('❌ Error fetching technician:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to fetch technician',
@@ -324,10 +381,12 @@ const login = async (email, password) => {
 
   const updateBasicInfo = async (data) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/basic', data);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/basic', data);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update basic info' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update basic info' };
     }
@@ -335,10 +394,12 @@ const login = async (email, password) => {
 
   const updateSkills = async (skills) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/skills', { skills });
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/skills', { skills });
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update skills' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update skills' };
     }
@@ -346,10 +407,12 @@ const login = async (email, password) => {
 
   const updateLanguages = async (languages) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/languages', { languages });
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/languages', { languages });
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update languages' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update languages' };
     }
@@ -357,10 +420,12 @@ const login = async (email, password) => {
 
   const updateLocation = async (locationData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/location', locationData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/location', locationData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update location' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update location' };
     }
@@ -368,10 +433,12 @@ const login = async (email, password) => {
 
   const updatePricing = async (pricingData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/pricing', pricingData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/pricing', pricingData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update pricing' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update pricing' };
     }
@@ -379,10 +446,12 @@ const login = async (email, password) => {
 
   const addServiceCategory = async (categoryData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.post('/technician/profile/service-category', categoryData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.post('/technicians/profile/service-category', categoryData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to add service category' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to add service category' };
     }
@@ -390,10 +459,12 @@ const login = async (email, password) => {
 
   const removeServiceCategory = async (categoryName) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.delete(`/technician/profile/service-category/${encodeURIComponent(categoryName)}`);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.delete(`/technicians/profile/service-category/${encodeURIComponent(categoryName)}`);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to remove service category' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to remove service category' };
     }
@@ -401,10 +472,12 @@ const login = async (email, password) => {
 
   const addPortfolioItem = async (itemData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.post('/technician/profile/portfolio', itemData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.post('/technicians/profile/portfolio', itemData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to add portfolio item' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to add portfolio item' };
     }
@@ -412,10 +485,12 @@ const login = async (email, password) => {
 
   const removePortfolioItem = async (itemId) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.delete(`/technician/profile/portfolio/${itemId}`);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.delete(`/technicians/profile/portfolio/${itemId}`);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to remove portfolio item' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to remove portfolio item' };
     }
@@ -423,10 +498,12 @@ const login = async (email, password) => {
 
   const addEducation = async (educationData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.post('/technician/profile/education', educationData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.post('/technicians/profile/education', educationData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to add education' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to add education' };
     }
@@ -434,10 +511,12 @@ const login = async (email, password) => {
 
   const addCertification = async (certData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.post('/technician/profile/certifications', certData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.post('/technicians/profile/certifications', certData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to add certification' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to add certification' };
     }
@@ -445,10 +524,12 @@ const login = async (email, password) => {
 
   const addExperience = async (expData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.post('/technician/profile/experience', expData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.post('/technicians/profile/experience', expData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to add experience' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to add experience' };
     }
@@ -456,10 +537,12 @@ const login = async (email, password) => {
 
   const updateAvailabilitySchedule = async (scheduleData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/availability', scheduleData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/availability', scheduleData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update availability' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update availability' };
     }
@@ -467,12 +550,14 @@ const login = async (email, password) => {
 
   const toggleAvailability = async () => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.patch('/technician/profile/status', { 
+      const response = await api.patch('/technicians/profile/status', { 
         isAvailable: !technicianProfile?.isAvailable 
       });
-      setTechnicianProfile(response.data.technician);
-      return { success: true, isAvailable: response.data.isAvailable };
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, isAvailable: response.data.data.isAvailable };
+      }
+      return { success: false, error: response.data.message || 'Failed to toggle availability' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to toggle availability' };
     }
@@ -480,10 +565,12 @@ const login = async (email, password) => {
 
   const updateBusinessInfo = async (businessData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/business', businessData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/business', businessData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update business info' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update business info' };
     }
@@ -491,10 +578,12 @@ const login = async (email, password) => {
 
   const updateSocialLinks = async (socialData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/social-links', socialData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/social-links', socialData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update social links' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update social links' };
     }
@@ -502,10 +591,12 @@ const login = async (email, password) => {
 
   const updatePrivacySettings = async (privacyData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
-      const response = await api.put('/technician/profile/settings', privacyData);
-      setTechnicianProfile(response.data.technician);
-      return { success: true, technician: response.data.technician };
+      const response = await api.put('/technicians/profile/settings', privacyData);
+      if (response.data.success) {
+        setTechnicianProfile(response.data.data);
+        return { success: true, technician: response.data.data };
+      }
+      return { success: false, error: response.data.message || 'Failed to update settings' };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Failed to update settings' };
     }
@@ -516,7 +607,6 @@ const login = async (email, password) => {
   const getAllTechnicians = async (filters = {}) => {
     try {
       const params = new URLSearchParams(filters).toString();
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.get(`/admin/technicians${params ? `?${params}` : ''}`);
       setTechnicians(response.data.data);
       return { 
@@ -534,7 +624,6 @@ const login = async (email, password) => {
 
   const verifyTechnician = async (technicianId, remarks = '') => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.put(`/admin/technicians/${technicianId}/verify`, { remarks });
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -547,7 +636,6 @@ const login = async (email, password) => {
 
   const rejectTechnician = async (technicianId, reason) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.put(`/admin/technicians/${technicianId}/reject`, { reason });
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -560,7 +648,6 @@ const login = async (email, password) => {
 
   const updateTechnicianSubscription = async (technicianId, subscriptionData) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.put(`/admin/technicians/${technicianId}/subscription`, subscriptionData);
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -573,7 +660,6 @@ const login = async (email, password) => {
 
   const getSubscriptionStats = async () => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.get('/admin/subscription/stats');
       setAdminStats(response.data.data);
       return { success: true, data: response.data.data };
@@ -589,7 +675,6 @@ const login = async (email, password) => {
 
   const getSubscriptionPlans = async () => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.get('/subscription/plans');
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -602,7 +687,6 @@ const login = async (email, password) => {
 
   const getCurrentSubscription = async () => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.get('/subscription/current');
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -615,7 +699,6 @@ const login = async (email, password) => {
 
   const activateTrial = async () => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.post('/subscription/trial');
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -628,7 +711,6 @@ const login = async (email, password) => {
 
   const upgradeSubscription = async (planId, autoRenew = false) => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.post('/subscription/upgrade', { planId, autoRenew });
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -641,7 +723,6 @@ const login = async (email, password) => {
 
   const cancelAutoRenew = async () => {
     try {
-      // ✅ No /api prefix - api.js interceptor adds it
       const response = await api.put('/subscription/cancel-auto-renew');
       return { success: true, data: response.data };
     } catch (error) {
@@ -669,12 +750,30 @@ const login = async (email, password) => {
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
       
-      if (storedToken) {
-        // Set token in axios headers
-        api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-        setToken(storedToken);
-        await fetchUserProfile();
+      console.log('🔍 Auth initialization:');
+      console.log('  - Token exists:', !!storedToken);
+      console.log('  - Stored user exists:', !!storedUser);
+      
+      if (storedToken && storedUser) {
+        try {
+          // Set token in axios headers
+          api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          setToken(storedToken);
+          
+          // Restore user from localStorage
+          const userData = JSON.parse(storedUser);
+          console.log('  - Restored user role:', userData.role);
+          console.log('  - Restored user email:', userData.email);
+          setUser(userData);
+          
+          // Fetch fresh user profile
+          await fetchUserProfile();
+        } catch (error) {
+          console.error('❌ Error restoring auth:', error);
+          logout();
+        }
       } else {
         setLoading(false);
       }
