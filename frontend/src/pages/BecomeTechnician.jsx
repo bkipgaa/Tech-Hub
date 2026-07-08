@@ -11,7 +11,6 @@ const BecomeTechnician = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // ✅ FIX: Redirect if already technician
   useEffect(() => {
     if (user && user.role === 'technician') {
       navigate('/create-technician-profile');
@@ -28,11 +27,19 @@ const BecomeTechnician = () => {
     setError('');
     
     try {
+      // ✅ FIX: Check if token exists before making request
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please login first');
+        setLoading(false);
+        navigate('/login');
+        return;
+      }
+      
       const result = await becomeTechnician();
       
       if (result.success) {
         setSuccess(true);
-        // Redirect to create profile page after 2 seconds
         setTimeout(() => {
           navigate('/create-technician-profile');
         }, 2000);
@@ -40,6 +47,7 @@ const BecomeTechnician = () => {
         setError(result.error || 'Failed to become technician');
       }
     } catch (err) {
+      console.error('Become technician error:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
