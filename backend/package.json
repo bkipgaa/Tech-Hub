@@ -5,7 +5,10 @@
   
 "scripts": {
   "start": "node server.js",
-  "dev": "nodemon server.js"
+  "dev": "nodemon server.js",
+  "cleanup-technicians": "node scripts/cleanup-technicians.js",
+    "populate-technicians": "node scripts/populate-technicians.js",
+    "reset-technicians": "npm run cleanup-technicians && npm run populate-technicians"
 },
 "engines": {
     "node": ">=16.0.0"

@@ -7,6 +7,8 @@
  * - Skills management
  * - Languages management
  * - Location with geocoding
+ * 
+ * Updated to use mainCategory (Level 1 of service hierarchy)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -23,7 +25,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
   const [locationError, setLocationError] = useState('');
   
   // State for categories fetched from backend
-  const [categories, setCategories] = useState([]);
+  const [mainCategories, setMainCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState('');
 
@@ -39,7 +41,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
       try {
         setCategoriesLoading(true);
         const response = await api.get('/service-catalog/main-categories');
-        setCategories(response.data.data);
+        setMainCategories(response.data.data);
         setCategoriesError('');
       } catch (err) {
         console.error('Failed to load categories:', err);
@@ -217,13 +219,14 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           </p>
         </div>
 
-        {/* Primary Category */}
+        {/* Main Category - Updated from category to mainCategory */}
         <div className="border-b border-gray-100 pb-4">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">
-            Primary Category
+          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center">
+            <Briefcase className="w-3.5 h-3.5 mr-1.5" />
+            Main Category
           </h3>
           <p className="text-gray-800 font-medium">
-            {formData.category || '—'}
+            {formData.mainCategory || '—'}
           </p>
         </div>
 
@@ -367,10 +370,10 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
         />
       </div>
 
-      {/* Primary Category - Dynamically loaded from backend */}
+      {/* Main Category - Updated from category to mainCategory with proper label */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Primary Category <span className="text-red-500">*</span>
+          Main Category <span className="text-red-500">*</span>
         </label>
         {categoriesLoading ? (
           <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
@@ -383,20 +386,23 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           </div>
         ) : (
           <select
-            name="category"
-            value={formData.category}
+            name="mainCategory" // Changed from "category" to "mainCategory"
+            value={formData.mainCategory || ''}
             onChange={handleInputChange}
             required
             className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
           >
-            <option value="">Select a category</option>
-            {categories.map(cat => (
+            <option value="">Select a main category</option>
+            {mainCategories.map(cat => (
               <option key={cat.name} value={cat.name}>
                 {cat.name} {!cat.hasServices && '(coming soon)'}
               </option>
             ))}
           </select>
         )}
+        <p className="text-xs text-gray-400 mt-1">
+          Your main category defines your primary area of expertise
+        </p>
       </div>
 
       {/* Skills */}
@@ -446,7 +452,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           </div>
           
           {/* Skills List */}
-          {formData.skills.length > 0 && (
+          {formData.skills && formData.skills.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Your Skills</p>
               {formData.skills.map((skill, index) => (
@@ -509,7 +515,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           </div>
           
           {/* Languages List */}
-          {formData.languages.length > 0 && (
+          {formData.languages && formData.languages.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {formData.languages.map((lang, index) => (
                 <span
@@ -576,7 +582,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           <input
             type="text"
             name="address.street"
-            value={formData.address.street}
+            value={formData.address?.street || ''}
             onChange={handleInputChange}
             placeholder="Street Address"
             className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -585,7 +591,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             <input
               type="text"
               name="address.city"
-              value={formData.address.city}
+              value={formData.address?.city || ''}
               onChange={handleInputChange}
               placeholder="City"
               required
@@ -594,7 +600,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             <input
               type="text"
               name="address.state"
-              value={formData.address.state}
+              value={formData.address?.state || ''}
               onChange={handleInputChange}
               placeholder="State/County"
               required
@@ -605,7 +611,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             <input
               type="text"
               name="address.zipCode"
-              value={formData.address.zipCode}
+              value={formData.address?.zipCode || ''}
               onChange={handleInputChange}
               placeholder="Postal Code"
               className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -613,7 +619,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             <input
               type="text"
               name="address.country"
-              value={formData.address.country}
+              value={formData.address?.country || ''}
               onChange={handleInputChange}
               placeholder="Country"
               className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -624,7 +630,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             <input
               type="number"
               name="serviceRadius"
-              value={formData.serviceRadius}
+              value={formData.serviceRadius || 50}
               onChange={handleInputChange}
               min="1"
               max="100"

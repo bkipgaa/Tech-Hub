@@ -76,7 +76,7 @@ const TechnicianDashboard = () => {
    * Form Data State
    * ===============
    * Complete technician profile data structure.
-   * This matches the backend Technician model schema.
+   * This matches the backend Technician model schema with three-level hierarchy.
    */
   const [formData, setFormData] = useState({
     // Basic Information
@@ -86,9 +86,9 @@ const TechnicianDashboard = () => {
     // Professional Skills
     skills: [],
     
-    // Service Categories
-    category: '',
-    serviceCategories: [],
+    // Service Categories - THREE LEVEL HIERARCHY
+    mainCategory: '', // Level 1: Main Category (e.g., "IT & Networking")
+    serviceCategories: [], // Level 2 & 3: [{ categoryName: '...', subServices: ['...'] }]
     
     // Pricing Structure
     pricing: {
@@ -253,6 +253,7 @@ const TechnicianDashboard = () => {
    * ================================
    * When technicianProfile is loaded from backend, update formData state
    * Supports both self-view (technician) and admin-view modes
+   * Updated to use mainCategory from the technician profile
    */
   useEffect(() => {
     // Use viewingTechnician for admin view, otherwise use technicianProfile
@@ -263,8 +264,8 @@ const TechnicianDashboard = () => {
         aboutMe: profile.aboutMe || '',
         profileHeadline: profile.profileHeadline || '',
         skills: profile.skills || [],
-        category: profile.category || '',
-        serviceCategories: profile.serviceCategories || [],
+        mainCategory: profile.mainCategory || '', // Changed from category to mainCategory
+        serviceCategories: profile.serviceCategories || [], // Level 2 & 3
         pricing: profile.pricing || {
           hourlyRate: 0,
           fixedPrice: 0,
@@ -343,12 +344,22 @@ const TechnicianDashboard = () => {
    * ====================
    * Supports nested form fields using dot notation
    * Disabled when in admin read-only mode
+   * Updated to handle mainCategory field
    */
   const handleInputChange = (e) => {
     // Don't allow edits in admin view mode
     if (isAdminView) return;
     
     const { name, value, type, checked } = e.target;
+    
+    // Handle mainCategory specifically (no dot notation needed)
+    if (name === 'mainCategory') {
+      setFormData({
+        ...formData,
+        mainCategory: value
+      });
+      return;
+    }
     
     if (name.includes('.')) {
       const parts = name.split('.');
@@ -387,6 +398,7 @@ const TechnicianDashboard = () => {
    * ======================
    * Only technicians can save changes
    * Admins cannot save changes when viewing other technicians
+   * Submits the complete form data including mainCategory
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -400,12 +412,23 @@ const TechnicianDashboard = () => {
     setError('');
     setLoading(true);
     
+    // Remove gallery from submit data as it's a legacy field
     const { gallery, ...submitData } = formData;
+    
+    // Validate mainCategory is selected
+    if (!submitData.mainCategory) {
+      setError('Please select a main category');
+      setLoading(false);
+      return;
+    }
+    
     const result = await updateTechnicianProfile(submitData);
     setLoading(false);
     
     if (result.success) {
       setIsEditing(false);
+      // Refresh profile data after update
+      await getTechnicianProfile();
     } else {
       setError(result.error || 'Failed to update profile');
     }

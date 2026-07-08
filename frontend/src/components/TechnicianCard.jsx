@@ -120,7 +120,7 @@ const TechnicianCard = ({ technician, distance, showDistance = true, onViewProfi
             <div className="flex items-center gap-1.5 text-xs">
               <Wrench className="w-3.5 h-3.5 text-gray-400" />
               <span className="text-gray-600 font-medium hover:text-green-600 hover:underline transition-colors duration-200 cursor-pointer">
-                {technician.category}
+                {technician.mainCategory}
               </span>
             </div>
             
