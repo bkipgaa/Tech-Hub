@@ -39,7 +39,7 @@ protectedRouter.use(auth);
 protectedRouter.use(requireTechnicianOrAdmin);
 
 // Full profile operations - all require technician or admin role
-protectedRouter.post('/profile', createProfile);  // Create profile
+protectedRouter.post('/create-profile', createProfile);  // Create profile
 protectedRouter.get('/profile', getProfile);      // Get profile
 protectedRouter.put('/profile', updateProfile);   // Update profile
 protectedRouter.delete('/profile', deleteProfile); // Delete profile

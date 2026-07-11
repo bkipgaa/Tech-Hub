@@ -300,7 +300,7 @@ export const AuthProvider = ({ children }) => {
    */
   const createTechnicianProfile = async (profileData) => {
     try {
-      const response = await api.post('/technician/profile', profileData);
+      const response = await api.post('/technician/create-profile', profileData);
       
       if (response.data.success) {
         setTechnicianProfile(response.data.data);
