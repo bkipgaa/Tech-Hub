@@ -1,30 +1,94 @@
-// backend/controllers/technician/profile/createProfile.js
 const User = require('../../../models/User');
 const Technician = require('../../../models/Technician');
 const { updateCompletionStats } = require('./helpers');
 
 exports.createProfile = async (req, res) => {
   try {
+    // 1. Validate user
     const user = await User.findById(req.user.userId);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (user.role !== 'technician') return res.status(403).json({ success: false, message: 'Please become a technician first' });
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+    
+    if (user.role !== 'technician') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Please become a technician first' 
+      });
+    }
 
+    // 2. Check if profile already exists
     const existing = await Technician.findOne({ userId: req.user.userId });
-    if (existing) return res.status(400).json({ success: false, message: 'Profile already exists' });
+    if (existing) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Profile already exists' 
+      });
+    }
 
-    // ✅ Updated to support both 'category' and 'mainCategory'
-    // This allows backward compatibility while supporting the new structure
-    const mainCategory = req.body.mainCategory || req.body.category;
+    // 3. Validate required fields
+    const { 
+      mainCategory, 
+      serviceCategories, 
+      address, 
+      yearsOfExperience 
+    } = req.body;
 
+    if (!mainCategory) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Main category is required' 
+      });
+    }
+
+    if (!serviceCategories || serviceCategories.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'At least one service category with sub-services is required' 
+      });
+    }
+
+    // Validate each service category has sub-services
+    for (const category of serviceCategories) {
+      if (!category.categoryName || !category.subServices || category.subServices.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Service category "${category.categoryName || 'unknown'}" must have at least one sub-service` 
+        });
+      }
+    }
+
+    if (!address?.city || !address?.state) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'City and state are required' 
+      });
+    }
+
+    // 4. Validate coordinates
+    const coordinates = req.body.location?.coordinates || [36.8219, -1.2921];
+    const [lng, lat] = coordinates;
+    if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid location coordinates' 
+      });
+    }
+
+    // 5. Build technician data
     const technicianData = {
       userId: req.user.userId,
       aboutMe: req.body.aboutMe || '',
       profileHeadline: req.body.profileHeadline || '',
       skills: req.body.skills || [],
-      // ✅ Support both field names
-      category: mainCategory,
-      mainCategory: mainCategory, // Store both for compatibility
-      serviceCategories: req.body.serviceCategories || [],
+      mainCategory: mainCategory, // ✅ Only use mainCategory
+      serviceCategories: serviceCategories.map(sc => ({
+        categoryName: sc.categoryName.trim(),
+        subServices: sc.subServices.map(s => s.trim()).filter(Boolean)
+      })),
       pricing: {
         hourlyRate: req.body.pricing?.hourlyRate || 0,
         fixedPrice: req.body.pricing?.fixedPrice || 0,
@@ -34,23 +98,23 @@ exports.createProfile = async (req, res) => {
       },
       education: req.body.education || [],
       certifications: req.body.certifications || [],
-      yearsOfExperience: req.body.yearsOfExperience || 0,
+      yearsOfExperience: Number(yearsOfExperience) || 0,
       experience: req.body.experience || [],
       portfolio: req.body.portfolio || [],
       address: {
-        street: req.body.address?.street || '',
-        city: req.body.address?.city || '',
-        state: req.body.address?.state || '',
-        zipCode: req.body.address?.zipCode || '',
-        country: req.body.address?.country || 'Kenya'
+        street: address.street || '',
+        city: address.city.trim(),
+        state: address.state.trim(),
+        zipCode: address.zipCode || '',
+        country: address.country || 'Kenya'
       },
       location: {
         type: 'Point',
-        coordinates: req.body.location?.coordinates || [0, 0],
+        coordinates: coordinates,
         formattedAddress: req.body.location?.formattedAddress || '',
         placeId: req.body.location?.placeId || ''
       },
-      serviceRadius: req.body.serviceRadius || 10,
+      serviceRadius: Number(req.body.serviceRadius) || 10,
       languages: req.body.languages || [{ name: 'English', proficiency: 'Fluent' }],
       availability: req.body.availability || {
         monday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
@@ -84,31 +148,22 @@ exports.createProfile = async (req, res) => {
       lastActive: new Date()
     };
 
-    // ✅ Updated validation to check both field names
-    if (!technicianData.category && !technicianData.mainCategory) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Main category (mainCategory or category) is required' 
-      });
-    }
-    
-    if (!technicianData.address.city || !technicianData.address.state) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'City and state are required' 
-      });
-    }
-
+    // 6. Create and save technician profile
     const technician = new Technician(technicianData);
     await technician.save();
+    
+    // 7. Update completion stats
     await updateCompletionStats(technician);
+    
+    // 8. Populate user data
     await technician.populate('userId', 'email firstName lastName phone profileImage');
 
     res.status(201).json({ 
       success: true, 
       message: 'Technician profile created successfully', 
-      technician 
+      data: technician 
     });
+    
   } catch (error) {
     console.error('Create profile error:', error);
     res.status(500).json({ 

@@ -2,13 +2,13 @@
  * CreateTechnicianProfile.js
  * ===========================
  * Technician profile creation form
- * Updated to load from service-catalog API endpoints
+ * Fully integrated with backend API
  * 
  * Level 1: mainCategory (from /api/service-catalog/main-categories)
  * Level 2: serviceCategories (from /api/service-catalog/:mainCategory/service-categories)
  * Level 3: subServices (from /api/service-catalog/:mainCategory/:serviceCategory/sub-services)
  * 
- * @version 2.0.0
+ * @version 3.1.0
  */
 
 import React, { useState, useEffect } from 'react';
@@ -19,7 +19,7 @@ import {
   Languages, Plus, Trash2, CheckCircle, AlertCircle,
   User, DollarSign, BadgeCheck as Certificate, Calendar, Globe, Settings,
   BookOpen, Image, Video, Star, Facebook, Twitter, Linkedin, Instagram, Youtube, 
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Loader2
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -30,29 +30,29 @@ const CreateTechnicianProfile = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Service catalog data - loaded from backend APIs
+  // Service catalog data
   const [mainCategories, setMainCategories] = useState([]);
   const [serviceCategoriesMap, setServiceCategoriesMap] = useState({});
   const [subServicesMap, setSubServicesMap] = useState({});
   const [catalogLoading, setCatalogLoading] = useState(true);
 
-  // Temporary selections for adding a service category
+  // Temporary selections
   const [tempServiceCategory, setTempServiceCategory] = useState('');
   const [tempSubServices, setTempSubServices] = useState([]);
   const [availableServiceCategories, setAvailableServiceCategories] = useState([]);
   const [availableSubServices, setAvailableSubServices] = useState([]);
 
-  // Proficiency & skill levels
+  // Level options
   const proficiencyLevels = ['Basic', 'Conversational', 'Fluent', 'Native'];
   const skillLevels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 
-  // Form state - ✅ UPDATED with proper three-level hierarchy
+  // Form state
   const [formData, setFormData] = useState({
     aboutMe: '',
     profileHeadline: '',
     skills: [],
-    mainCategory: '', // Level 1: Main Category
-    serviceCategories: [], // Level 2 & 3: [{ categoryName: '...', subServices: ['...'] }]
+    mainCategory: '',
+    serviceCategories: [],
     pricing: {
       hourlyRate: 0,
       fixedPrice: 0,
@@ -117,7 +117,7 @@ const CreateTechnicianProfile = () => {
     isAvailable: true
   });
 
-  // --- Dynamic input states ---
+  // Dynamic input states
   const [newSkill, setNewSkill] = useState({ 
     name: '', 
     level: 'Intermediate', 
@@ -168,6 +168,7 @@ const CreateTechnicianProfile = () => {
   const [newAchievement, setNewAchievement] = useState('');
   const [newTag, setNewTag] = useState('');
   const [newPaymentMethod, setNewPaymentMethod] = useState('');
+  
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
     services: true,
@@ -184,9 +185,7 @@ const CreateTechnicianProfile = () => {
     settings: false
   });
 
-  /**
-   * Fetch catalog data from service-catalog API
-   */
+  // Fetch catalog data
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
@@ -252,6 +251,7 @@ const CreateTechnicianProfile = () => {
     fetchCatalog();
   }, []);
 
+  // Default categories (fallback)
   const useDefaultCategories = () => {
     const fallbackCategories = [
       'IT & Networking',
@@ -277,7 +277,7 @@ const CreateTechnicianProfile = () => {
     });
   };
 
-  // --- When main category changes, update available service categories ---
+  // Update available service categories when main category changes
   useEffect(() => {
     if (formData.mainCategory) {
       const services = serviceCategoriesMap[formData.mainCategory] || [];
@@ -293,7 +293,7 @@ const CreateTechnicianProfile = () => {
     }
   }, [formData.mainCategory, serviceCategoriesMap]);
 
-  // --- When temporary service category changes, update available sub-services ---
+  // Update available sub-services when temp service category changes
   useEffect(() => {
     if (tempServiceCategory) {
       const subs = subServicesMap[tempServiceCategory] || [];
@@ -305,7 +305,7 @@ const CreateTechnicianProfile = () => {
     }
   }, [tempServiceCategory, subServicesMap]);
 
-  // --- Handlers for form fields ---
+  // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     
@@ -341,7 +341,7 @@ const CreateTechnicianProfile = () => {
     }
   };
 
-  // --- Skills management ---
+  // Skills management
   const addSkill = () => {
     if (newSkill.name) {
       setFormData(prev => ({
@@ -351,6 +351,7 @@ const CreateTechnicianProfile = () => {
       setNewSkill({ name: '', level: 'Intermediate', yearsOfExperience: 0 });
     }
   };
+  
   const removeSkill = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -358,7 +359,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Languages management ---
+  // Languages management
   const addLanguage = () => {
     if (newLanguage.name) {
       setFormData(prev => ({
@@ -368,6 +369,7 @@ const CreateTechnicianProfile = () => {
       setNewLanguage({ name: '', proficiency: 'Fluent' });
     }
   };
+  
   const removeLanguage = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -375,7 +377,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Education management ---
+  // Education management
   const addEducation = () => {
     if (newEducation.institution && newEducation.degree) {
       setFormData(prev => ({
@@ -394,6 +396,7 @@ const CreateTechnicianProfile = () => {
       });
     }
   };
+  
   const removeEducation = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -401,7 +404,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Certifications management ---
+  // Certifications management
   const addCertification = () => {
     if (newCertification.name && newCertification.issuingOrganization) {
       setFormData(prev => ({
@@ -419,6 +422,7 @@ const CreateTechnicianProfile = () => {
       });
     }
   };
+  
   const removeCertification = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -426,7 +430,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Experience management ---
+  // Experience management
   const addAchievement = () => {
     if (newAchievement) {
       setNewExperience(prev => ({
@@ -436,12 +440,14 @@ const CreateTechnicianProfile = () => {
       setNewAchievement('');
     }
   };
+  
   const removeAchievement = (index) => {
     setNewExperience(prev => ({
       ...prev,
       achievements: prev.achievements.filter((_, i) => i !== index)
     }));
   };
+  
   const addExperience = () => {
     if (newExperience.title && newExperience.company) {
       setFormData(prev => ({
@@ -460,6 +466,7 @@ const CreateTechnicianProfile = () => {
       });
     }
   };
+  
   const removeExperience = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -467,7 +474,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Portfolio management ---
+  // Portfolio management
   const addTag = () => {
     if (newTag) {
       setNewPortfolio(prev => ({
@@ -477,12 +484,14 @@ const CreateTechnicianProfile = () => {
       setNewTag('');
     }
   };
+  
   const removeTag = (index) => {
     setNewPortfolio(prev => ({
       ...prev,
       tags: prev.tags.filter((_, i) => i !== index)
     }));
   };
+  
   const addPortfolio = () => {
     if (newPortfolio.title && newPortfolio.mediaUrl) {
       setFormData(prev => ({
@@ -503,6 +512,7 @@ const CreateTechnicianProfile = () => {
       });
     }
   };
+  
   const removePortfolio = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -510,7 +520,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Payment methods ---
+  // Payment methods
   const addPaymentMethod = () => {
     if (newPaymentMethod && !formData.pricing.paymentMethods.includes(newPaymentMethod)) {
       setFormData(prev => ({
@@ -523,6 +533,7 @@ const CreateTechnicianProfile = () => {
       setNewPaymentMethod('');
     }
   };
+  
   const removePaymentMethod = (method) => {
     setFormData(prev => ({
       ...prev,
@@ -533,7 +544,7 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Service categories management with three-level hierarchy ---
+  // Service categories management
   const addServiceCategory = () => {
     if (!tempServiceCategory) {
       setError('Please select a service category');
@@ -543,13 +554,11 @@ const CreateTechnicianProfile = () => {
       setError('Please select at least one sub-service for this category');
       return;
     }
-    // Check if already added
     if (formData.serviceCategories.some(sc => sc.categoryName === tempServiceCategory)) {
       setError('This service category is already added');
       return;
     }
     
-    // ✅ FIXED: Store as serviceCategories array with categoryName and subServices
     setFormData(prev => ({
       ...prev,
       serviceCategories: [
@@ -560,7 +569,6 @@ const CreateTechnicianProfile = () => {
         }
       ]
     }));
-    // Reset temporary selections
     setTempServiceCategory('');
     setTempSubServices([]);
     setError('');
@@ -573,14 +581,13 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // Toggle sub-service selection
   const toggleSubService = (subName) => {
     setTempSubServices(prev =>
       prev.includes(subName) ? prev.filter(s => s !== subName) : [...prev, subName]
     );
   };
 
-  // --- Toggle section expansion ---
+  // Toggle section expansion
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
       ...prev,
@@ -588,20 +595,20 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
-  // --- Submit handler ---
+  // Submit handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // ✅ Validate Level 1: mainCategory
+    // Validate Level 1: mainCategory
     if (!formData.mainCategory) {
       setError('Please select a main category');
       setLoading(false);
       return;
     }
     
-    // ✅ Validate Level 2 & 3: serviceCategories with subServices
+    // Validate Level 2 & 3: serviceCategories with subServices
     if (formData.serviceCategories.length === 0) {
       setError('Please add at least one service category with sub-services');
       setLoading(false);
@@ -614,7 +621,7 @@ const CreateTechnicianProfile = () => {
       return;
     }
 
-    // ✅ Format data correctly for backend
+    // Format data for backend
     const submitData = {
       ...formData,
       yearsOfExperience: Number(formData.yearsOfExperience),
@@ -631,17 +638,19 @@ const CreateTechnicianProfile = () => {
     
     if (result.success) {
       setSuccess(true);
-      setTimeout(() => navigate('/technician-dashboard'), 2000);
+      // ✅ UPDATED: Redirect to home page instead of technician dashboard
+      setTimeout(() => navigate('/'), 2000);
     } else {
       setError(result.error || 'Failed to create profile');
     }
   };
 
+  // Loading state
   if (catalogLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <Loader2 className="w-12 h-12 text-green-600 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Loading service catalog...</p>
         </div>
       </div>
@@ -674,12 +683,12 @@ const CreateTechnicianProfile = () => {
           {success && (
             <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded flex items-center">
               <CheckCircle className="w-5 h-5 mr-2 flex-shrink-0" />
-              <span>Profile created successfully! Redirecting...</span>
+              <span>Profile created successfully! Redirecting to home...</span>
             </div>
           )}
 
           <div className="space-y-4">
-            {/* ========== BASIC INFO ========== */}
+            {/* BASIC INFO */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -701,7 +710,7 @@ const CreateTechnicianProfile = () => {
                       name="profileHeadline"
                       value={formData.profileHeadline}
                       onChange={handleInputChange}
-                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       placeholder="e.g., Expert Electrician with 10+ years experience"
                     />
                   </div>
@@ -712,7 +721,7 @@ const CreateTechnicianProfile = () => {
                       value={formData.aboutMe}
                       onChange={handleInputChange}
                       rows="4"
-                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       placeholder="Tell clients about yourself, your experience, and what makes you unique..."
                     />
                   </div>
@@ -723,7 +732,7 @@ const CreateTechnicianProfile = () => {
                       name="businessName"
                       value={formData.businessName}
                       onChange={handleInputChange}
-                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       placeholder="Your Business Name"
                     />
                   </div>
@@ -734,7 +743,7 @@ const CreateTechnicianProfile = () => {
                       name="businessRegistrationNumber"
                       value={formData.businessRegistrationNumber}
                       onChange={handleInputChange}
-                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       placeholder="e.g., BRN-2024-00123"
                     />
                   </div>
@@ -742,7 +751,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== SERVICES OFFERED (Three-level hierarchy) ========== */}
+            {/* SERVICES OFFERED */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -767,7 +776,7 @@ const CreateTechnicianProfile = () => {
                       value={formData.mainCategory}
                       onChange={handleInputChange}
                       required
-                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                     >
                       <option value="">Select a main category</option>
                       {mainCategories.map(cat => (
@@ -779,21 +788,21 @@ const CreateTechnicianProfile = () => {
                     </p>
                   </div>
 
-                  {/* Level 2 & 3: Service Categories with Sub-Services */}
+                  {/* Level 2 & 3 */}
                   {formData.mainCategory && (
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Add Service Category & Sub-Services
                       </label>
                       <div className="space-y-3">
-                        {/* Level 2: Service Category */}
+                        {/* Level 2 */}
                         <select
                           value={tempServiceCategory}
                           onChange={(e) => {
                             setTempServiceCategory(e.target.value);
                             setTempSubServices([]);
                           }}
-                          className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                          className="w-full p-3 border border-gray-300 rounded-lg"
                         >
                           <option value="">Select a service category</option>
                           {availableServiceCategories.map(cat => (
@@ -804,7 +813,7 @@ const CreateTechnicianProfile = () => {
                           Level 2: Select a specific service category
                         </p>
 
-                        {/* Level 3: Sub-services checkboxes */}
+                        {/* Level 3 */}
                         {tempServiceCategory && availableSubServices.length > 0 && (
                           <div className="mt-3">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -877,7 +886,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== SKILLS ========== */}
+            {/* SKILLS */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -899,12 +908,12 @@ const CreateTechnicianProfile = () => {
                         value={newSkill.name}
                         onChange={(e) => setNewSkill({...newSkill, name: e.target.value})}
                         placeholder="Skill name"
-                        className="p-3 border-2 border-gray-300 rounded-lg"
+                        className="p-3 border border-gray-300 rounded-lg"
                       />
                       <select
                         value={newSkill.level}
                         onChange={(e) => setNewSkill({...newSkill, level: e.target.value})}
-                        className="p-3 border-2 border-gray-300 rounded-lg"
+                        className="p-3 border border-gray-300 rounded-lg"
                       >
                         {skillLevels.map(level => (
                           <option key={level} value={level}>{level}</option>
@@ -915,7 +924,7 @@ const CreateTechnicianProfile = () => {
                         value={newSkill.yearsOfExperience}
                         onChange={(e) => setNewSkill({...newSkill, yearsOfExperience: parseInt(e.target.value) || 0})}
                         placeholder="Years of experience"
-                        className="p-3 border-2 border-gray-300 rounded-lg"
+                        className="p-3 border border-gray-300 rounded-lg"
                       />
                       <button type="button" onClick={addSkill} className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700">
                         Add Skill
@@ -940,7 +949,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== EXPERIENCE ========== */}
+            {/* EXPERIENCE */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -964,7 +973,7 @@ const CreateTechnicianProfile = () => {
                       onChange={handleInputChange}
                       min="0"
                       required
-                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                     />
                   </div>
                   <div className="bg-gray-50 p-4 rounded-lg mb-4">
@@ -975,35 +984,35 @@ const CreateTechnicianProfile = () => {
                         value={newExperience.title}
                         onChange={(e) => setNewExperience({...newExperience, title: e.target.value})}
                         placeholder="Job Title"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newExperience.company}
                         onChange={(e) => setNewExperience({...newExperience, company: e.target.value})}
                         placeholder="Company"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newExperience.location}
                         onChange={(e) => setNewExperience({...newExperience, location: e.target.value})}
                         placeholder="Location"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <div className="grid grid-cols-2 gap-4">
                         <input
                           type="date"
                           value={newExperience.startDate}
                           onChange={(e) => setNewExperience({...newExperience, startDate: e.target.value})}
-                          className="p-3 border-2 border-gray-300 rounded-lg"
+                          className="p-3 border border-gray-300 rounded-lg"
                         />
                         <input
                           type="date"
                           value={newExperience.endDate}
                           onChange={(e) => setNewExperience({...newExperience, endDate: e.target.value})}
                           disabled={newExperience.isCurrent}
-                          className="p-3 border-2 border-gray-300 rounded-lg"
+                          className="p-3 border border-gray-300 rounded-lg"
                         />
                       </div>
                       <div className="flex items-center">
@@ -1020,7 +1029,7 @@ const CreateTechnicianProfile = () => {
                         onChange={(e) => setNewExperience({...newExperience, description: e.target.value})}
                         placeholder="Job Description"
                         rows="3"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Achievements</label>
@@ -1030,7 +1039,7 @@ const CreateTechnicianProfile = () => {
                             value={newAchievement}
                             onChange={(e) => setNewAchievement(e.target.value)}
                             placeholder="Add achievement"
-                            className="flex-1 p-2 border-2 border-gray-300 rounded-lg"
+                            className="flex-1 p-2 border border-gray-300 rounded-lg"
                           />
                           <button type="button" onClick={addAchievement} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                             <Plus className="w-4 h-4" />
@@ -1073,7 +1082,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== EDUCATION ========== */}
+            {/* EDUCATION */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1095,35 +1104,35 @@ const CreateTechnicianProfile = () => {
                         value={newEducation.institution}
                         onChange={(e) => setNewEducation({...newEducation, institution: e.target.value})}
                         placeholder="Institution"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newEducation.degree}
                         onChange={(e) => setNewEducation({...newEducation, degree: e.target.value})}
                         placeholder="Degree"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newEducation.fieldOfStudy}
                         onChange={(e) => setNewEducation({...newEducation, fieldOfStudy: e.target.value})}
                         placeholder="Field of Study"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <div className="grid grid-cols-2 gap-4">
                         <input
                           type="date"
                           value={newEducation.startDate}
                           onChange={(e) => setNewEducation({...newEducation, startDate: e.target.value})}
-                          className="p-3 border-2 border-gray-300 rounded-lg"
+                          className="p-3 border border-gray-300 rounded-lg"
                         />
                         <input
                           type="date"
                           value={newEducation.endDate}
                           onChange={(e) => setNewEducation({...newEducation, endDate: e.target.value})}
                           disabled={newEducation.isCurrent}
-                          className="p-3 border-2 border-gray-300 rounded-lg"
+                          className="p-3 border border-gray-300 rounded-lg"
                         />
                       </div>
                       <div className="flex items-center">
@@ -1140,14 +1149,14 @@ const CreateTechnicianProfile = () => {
                         onChange={(e) => setNewEducation({...newEducation, description: e.target.value})}
                         placeholder="Description"
                         rows="3"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newEducation.grade}
                         onChange={(e) => setNewEducation({...newEducation, grade: e.target.value})}
                         placeholder="Grade (optional)"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <button type="button" onClick={addEducation} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                         Add Education
@@ -1174,7 +1183,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== CERTIFICATIONS ========== */}
+            {/* CERTIFICATIONS */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1196,28 +1205,28 @@ const CreateTechnicianProfile = () => {
                         value={newCertification.name}
                         onChange={(e) => setNewCertification({...newCertification, name: e.target.value})}
                         placeholder="Certification Name"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newCertification.issuingOrganization}
                         onChange={(e) => setNewCertification({...newCertification, issuingOrganization: e.target.value})}
                         placeholder="Issuing Organization"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <div className="grid grid-cols-2 gap-4">
                         <input
                           type="date"
                           value={newCertification.issueDate}
                           onChange={(e) => setNewCertification({...newCertification, issueDate: e.target.value})}
-                          className="p-3 border-2 border-gray-300 rounded-lg"
+                          className="p-3 border border-gray-300 rounded-lg"
                         />
                         <input
                           type="date"
                           value={newCertification.expiryDate}
                           onChange={(e) => setNewCertification({...newCertification, expiryDate: e.target.value})}
                           disabled={newCertification.doesNotExpire}
-                          className="p-3 border-2 border-gray-300 rounded-lg"
+                          className="p-3 border border-gray-300 rounded-lg"
                         />
                       </div>
                       <div className="flex items-center">
@@ -1234,14 +1243,14 @@ const CreateTechnicianProfile = () => {
                         value={newCertification.credentialId}
                         onChange={(e) => setNewCertification({...newCertification, credentialId: e.target.value})}
                         placeholder="Credential ID"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="url"
                         value={newCertification.credentialUrl}
                         onChange={(e) => setNewCertification({...newCertification, credentialUrl: e.target.value})}
                         placeholder="Credential URL"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <button type="button" onClick={addCertification} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                         Add Certification
@@ -1270,7 +1279,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== PORTFOLIO ========== */}
+            {/* PORTFOLIO */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1292,20 +1301,20 @@ const CreateTechnicianProfile = () => {
                         value={newPortfolio.title}
                         onChange={(e) => setNewPortfolio({...newPortfolio, title: e.target.value})}
                         placeholder="Project Title"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <textarea
                         value={newPortfolio.description}
                         onChange={(e) => setNewPortfolio({...newPortfolio, description: e.target.value})}
                         placeholder="Project Description"
                         rows="3"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <div className="grid grid-cols-2 gap-4">
                         <select
                           value={newPortfolio.mediaType}
                           onChange={(e) => setNewPortfolio({...newPortfolio, mediaType: e.target.value})}
-                          className="p-3 border-2 border-gray-300 rounded-lg"
+                          className="p-3 border border-gray-300 rounded-lg"
                         >
                           <option value="image">Image</option>
                           <option value="video">Video</option>
@@ -1316,7 +1325,7 @@ const CreateTechnicianProfile = () => {
                           value={newPortfolio.category}
                           onChange={(e) => setNewPortfolio({...newPortfolio, category: e.target.value})}
                           placeholder="Category"
-                          className="p-3 border-2 border-gray-300 rounded-lg"
+                          className="p-3 border border-gray-300 rounded-lg"
                         />
                       </div>
                       <input
@@ -1324,27 +1333,27 @@ const CreateTechnicianProfile = () => {
                         value={newPortfolio.mediaUrl}
                         onChange={(e) => setNewPortfolio({...newPortfolio, mediaUrl: e.target.value})}
                         placeholder="Media URL"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="url"
                         value={newPortfolio.thumbnailUrl}
                         onChange={(e) => setNewPortfolio({...newPortfolio, thumbnailUrl: e.target.value})}
                         placeholder="Thumbnail URL (optional)"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newPortfolio.clientName}
                         onChange={(e) => setNewPortfolio({...newPortfolio, clientName: e.target.value})}
                         placeholder="Client Name"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="date"
                         value={newPortfolio.completionDate}
                         onChange={(e) => setNewPortfolio({...newPortfolio, completionDate: e.target.value})}
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg"
+                        className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
@@ -1354,7 +1363,7 @@ const CreateTechnicianProfile = () => {
                             value={newTag}
                             onChange={(e) => setNewTag(e.target.value)}
                             placeholder="Add tag"
-                            className="flex-1 p-2 border-2 border-gray-300 rounded-lg"
+                            className="flex-1 p-2 border border-gray-300 rounded-lg"
                           />
                           <button type="button" onClick={addTag} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                             <Plus className="w-4 h-4" />
@@ -1407,7 +1416,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== LANGUAGES ========== */}
+            {/* LANGUAGES */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1429,12 +1438,12 @@ const CreateTechnicianProfile = () => {
                         value={newLanguage.name}
                         onChange={(e) => setNewLanguage({...newLanguage, name: e.target.value})}
                         placeholder="Language"
-                        className="p-3 border-2 border-gray-300 rounded-lg"
+                        className="p-3 border border-gray-300 rounded-lg"
                       />
                       <select
                         value={newLanguage.proficiency}
                         onChange={(e) => setNewLanguage({...newLanguage, proficiency: e.target.value})}
-                        className="p-3 border-2 border-gray-300 rounded-lg"
+                        className="p-3 border border-gray-300 rounded-lg"
                       >
                         {proficiencyLevels.map(level => (
                           <option key={level} value={level}>{level}</option>
@@ -1459,7 +1468,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== LOCATION ========== */}
+            {/* LOCATION */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1482,7 +1491,7 @@ const CreateTechnicianProfile = () => {
                         name="address.street"
                         value={formData.address.street}
                         onChange={handleInputChange}
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                         placeholder="Street address"
                       />
                     </div>
@@ -1494,7 +1503,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.address.city}
                         onChange={handleInputChange}
                         required
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                         placeholder="City"
                       />
                     </div>
@@ -1506,7 +1515,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.address.state}
                         onChange={handleInputChange}
                         required
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                         placeholder="State"
                       />
                     </div>
@@ -1517,7 +1526,7 @@ const CreateTechnicianProfile = () => {
                         name="address.zipCode"
                         value={formData.address.zipCode}
                         onChange={handleInputChange}
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                         placeholder="ZIP Code"
                       />
                     </div>
@@ -1528,7 +1537,7 @@ const CreateTechnicianProfile = () => {
                         name="address.country"
                         value={formData.address.country}
                         onChange={handleInputChange}
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                         placeholder="Country"
                       />
                     </div>
@@ -1541,7 +1550,7 @@ const CreateTechnicianProfile = () => {
                         onChange={handleInputChange}
                         min="1"
                         max="100"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1549,7 +1558,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== PRICING ========== */}
+            {/* PRICING */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1573,7 +1582,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.pricing.hourlyRate}
                         onChange={handleInputChange}
                         min="0"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                         placeholder="0"
                       />
                     </div>
@@ -1585,7 +1594,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.pricing.fixedPrice}
                         onChange={handleInputChange}
                         min="0"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                         placeholder="0"
                       />
                     </div>
@@ -1597,7 +1606,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.pricing.consultationFee}
                         onChange={handleInputChange}
                         min="0"
-                        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                         placeholder="0"
                       />
                     </div>
@@ -1610,7 +1619,7 @@ const CreateTechnicianProfile = () => {
                         value={newPaymentMethod}
                         onChange={(e) => setNewPaymentMethod(e.target.value)}
                         placeholder="Add payment method"
-                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
                       <button type="button" onClick={addPaymentMethod} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700">
                         <Plus className="w-5 h-5" />
@@ -1631,7 +1640,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== AVAILABILITY ========== */}
+            {/* AVAILABILITY */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1688,7 +1697,7 @@ const CreateTechnicianProfile = () => {
                                       }
                                     }));
                                   }}
-                                  className="p-2 border-2 border-gray-300 rounded-lg"
+                                  className="p-2 border border-gray-300 rounded-lg"
                                 />
                                 <span>to</span>
                                 <input
@@ -1705,7 +1714,7 @@ const CreateTechnicianProfile = () => {
                                       }
                                     }));
                                   }}
-                                  className="p-2 border-2 border-gray-300 rounded-lg"
+                                  className="p-2 border border-gray-300 rounded-lg"
                                 />
                               </div>
                             ))}
@@ -1750,7 +1759,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== SOCIAL LINKS ========== */}
+            {/* SOCIAL LINKS */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1774,7 +1783,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.socialLinks.website}
                         onChange={handleInputChange}
                         placeholder="Website URL"
-                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
                     </div>
                     <div className="flex items-center space-x-2">
@@ -1785,7 +1794,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.socialLinks.facebook}
                         onChange={handleInputChange}
                         placeholder="Facebook URL"
-                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
                     </div>
                     <div className="flex items-center space-x-2">
@@ -1796,7 +1805,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.socialLinks.twitter}
                         onChange={handleInputChange}
                         placeholder="Twitter URL"
-                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
                     </div>
                     <div className="flex items-center space-x-2">
@@ -1807,7 +1816,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.socialLinks.linkedin}
                         onChange={handleInputChange}
                         placeholder="LinkedIn URL"
-                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
                     </div>
                     <div className="flex items-center space-x-2">
@@ -1818,7 +1827,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.socialLinks.instagram}
                         onChange={handleInputChange}
                         placeholder="Instagram URL"
-                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
                     </div>
                     <div className="flex items-center space-x-2">
@@ -1829,7 +1838,7 @@ const CreateTechnicianProfile = () => {
                         value={formData.socialLinks.youtube}
                         onChange={handleInputChange}
                         placeholder="YouTube URL"
-                        className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1837,7 +1846,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* ========== SETTINGS ========== */}
+            {/* SETTINGS */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1917,7 +1926,7 @@ const CreateTechnicianProfile = () => {
             >
               {loading ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <Loader2 className="w-5 h-5 animate-spin" />
                   <span>Creating Profile...</span>
                 </>
               ) : success ? (
