@@ -165,6 +165,7 @@ app.get('/', (req, res) => {
       admin: '/api/admin',
       subscription: '/api/subscription',
       technician: '/api/technician',
+      technician: '/api/technician/public',
       serviceCatalog: '/api/service-catalog',
       search: '/api/search',
       jobs: '/api/jobs',
