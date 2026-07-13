@@ -132,7 +132,7 @@ app.use('/api/technician', technicianProfileRoutes);
 app.use('/api/service-catalog', serviceCatalogRoutes);
 
 // Search technicians public profiles and stats (no authentication needed)
-app.use('/api/technician/public', technicianRoutes);
+app.use('/api/technician-public', technicianRoutes);
 
 // Search routes - find technicians, jobs, services
 app.use('/api/search', searchRoutes);
