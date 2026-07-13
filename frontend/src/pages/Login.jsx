@@ -38,7 +38,7 @@ const Login = () => {
     // Otherwise redirect based on role
     switch (role) {
       case 'technician':
-        navigate('/technician-dashboard');
+        navigate('/');
         break;
       case 'admin':
         navigate('/admin');
