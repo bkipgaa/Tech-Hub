@@ -1129,17 +1129,3 @@ exports.getFullCategories = async (req, res) => {
 // EXPORT ALL CONTROLLER FUNCTIONS
 // ===========================================
 
-module.exports = {
-  // Main search functions
-  searchTechnicians,
-  getTechniciansBySubService,
-  getNearbyTechnicians,
-  getSearchSuggestions,
-  getCategories,
-  getFullCategories, // New function for full hierarchy
-  
-  // Helper functions (exported for testing and reuse)
-  getVisibilityRadius,
-  isSubscriptionActive,
-  calculateDistance
-};
