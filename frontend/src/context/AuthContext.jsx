@@ -25,23 +25,27 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  // ==================== STATE VARIABLES ====================
+  // ============================================================
+  // STATE VARIABLES
+  // ============================================================
   
   const [user, setUser] = useState(null);
   const [technicianProfile, setTechnicianProfile] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
-  const [showToken, setShowToken] = useState(false);
   const [authError, setAuthError] = useState(null);
   
   // Admin-specific state
   const [technicians, setTechnicians] = useState([]);
   const [adminStats, setAdminStats] = useState(null);
 
-  // ==================== TOKEN MANAGEMENT ====================
+  // ============================================================
+  // TOKEN MANAGEMENT
+  // ============================================================
 
   /**
-   * Set token in localStorage and axios headers
+   * Set authentication token in localStorage and axios headers
+   * @param {string|null} newToken - JWT token or null to remove
    */
   const setAuthToken = (newToken) => {
     if (newToken) {
@@ -55,74 +59,54 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ==================== PROFILE FETCH FUNCTIONS ====================
+  // ============================================================
+  // PROFILE FETCH FUNCTIONS
+  // ============================================================
 
   /**
    * Fetch technician profile for current user
-   * Uses /technicians/profile endpoint (plural)
+   * Handles both response formats: data.technician or data.data
+   * @returns {Object|null} Technician profile or null if not found
    */
-// AuthContext.js - Fix the fetchTechnicianProfile function
-/**
- * Fetch technician profile for current user
- */
-const fetchTechnicianProfile = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.log('No token found, skipping technician profile fetch');
-      return null;
-    }
+  const fetchTechnicianProfile = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
 
-    console.log('🔍 Fetching technician profile...');
-    const response = await api.get('/technician/profile');
-    
-    console.log('📦 Fetch technician profile response:', response.data);
-    
-    if (response.data.success) {
-      // ✅ FIXED: Check both response.data.data AND response.data.technician
-      const profileData = response.data.data || response.data.technician;
+      const response = await api.get('/technician/profile');
       
-      if (profileData) {
-        setTechnicianProfile(profileData);
-        console.log('✅ Technician profile set in context:', profileData);
-        return profileData;
-      } else {
-        console.warn('⚠️ No profile data in response:', response.data);
-        setTechnicianProfile(null);
-        return null;
+      if (response.data.success) {
+        // Handle both response formats: data.technician OR data.data
+        const profileData = response.data.data || response.data.technician;
+        
+        if (profileData) {
+          setTechnicianProfile(profileData);
+          return profileData;
+        }
       }
-    } else {
-      console.warn('⚠️ Could not fetch technician profile:', response.data.message);
+      
+      setTechnicianProfile(null);
+      return null;
+    } catch (error) {
+      // 404 means no profile yet – that's fine for new technicians
+      if (error.response?.status !== 404) {
+        console.error('Error fetching technician profile:', error);
+      }
       setTechnicianProfile(null);
       return null;
     }
-  } catch (error) {
-    // 404 means no profile yet – that's fine for new technicians
-    if (error.response?.status === 404) {
-      console.log('ℹ️ No technician profile found (user may not have created one yet)');
-      setTechnicianProfile(null);
-      return null;
-    }
-    console.error('❌ Error fetching technician profile:', error);
-    setTechnicianProfile(null);
-    return null;
-  }
-};
+  };
+
   /**
    * Fetch current user profile from backend
-   * Uses /auth/profile endpoint
+   * @returns {Object|null} User data or null if failed
    */
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
       setAuthError(null);
       
-      console.log('🔍 Fetching user profile...');
-      
-      // ✅ FIXED: Complete the API call with response variable
       const response = await api.get('/auth/profile');
-      
-      console.log('📦 User profile response:', response.data);
       
       const userData = response.data.user || response.data;
       setUser(userData);
@@ -134,7 +118,7 @@ const fetchTechnicianProfile = async () => {
       
       return userData;
     } catch (error) {
-      console.error('❌ Error fetching user profile:', error);
+      console.error('Error fetching user profile:', error);
       setAuthError(error.response?.data?.message || 'Failed to fetch profile');
       
       // If token is invalid, logout
@@ -147,10 +131,14 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
-  // ==================== AUTHENTICATION FUNCTIONS ====================
+  // ============================================================
+  // AUTHENTICATION FUNCTIONS
+  // ============================================================
 
   /**
    * Register new user (client role by default)
+   * @param {Object} userData - User registration data
+   * @returns {Object} { success: boolean, user: Object, error: string }
    */
   const register = async (userData) => {
     try {
@@ -162,7 +150,7 @@ const fetchTechnicianProfile = async () => {
 
       return { success: true, user };
     } catch (error) {
-      console.error('❌ Registration error:', error);
+      console.error('Registration error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Registration failed',
@@ -172,49 +160,33 @@ const fetchTechnicianProfile = async () => {
 
   /**
    * Login user with email and password
-   * ✅ FIXED: Properly stores token and user data
+   * @param {string} email - User email
+   * @param {string} password - User password
+   * @returns {Object} { success: boolean, user: Object, token: string, error: string }
    */
   const login = async (email, password) => {
     try {
-      console.log('🔄 Attempting login...');
-      
       const response = await api.post('/auth/login', { email, password });
       
-      console.log('📦 Login response:', response.data);
-      
       if (response.data.success) {
-        // ✅ Extract token and user from response
         const token = response.data.token;
         const userData = response.data.user;
         
         if (!userData) {
-          console.error('❌ No user data in response');
           return { 
             success: false, 
             error: 'No user data received from server' 
           };
         }
         
-        // ✅ Store token in localStorage
+        // Store authentication data
         localStorage.setItem('token', token);
-        
-        // ✅ Store user data in localStorage
         localStorage.setItem('user', JSON.stringify(userData));
-        
-        // ✅ Set token in axios headers
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         setToken(token);
-        
-        // ✅ Set user in state
         setUser(userData);
         
-        console.log('✅ Login successful!');
-        console.log('  - Token stored:', !!localStorage.getItem('token'));
-        console.log('  - User stored:', !!localStorage.getItem('user'));
-        console.log('  - User role:', userData.role);
-        console.log('  - User email:', userData.email);
-        
-        // ✅ Fetch technician profile if needed
+        // Fetch technician profile if needed
         if (userData.role === 'technician' || userData.role === 'admin') {
           await fetchTechnicianProfile();
         }
@@ -232,7 +204,7 @@ const fetchTechnicianProfile = async () => {
         error: response.data.message || 'Login failed' 
       };
     } catch (error) {
-      console.error('❌ Login error:', error);
+      console.error('Login error:', error);
       return { 
         success: false, 
         error: error.response?.data?.message || 'Login failed. Please try again.' 
@@ -254,16 +226,14 @@ const fetchTechnicianProfile = async () => {
 
   /**
    * Upgrade client to technician role
+   * @returns {Object} { success: boolean, user: Object, message: string, error: string }
    */
   const becomeTechnician = async () => {
     try {
       const response = await api.put('/auth/become-technician');
       
-      // Update user with the new role data from response
       const updatedUser = response.data.user;
       setUser(updatedUser);
-      
-      // Update localStorage
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
       // Fetch technician profile after role upgrade
@@ -275,7 +245,7 @@ const fetchTechnicianProfile = async () => {
         message: response.data.message 
       };
     } catch (error) {
-      console.error('❌ Become technician error:', error);
+      console.error('Become technician error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to upgrade to technician',
@@ -285,6 +255,8 @@ const fetchTechnicianProfile = async () => {
 
   /**
    * Update user profile information
+   * @param {Object} userData - Updated user data
+   * @returns {Object} { success: boolean, user: Object, error: string }
    */
   const updateUserProfile = async (userData) => {
     try {
@@ -292,7 +264,7 @@ const fetchTechnicianProfile = async () => {
       setUser(response.data.user);
       return { success: true, user: response.data.user };
     } catch (error) {
-      console.error('❌ Update profile error:', error);
+      console.error('Update profile error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Update failed',
@@ -300,129 +272,103 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
-  // ==================== TECHNICIAN PROFILE MANAGEMENT ====================
+  // ============================================================
+  // TECHNICIAN PROFILE MANAGEMENT
+  // ============================================================
 
   /**
+   * Helper to extract profile data from response
+   * Handles both response.data.data and response.data.technician
+   * @param {Object} response - API response object
+   * @returns {Object|null} Profile data or null
+   */
+  const extractProfileData = (response) => {
+    if (!response?.data?.success) return null;
+    return response.data.data || response.data.technician || null;
+  };
 
+  /**
+   * Update technician profile state with response data
+   * @param {Object} response - API response object
+   * @returns {Object|null} Profile data or null
+   */
+  const updateProfileState = (response) => {
+    const profileData = extractProfileData(response);
+    if (profileData) {
+      setTechnicianProfile(profileData);
+    }
+    return profileData;
+  };
 
   /**
    * Create new technician profile
+   * @param {Object} profileData - Technician profile data
+   * @returns {Object} { success: boolean, technician: Object, error: string }
    */
- const createTechnicianProfile = async (profileData) => {
-  try {
-    console.log('🚀 ===== CREATE PROFILE START =====');
-    
-    // 1. Check localStorage directly
-    const token = localStorage.getItem('token');
-    console.log('📋 Step 1 - localStorage check:');
-    console.log('  - Token exists:', !!token);
-    console.log('  - Token type:', typeof token);
-    console.log('  - Token length:', token?.length || 0);
-    console.log('  - Token preview:', token ? token.substring(0, 30) + '...' : 'NO TOKEN');
-    console.log('  - All localStorage keys:', Object.keys(localStorage));
-    
-    // 2. Check if token is in the correct format
-    if (token) {
-      console.log('📋 Step 2 - Token validation:');
-      const parts = token.split('.');
-      console.log('  - Has 3 parts:', parts.length === 3);
-      console.log('  - First part (header):', parts[0]?.substring(0, 20) + '...');
-      console.log('  - Is valid JWT format:', token.match(/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/));
-    }
-    
-    // 3. Check axios default headers BEFORE the request
-    console.log('📋 Step 3 - Axios headers BEFORE request:');
-    console.log('  - Authorization header:', api.defaults.headers.common['Authorization']);
-    
-    if (!token) {
-      console.error('❌ No token found in localStorage');
-      return {
-        success: false,
-        error: 'Please login first to create a technician profile'
-      };
-    }
+  const createTechnicianProfile = async (profileData) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        return {
+          success: false,
+          error: 'Please login first to create a technician profile'
+        };
+      }
 
-    // 4. Log the request data
-    console.log('📤 Step 4 - Sending request:');
-    console.log('  - URL:', '/technician/create-profile');
-    console.log('  - Method: POST');
-    console.log('  - Profile data keys:', Object.keys(profileData));
-    console.log('  - Profile data preview:', {
-      mainCategory: profileData.mainCategory,
-      serviceCategories: profileData.serviceCategories?.length || 0,
-      skills: profileData.skills?.length || 0
-    });
-    
-    // 5. Make the request with explicit headers
-    const response = await api.post('/technician/create-profile', profileData, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    console.log('📥 Step 5 - Response received:');
-    console.log('  - Status:', response.status);
-    console.log('  - Success:', response.data.success);
-    console.log('  - Data:', response.data.data ? '✅ Present' : '❌ Missing');
-    
-    if (response.data.success) {
-      // ✅ Store the profile in state
-      setTechnicianProfile(response.data.data);
+      const response = await api.post('/technician/create-profile', profileData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
-      // Update user role if needed
-      if (user && user.role !== 'technician') {
-        const updatedUser = { ...user, role: 'technician' };
-        setUser(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        console.log('✅ User role updated to: technician');
+      if (response.data.success) {
+        const profile = updateProfileState(response);
+        
+        // Update user role if needed
+        if (user && user.role !== 'technician') {
+          const updatedUser = { ...user, role: 'technician' };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+        
+        return { success: true, technician: profile };
       }
       
-      console.log('✅ Profile created successfully!');
-      return { success: true, technician: response.data.data };
-    }
-    
-    console.warn('⚠️ Profile creation failed:', response.data.message);
-    return { 
-      success: false, 
-      error: response.data.message || 'Failed to create technician profile' 
-    };
-  } catch (error) {
-    console.error('❌ ===== CREATE PROFILE ERROR =====');
-    console.error('Error object:', error);
-    console.error('Error response:', error.response);
-    console.error('Error config:', error.config);
-    
-    if (error.response) {
-      console.error('  - Status:', error.response.status);
-      console.error('  - Data:', error.response.data);
-      console.error('  - Headers sent:', error.config?.headers);
-    }
-    
-    // Handle specific errors
-    if (error.response?.status === 401) {
+      return { 
+        success: false, 
+        error: response.data.message || 'Failed to create technician profile' 
+      };
+    } catch (error) {
+      console.error('Create profile error:', error);
+      
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          error: 'Your session has expired. Please login again.'
+        };
+      }
+      
       return {
         success: false,
-        error: 'Your session has expired. Please login again.'
+        error: error.response?.data?.message || 'Failed to create technician profile',
       };
     }
-    
-    return {
-      success: false,
-      error: error.response?.data?.message || 'Failed to create technician profile',
-    };
-  }
-};
+  };
+
   /**
    * Update entire technician profile
+   * @param {Object} profileData - Updated technician profile data
+   * @returns {Object} { success: boolean, technician: Object, error: string }
    */
   const updateTechnicianProfile = async (profileData) => {
     try {
       const response = await api.put('/technician/profile', profileData);
       
       if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
+        const profile = updateProfileState(response);
+        return { success: true, technician: profile };
       }
       
       return { 
@@ -430,7 +376,7 @@ const fetchTechnicianProfile = async () => {
         error: response.data.message || 'Failed to update technician profile' 
       };
     } catch (error) {
-      console.error('❌ Update profile error:', error);
+      console.error('Update profile error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to update technician profile',
@@ -440,6 +386,8 @@ const fetchTechnicianProfile = async () => {
 
   /**
    * Get technician profile by ID (Admin only)
+   * @param {string} technicianId - Technician ID
+   * @returns {Object} { success: boolean, data: Object, error: string }
    */
   const getTechnicianById = async (technicianId) => {
     try {
@@ -454,7 +402,7 @@ const fetchTechnicianProfile = async () => {
         error: response.data.message || 'Technician not found' 
       };
     } catch (error) {
-      console.error('❌ Error fetching technician:', error);
+      console.error('Error fetching technician:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to fetch technician',
@@ -462,233 +410,79 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
-  // ==================== SECTION-SPECIFIC UPDATES ====================
+  // ============================================================
+  // SECTION-SPECIFIC UPDATE FUNCTIONS
+  // ============================================================
 
-  const updateBasicInfo = async (data) => {
+  /**
+   * Generic update function for profile sections
+   * @param {string} endpoint - API endpoint path
+   * @param {Object} data - Data to send
+   * @returns {Object} { success: boolean, technician: Object, error: string }
+   */
+  const updateProfileSection = async (endpoint, data) => {
     try {
-      const response = await api.put('/technician/profile/basic', data);
+      const response = await api.put(endpoint, data);
       if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
+        const profile = updateProfileState(response);
+        return { success: true, technician: profile };
       }
-      return { success: false, error: response.data.message || 'Failed to update basic info' };
+      return { 
+        success: false, 
+        error: response.data.message || `Failed to update ${endpoint.split('/').pop()}` 
+      };
     } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update basic info' };
+      return { 
+        success: false, 
+        error: error.response?.data?.message || `Failed to update ${endpoint.split('/').pop()}` 
+      };
     }
   };
 
-  const updateSkills = async (skills) => {
-    try {
-      const response = await api.put('/technician/profile/skills', { skills });
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to update skills' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update skills' };
-    }
-  };
+  const updateBasicInfo = (data) => updateProfileSection('/technician/profile/basic', data);
+  const updateSkills = (skills) => updateProfileSection('/technician/profile/skills', { skills });
+  const updateLanguages = (languages) => updateProfileSection('/technician/profile/languages', { languages });
+  const updateLocation = (locationData) => updateProfileSection('/technician/profile/location', locationData);
+  const updatePricing = (pricingData) => updateProfileSection('/technician/profile/pricing', pricingData);
+  const updateBusinessInfo = (businessData) => updateProfileSection('/technician/profile/business', businessData);
+  const updateSocialLinks = (socialData) => updateProfileSection('/technician/profile/social-links', socialData);
+  const updatePrivacySettings = (privacyData) => updateProfileSection('/technician/profile/settings', privacyData);
+  const updateAvailabilitySchedule = (scheduleData) => updateProfileSection('/technician/profile/availability', scheduleData);
 
-  const updateLanguages = async (languages) => {
-    try {
-      const response = await api.put('/technician/profile/languages', { languages });
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to update languages' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update languages' };
-    }
-  };
-
-  const updateLocation = async (locationData) => {
-    try {
-      const response = await api.put('/technician/profile/location', locationData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to update location' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update location' };
-    }
-  };
-
-  const updatePricing = async (pricingData) => {
-    try {
-      const response = await api.put('/technician/profile/pricing', pricingData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to update pricing' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update pricing' };
-    }
-  };
-
-  const addServiceCategory = async (categoryData) => {
-    try {
-      const response = await api.post('/technician/profile/service-category', categoryData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to add service category' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to add service category' };
-    }
-  };
-
-  const removeServiceCategory = async (categoryName) => {
-    try {
-      const response = await api.delete(`/technician/profile/service-category/${encodeURIComponent(categoryName)}`);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to remove service category' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to remove service category' };
-    }
-  };
-
-  const addPortfolioItem = async (itemData) => {
-    try {
-      const response = await api.post('/technician/profile/portfolio', itemData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to add portfolio item' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to add portfolio item' };
-    }
-  };
-
-  const removePortfolioItem = async (itemId) => {
-    try {
-      const response = await api.delete(`/technician/profile/portfolio/${itemId}`);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to remove portfolio item' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to remove portfolio item' };
-    }
-  };
-
-  const addEducation = async (educationData) => {
-    try {
-      const response = await api.post('/technician/profile/education', educationData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to add education' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to add education' };
-    }
-  };
-
-  const addCertification = async (certData) => {
-    try {
-      const response = await api.post('/technician/profile/certifications', certData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to add certification' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to add certification' };
-    }
-  };
-
-  const addExperience = async (expData) => {
-    try {
-      const response = await api.post('/technician/profile/experience', expData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to add experience' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to add experience' };
-    }
-  };
-
-  const updateAvailabilitySchedule = async (scheduleData) => {
-    try {
-      const response = await api.put('/technician/profile/availability', scheduleData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to update availability' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update availability' };
-    }
-  };
-
+  /**
+   * Toggle technician availability status
+   * @returns {Object} { success: boolean, isAvailable: boolean, error: string }
+   */
   const toggleAvailability = async () => {
     try {
       const response = await api.patch('/technician/profile/status', { 
         isAvailable: !technicianProfile?.isAvailable 
       });
       if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, isAvailable: response.data.data.isAvailable };
+        const profile = updateProfileState(response);
+        return { success: true, isAvailable: profile?.isAvailable };
       }
-      return { success: false, error: response.data.message || 'Failed to toggle availability' };
+      return { 
+        success: false, 
+        error: response.data.message || 'Failed to toggle availability' 
+      };
     } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to toggle availability' };
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Failed to toggle availability' 
+      };
     }
   };
 
-  const updateBusinessInfo = async (businessData) => {
-    try {
-      const response = await api.put('/technician/profile/business', businessData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to update business info' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update business info' };
-    }
-  };
+  // ============================================================
+  // ADMIN FUNCTIONS
+  // ============================================================
 
-  const updateSocialLinks = async (socialData) => {
-    try {
-      const response = await api.put('/technician/profile/social-links', socialData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to update social links' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update social links' };
-    }
-  };
-
-  const updatePrivacySettings = async (privacyData) => {
-    try {
-      const response = await api.put('/technician/profile/settings', privacyData);
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        return { success: true, technician: response.data.data };
-      }
-      return { success: false, error: response.data.message || 'Failed to update settings' };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Failed to update settings' };
-    }
-  };
-
-  // ==================== ADMIN FUNCTIONS ====================
-
+  /**
+   * Get all technicians with optional filters
+   * @param {Object} filters - Filter parameters
+   * @returns {Object} { success: boolean, data: Array, pagination: Object, error: string }
+   */
   const getAllTechnicians = async (filters = {}) => {
     try {
       const params = new URLSearchParams(filters).toString();
@@ -707,6 +501,12 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
+  /**
+   * Verify a technician (Admin only)
+   * @param {string} technicianId - Technician ID
+   * @param {string} remarks - Verification remarks
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
   const verifyTechnician = async (technicianId, remarks = '') => {
     try {
       const response = await api.put(`/admin/technician/${technicianId}/verify`, { remarks });
@@ -719,6 +519,12 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
+  /**
+   * Reject a technician (Admin only)
+   * @param {string} technicianId - Technician ID
+   * @param {string} reason - Rejection reason
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
   const rejectTechnician = async (technicianId, reason) => {
     try {
       const response = await api.put(`/admin/technician/${technicianId}/reject`, { reason });
@@ -731,6 +537,12 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
+  /**
+   * Update technician subscription (Admin only)
+   * @param {string} technicianId - Technician ID
+   * @param {Object} subscriptionData - Subscription data
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
   const updateTechnicianSubscription = async (technicianId, subscriptionData) => {
     try {
       const response = await api.put(`/admin/technician/${technicianId}/subscription`, subscriptionData);
@@ -743,6 +555,10 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
+  /**
+   * Get subscription statistics (Admin only)
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
   const getSubscriptionStats = async () => {
     try {
       const response = await api.get('/admin/subscription/stats');
@@ -756,8 +572,14 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
-  // ==================== SUBSCRIPTION FUNCTIONS ====================
+  // ============================================================
+  // SUBSCRIPTION FUNCTIONS
+  // ============================================================
 
+  /**
+   * Get available subscription plans
+   * @returns {Object} { success: boolean, data: Array, error: string }
+   */
   const getSubscriptionPlans = async () => {
     try {
       const response = await api.get('/subscription/plans');
@@ -770,6 +592,10 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
+  /**
+   * Get current user's subscription
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
   const getCurrentSubscription = async () => {
     try {
       const response = await api.get('/subscription/current');
@@ -782,6 +608,10 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
+  /**
+   * Activate free trial subscription
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
   const activateTrial = async () => {
     try {
       const response = await api.post('/subscription/trial');
@@ -794,6 +624,12 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
+  /**
+   * Upgrade subscription to a plan
+   * @param {string} planId - Plan ID
+   * @param {boolean} autoRenew - Auto-renew flag
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
   const upgradeSubscription = async (planId, autoRenew = false) => {
     try {
       const response = await api.post('/subscription/upgrade', { planId, autoRenew });
@@ -806,6 +642,10 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
+  /**
+   * Cancel auto-renewal of subscription
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
   const cancelAutoRenew = async () => {
     try {
       const response = await api.put('/subscription/cancel-auto-renew');
@@ -818,28 +658,22 @@ const fetchTechnicianProfile = async () => {
     }
   };
 
-  // ==================== UTILITY FUNCTIONS ====================
-
-  const toggleTokenDisplay = () => {
-    setShowToken(!showToken);
-  };
-
-  // ==================== ROLE CHECK HELPER PROPERTIES ====================
+  // ============================================================
+  // ROLE CHECK HELPER PROPERTIES
+  // ============================================================
   
   const isAdmin = user?.role === 'admin';
   const isTechnician = user?.role === 'technician';
   const isClient = user?.role === 'client';
 
-  // ==================== INITIALIZATION EFFECT ====================
+  // ============================================================
+  // INITIALIZATION EFFECT
+  // ============================================================
   
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
-      
-      console.log('🔍 Auth initialization:');
-      console.log('  - Token exists:', !!storedToken);
-      console.log('  - Stored user exists:', !!storedUser);
       
       if (storedToken && storedUser) {
         try {
@@ -849,14 +683,12 @@ const fetchTechnicianProfile = async () => {
           
           // Restore user from localStorage
           const userData = JSON.parse(storedUser);
-          console.log('  - Restored user role:', userData.role);
-          console.log('  - Restored user email:', userData.email);
           setUser(userData);
           
           // Fetch fresh user profile
           await fetchUserProfile();
         } catch (error) {
-          console.error('❌ Error restoring auth:', error);
+          console.error('Error restoring auth:', error);
           logout();
         }
       } else {
@@ -868,7 +700,9 @@ const fetchTechnicianProfile = async () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ==================== CONTEXT VALUE ====================
+  // ============================================================
+  // CONTEXT VALUE
+  // ============================================================
   
   const value = {
     // User state
@@ -876,7 +710,6 @@ const fetchTechnicianProfile = async () => {
     technicianProfile,
     token,
     loading,
-    showToken,
     authError,
     
     // Role checks
@@ -907,18 +740,11 @@ const fetchTechnicianProfile = async () => {
     updateLanguages,
     updateLocation,
     updatePricing,
-    addServiceCategory,
-    removeServiceCategory,
-    addPortfolioItem,
-    removePortfolioItem,
-    addEducation,
-    addCertification,
-    addExperience,
-    updateAvailabilitySchedule,
-    toggleAvailability,
     updateBusinessInfo,
     updateSocialLinks,
     updatePrivacySettings,
+    updateAvailabilitySchedule,
+    toggleAvailability,
     
     // Admin functions
     getAllTechnicians,
@@ -933,9 +759,6 @@ const fetchTechnicianProfile = async () => {
     activateTrial,
     upgradeSubscription,
     cancelAutoRenew,
-    
-    // Utility functions
-    toggleTokenDisplay,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
