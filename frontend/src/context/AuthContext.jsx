@@ -300,37 +300,95 @@ export const AuthProvider = ({ children }) => {
    */
  const createTechnicianProfile = async (profileData) => {
   try {
+    console.log('🚀 ===== CREATE PROFILE START =====');
+    
+    // 1. Check localStorage directly
     const token = localStorage.getItem('token');
+    console.log('📋 Step 1 - localStorage check:');
+    console.log('  - Token exists:', !!token);
+    console.log('  - Token type:', typeof token);
+    console.log('  - Token length:', token?.length || 0);
+    console.log('  - Token preview:', token ? token.substring(0, 30) + '...' : 'NO TOKEN');
+    console.log('  - All localStorage keys:', Object.keys(localStorage));
+    
+    // 2. Check if token is in the correct format
+    if (token) {
+      console.log('📋 Step 2 - Token validation:');
+      const parts = token.split('.');
+      console.log('  - Has 3 parts:', parts.length === 3);
+      console.log('  - First part (header):', parts[0]?.substring(0, 20) + '...');
+      console.log('  - Is valid JWT format:', token.match(/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/));
+    }
+    
+    // 3. Check axios default headers BEFORE the request
+    console.log('📋 Step 3 - Axios headers BEFORE request:');
+    console.log('  - Authorization header:', api.defaults.headers.common['Authorization']);
     
     if (!token) {
-      console.error('❌ No token found');
+      console.error('❌ No token found in localStorage');
       return {
         success: false,
         error: 'Please login first to create a technician profile'
       };
     }
 
-    console.log('📤 Creating technician profile...');
-    const response = await api.post('/technician/create-profile', profileData);
+    // 4. Log the request data
+    console.log('📤 Step 4 - Sending request:');
+    console.log('  - URL:', '/technician/create-profile');
+    console.log('  - Method: POST');
+    console.log('  - Profile data keys:', Object.keys(profileData));
+    console.log('  - Profile data preview:', {
+      mainCategory: profileData.mainCategory,
+      serviceCategories: profileData.serviceCategories?.length || 0,
+      skills: profileData.skills?.length || 0
+    });
+    
+    // 5. Make the request with explicit headers
+    const response = await api.post('/technician/create-profile', profileData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('📥 Step 5 - Response received:');
+    console.log('  - Status:', response.status);
+    console.log('  - Success:', response.data.success);
+    console.log('  - Data:', response.data.data ? '✅ Present' : '❌ Missing');
     
     if (response.data.success) {
+      // ✅ Store the profile in state
       setTechnicianProfile(response.data.data);
       
+      // Update user role if needed
       if (user && user.role !== 'technician') {
         const updatedUser = { ...user, role: 'technician' };
         setUser(updatedUser);
         localStorage.setItem('user', JSON.stringify(updatedUser));
+        console.log('✅ User role updated to: technician');
       }
       
+      console.log('✅ Profile created successfully!');
       return { success: true, technician: response.data.data };
     }
     
+    console.warn('⚠️ Profile creation failed:', response.data.message);
     return { 
       success: false, 
       error: response.data.message || 'Failed to create technician profile' 
     };
   } catch (error) {
-    console.error('❌ Create profile error:', error);
+    console.error('❌ ===== CREATE PROFILE ERROR =====');
+    console.error('Error object:', error);
+    console.error('Error response:', error.response);
+    console.error('Error config:', error.config);
+    
+    if (error.response) {
+      console.error('  - Status:', error.response.status);
+      console.error('  - Data:', error.response.data);
+      console.error('  - Headers sent:', error.config?.headers);
+    }
+    
     // Handle specific errors
     if (error.response?.status === 401) {
       return {
@@ -338,6 +396,7 @@ export const AuthProvider = ({ children }) => {
         error: 'Your session has expired. Please login again.'
       };
     }
+    
     return {
       success: false,
       error: error.response?.data?.message || 'Failed to create technician profile',
