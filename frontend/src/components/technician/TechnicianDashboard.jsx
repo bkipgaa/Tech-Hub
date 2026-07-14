@@ -260,66 +260,75 @@ const TechnicianDashboard = () => {
    * 3. Fetch appropriate profile data
    * 4. Set isLoading = false
    */
-  useEffect(() => {
-    /**
-     * Initialize the dashboard
-     * Async function to handle API calls
-     */
-    const initDashboard = async () => {
-      // --- Step 1: Check if user is logged in ---
-      if (!user) {
-        console.log('🔒 No user found, redirecting to login...');
-        navigate('/login');
-        return;
-      }
+ // TechnicianDashboard.js - Update the initDashboard function
 
-      // --- Step 2: Check user role ---
-      if (user.role === 'client') {
-        console.log('🚫 Client users cannot access technician dashboard');
-        navigate('/');
-        return;
-      }
+useEffect(() => {
+  const initDashboard = async () => {
+    // --- Step 1: Check if user is logged in ---
+    if (!user) {
+      console.log('🔒 No user found, redirecting to login...');
+      navigate('/login');
+      return;
+    }
 
-      // --- Step 3: Start loading ---
-      setIsLoading(true);
+    // --- Step 2: Check user role ---
+    if (user.role === 'client') {
+      console.log('🚫 Client users cannot access technician dashboard');
+      navigate('/');
+      return;
+    }
 
-      try {
-        // --- Step 4: Admin viewing specific technician ---
-        if (user.role === 'admin' && id) {
-          console.log(`🔍 Admin viewing technician ID: ${id}`);
-          setIsAdminView(true);
+    // --- Step 3: Start loading ---
+    setIsLoading(true);
+
+    try {
+      // --- Step 4: Admin viewing specific technician ---
+      if (user.role === 'admin' && id) {
+        console.log(`🔍 Admin viewing technician ID: ${id}`);
+        setIsAdminView(true);
+        
+        const response = await getTechnicianById(id);
+        if (response.success) {
+          setViewingTechnician(response.data);
+          console.log('✅ Technician loaded for admin view');
+        } else {
+          setError('Technician not found');
+          navigate('/admin/technicians');
+        }
+      } 
+      // --- Step 5: Technician or admin viewing own dashboard ---
+      else if (user.role === 'technician' || (user.role === 'admin' && !id)) {
+        // ✅ Check if profile already exists in context
+        if (technicianProfile) {
+          console.log('✅ Technician profile already loaded in context');
+          // Profile is already loaded, nothing to do
+        } else {
+          console.log('🔍 Fetching technician profile...');
+          // ✅ Wait for the profile to be fetched and stored
+          const profile = await getTechnicianProfile();
+          console.log('📦 Profile fetched:', profile);
           
-          const response = await getTechnicianById(id);
-          if (response.success) {
-            setViewingTechnician(response.data);
-            console.log('✅ Technician loaded for admin view');
-          } else {
-            setError('Technician not found');
-            navigate('/admin/technicians');
-          }
-        } 
-        // --- Step 5: Technician or admin viewing own dashboard ---
-        else if (user.role === 'technician' || (user.role === 'admin' && !id)) {
-          if (!technicianProfile) {
-            console.log('🔍 Fetching technician profile...');
-            await getTechnicianProfile();
-            console.log('✅ Technician profile fetched successfully');
-          } else {
-            console.log('✅ Technician profile already loaded');
+          // ✅ If still no profile after fetch, redirect to create
+          if (!profile) {
+            console.log('ℹ️ No technician profile exists, redirecting to create...');
+            navigate('/create-technician-profile');
+            return;
           }
         }
-      } catch (error) {
-        console.error('❌ Error initializing dashboard:', error);
-        setError('Failed to load profile. Please try again.');
-      } finally {
-        // --- Step 6: Stop loading regardless of success/failure ---
-        setIsLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('❌ Error initializing dashboard:', error);
+      setError('Failed to load profile. Please try again.');
+    } finally {
+      // --- Step 6: Stop loading ---
+      console.log('✅ Dashboard initialization complete');
+      setIsLoading(false);
+    }
+  };
 
-    // Execute the initialization
-    initDashboard();
-  }, [user, id, navigate, getTechnicianProfile, getTechnicianById]);
+  initDashboard();
+  // ✅ Add technicianProfile to dependencies so it re-runs when it changes
+}, [user, id, navigate, getTechnicianProfile, getTechnicianById, technicianProfile]);
 
   /**
    * EFFECT 2: POPULATE FORM DATA FROM PROFILE
@@ -644,32 +653,53 @@ const TechnicianDashboard = () => {
    * Handle case where profile doesn't exist after loading
    * Different behavior for admins vs technicians
    */
-  if (!currentProfile && !isLoading) {
-    console.warn('⚠️ No profile found after loading');
-    
-    // --- Admin view: Show error and provide back button ---
-    if (isAdminView) {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-50">
-          <div className="text-center">
-            <p className="text-xl text-gray-700">Technician profile not found</p>
-            <button
-              onClick={() => navigate('/admin/technicians')}
-              className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-            >
-              Back to Technicians
-            </button>
-          </div>
+  // TechnicianDashboard.js - After the loading state
+
+// ============================================================
+// RENDER: PROFILE NOT FOUND
+// ============================================================
+
+/**
+ * Handle case where profile doesn't exist after loading
+ * Different behavior for admins vs technicians
+ */
+if (!currentProfile && !isLoading) {
+  console.warn('⚠️ No profile found after loading');
+  console.log('  - technicianProfile:', technicianProfile);
+  console.log('  - viewingTechnician:', viewingTechnician);
+  console.log('  - isAdminView:', isAdminView);
+  
+  // --- Admin view: Show error and provide back button ---
+  if (isAdminView) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <p className="text-xl text-gray-700">Technician profile not found</p>
+          <button
+            onClick={() => navigate('/admin/technicians')}
+            className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Back to Technicians
+          </button>
         </div>
-      );
-    }
-    
-    // --- Technician view: Redirect to create profile page ---
+      </div>
+    );
+  }
+  
+  // --- Technician view: Check if we should redirect ---
+  // ✅ Only redirect if we've confirmed there's no profile
+  if (!technicianProfile) {
     console.log('🔄 Redirecting to create technician profile...');
     navigate('/create-technician-profile');
     return null;
   }
-
+  
+  // If we have technicianProfile but currentProfile is null, use technicianProfile
+  if (technicianProfile && !currentProfile) {
+    console.log('✅ Using technicianProfile from context');
+    // The currentProfile will be set correctly below
+  }
+}
   // ============================================================
   // RENDER: MAIN DASHBOARD
   // ============================================================

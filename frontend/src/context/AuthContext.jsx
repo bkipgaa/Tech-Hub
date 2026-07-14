@@ -61,39 +61,42 @@ export const AuthProvider = ({ children }) => {
    * Fetch technician profile for current user
    * Uses /technicians/profile endpoint (plural)
    */
-  const fetchTechnicianProfile = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.log('No token found, skipping technician profile fetch');
-        return null;
-      }
+// AuthContext.js - Fix the fetchTechnicianProfile function
 
-      console.log('🔍 Fetching technician profile...');
-      const response = await api.get('/technician/profile');
-      
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        console.log('✅ Technician profile fetched successfully');
-        return response.data.data;
-      } else {
-        console.warn('⚠️ Could not fetch technician profile:', response.data.message);
-        setTechnicianProfile(null);
-        return null;
-      }
-    } catch (error) {
-      // 404 means no profile yet – that's fine for new technicians
-      if (error.response?.status === 404) {
-        console.log('ℹ️ No technician profile found (user may not have created one yet)');
-        setTechnicianProfile(null);
-        return null;
-      }
-      console.error('❌ Error fetching technician profile:', error);
+const fetchTechnicianProfile = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.log('No token found, skipping technician profile fetch');
+      return null;
+    }
+
+    console.log('🔍 Fetching technician profile...');
+    const response = await api.get('/technician/profile');
+    
+    console.log('📦 Fetch technician profile response:', response.data);
+    
+    if (response.data.success) {
+      // ✅ Store the profile in state
+      setTechnicianProfile(response.data.data);
+      console.log('✅ Technician profile set in context:', response.data.data);
+      return response.data.data;
+    } else {
+      console.warn('⚠️ Could not fetch technician profile:', response.data.message);
       setTechnicianProfile(null);
       return null;
     }
-  };
-
+  } catch (error) {
+    if (error.response?.status === 404) {
+      console.log('ℹ️ No technician profile found (404)');
+      setTechnicianProfile(null);
+      return null;
+    }
+    console.error('❌ Error fetching technician profile:', error);
+    setTechnicianProfile(null);
+    return null;
+  }
+};
   /**
    * Fetch current user profile from backend
    * Uses /auth/profile endpoint
