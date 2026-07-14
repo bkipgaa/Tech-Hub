@@ -663,11 +663,26 @@ useEffect(() => {
  * Handle case where profile doesn't exist after loading
  * Different behavior for admins vs technicians
  */
+// TechnicianDashboard.js - Update the profile check
+
+// ============================================================
+// RENDER: PROFILE NOT FOUND
+// ============================================================
+
 if (!currentProfile && !isLoading) {
   console.warn('⚠️ No profile found after loading');
-  console.log('  - technicianProfile:', technicianProfile);
-  console.log('  - viewingTechnician:', viewingTechnician);
-  console.log('  - isAdminView:', isAdminView);
+  
+  // ✅ IMPORTANT: If we're still fetching, don't redirect
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
   
   // --- Admin view: Show error and provide back button ---
   if (isAdminView) {
@@ -686,18 +701,18 @@ if (!currentProfile && !isLoading) {
     );
   }
   
-  // --- Technician view: Check if we should redirect ---
-  // ✅ Only redirect if we've confirmed there's no profile
-  if (!technicianProfile) {
-    console.log('🔄 Redirecting to create technician profile...');
+  // ✅ Only redirect if we've confirmed no profile exists
+  // Check if we've actually tried to fetch the profile
+  if (!technicianProfile && !isLoading) {
+    console.log('🔄 No technician profile, redirecting to create...');
     navigate('/create-technician-profile');
     return null;
   }
   
-  // If we have technicianProfile but currentProfile is null, use technicianProfile
+  // If we have technicianProfile but currentProfile is null, use it
   if (technicianProfile && !currentProfile) {
     console.log('✅ Using technicianProfile from context');
-    // The currentProfile will be set correctly below
+    // The component will re-render with the correct profile
   }
 }
   // ============================================================
