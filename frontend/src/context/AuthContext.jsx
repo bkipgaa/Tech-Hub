@@ -298,36 +298,52 @@ export const AuthProvider = ({ children }) => {
   /**
    * Create new technician profile
    */
-  const createTechnicianProfile = async (profileData) => {
-    try {
-      const response = await api.post('/technician/create-profile', profileData);
-      
-      if (response.data.success) {
-        setTechnicianProfile(response.data.data);
-        
-        // Update user role if needed
-        if (user && user.role !== 'technician') {
-          const updatedUser = { ...user, role: 'technician' };
-          setUser(updatedUser);
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-        }
-        
-        return { success: true, technician: response.data.data };
-      }
-      
-      return { 
-        success: false, 
-        error: response.data.message || 'Failed to create technician profile' 
-      };
-    } catch (error) {
-      console.error('❌ Create profile error:', error);
+ const createTechnicianProfile = async (profileData) => {
+  try {
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      console.error('❌ No token found');
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to create technician profile',
+        error: 'Please login first to create a technician profile'
       };
     }
-  };
 
+    console.log('📤 Creating technician profile...');
+    const response = await api.post('/technician/create-profile', profileData);
+    
+    if (response.data.success) {
+      setTechnicianProfile(response.data.data);
+      
+      if (user && user.role !== 'technician') {
+        const updatedUser = { ...user, role: 'technician' };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+      
+      return { success: true, technician: response.data.data };
+    }
+    
+    return { 
+      success: false, 
+      error: response.data.message || 'Failed to create technician profile' 
+    };
+  } catch (error) {
+    console.error('❌ Create profile error:', error);
+    // Handle specific errors
+    if (error.response?.status === 401) {
+      return {
+        success: false,
+        error: 'Your session has expired. Please login again.'
+      };
+    }
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Failed to create technician profile',
+    };
+  }
+};
   /**
    * Update entire technician profile
    */
