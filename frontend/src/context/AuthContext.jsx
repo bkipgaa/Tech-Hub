@@ -62,7 +62,9 @@ export const AuthProvider = ({ children }) => {
    * Uses /technicians/profile endpoint (plural)
    */
 // AuthContext.js - Fix the fetchTechnicianProfile function
-
+/**
+ * Fetch technician profile for current user
+ */
 const fetchTechnicianProfile = async () => {
   try {
     const token = localStorage.getItem('token');
@@ -77,18 +79,27 @@ const fetchTechnicianProfile = async () => {
     console.log('📦 Fetch technician profile response:', response.data);
     
     if (response.data.success) {
-      // ✅ Store the profile in state
-      setTechnicianProfile(response.data.data);
-      console.log('✅ Technician profile set in context:', response.data.data);
-      return response.data.data;
+      // ✅ FIXED: Check both response.data.data AND response.data.technician
+      const profileData = response.data.data || response.data.technician;
+      
+      if (profileData) {
+        setTechnicianProfile(profileData);
+        console.log('✅ Technician profile set in context:', profileData);
+        return profileData;
+      } else {
+        console.warn('⚠️ No profile data in response:', response.data);
+        setTechnicianProfile(null);
+        return null;
+      }
     } else {
       console.warn('⚠️ Could not fetch technician profile:', response.data.message);
       setTechnicianProfile(null);
       return null;
     }
   } catch (error) {
+    // 404 means no profile yet – that's fine for new technicians
     if (error.response?.status === 404) {
-      console.log('ℹ️ No technician profile found (404)');
+      console.log('ℹ️ No technician profile found (user may not have created one yet)');
       setTechnicianProfile(null);
       return null;
     }
@@ -292,11 +303,7 @@ const fetchTechnicianProfile = async () => {
   // ==================== TECHNICIAN PROFILE MANAGEMENT ====================
 
   /**
-   * Get technician profile (alias for fetchTechnicianProfile)
-   */
-  const getTechnicianProfile = async () => {
-    return await fetchTechnicianProfile();
-  };
+
 
   /**
    * Create new technician profile
@@ -892,7 +899,6 @@ const fetchTechnicianProfile = async () => {
     createTechnicianProfile,
     updateTechnicianProfile,
     fetchTechnicianProfile,
-    getTechnicianProfile,
     getTechnicianById,
     
     // Section-specific update functions
