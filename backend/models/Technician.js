@@ -49,7 +49,6 @@ const TechnicianSchema = new Schema({
   // Level 1: Main Category - Matches ServiceCatalog.mainCategory
   mainCategory: { 
     type: String, 
-    required: true,
     enum: [
       'IT & Networking',
       'Electrical Services',
@@ -74,6 +73,33 @@ const TechnicianSchema = new Schema({
     ]
   },
 
+  // NEW: array for multiple main categories
+  mainCategories: [{
+    type: String,
+    enum: ['IT & Networking',
+      'Electrical Services',
+      'Mechanical Services',
+      'Plumbing',
+      'Programming & AI',
+      'Hairdressing & Beauty',
+      'Carpentry & Furniture',
+      'Laundry & Dry Cleaning',
+      'Cleaning Services',
+      'Painting & Decorating',
+      'Welding & Fabrication',
+      'Automotive Repair',
+      'Tutoring & Training',
+      'Photography & Videography',
+      'Event Planning',
+      'Construction & Renovation',
+      'HVAC Services',
+      'Appliance Repair',
+      'Moving & Logistics',
+      'Gardening & Landscaping'],
+    trim: true
+  }],
+
+  
   // Level 2 & 3: Service Categories with Sub-Services
   // Matches ServiceCatalog.serviceCategories structure
   serviceCategories: [{
@@ -433,6 +459,26 @@ TechnicianSchema.index({
 });
 
 // ========== VIRTUALS ==========
+TechnicianSchema.pre('save', function(next) {
+  // Ensure mainCategories is an array
+  if (!this.mainCategories || !Array.isArray(this.mainCategories)) {
+    this.mainCategories = [];
+  }
+
+  // Remove duplicates and empty strings
+  this.mainCategories = [...new Set(this.mainCategories.filter(cat => cat && cat.trim() !== ''))];
+
+  // If mainCategories has items, set mainCategory to the first one
+  if (this.mainCategories.length > 0) {
+    this.mainCategory = this.mainCategories[0];
+  } else {
+    // Optionally keep existing or clear
+    this.mainCategories = this.mainCategory ? [this.mainCategory] : [];
+  }
+
+  next();
+});
+
 TechnicianSchema.virtual('fullName').get(function() {
   return this.userId ? `${this.userId.firstName} ${this.userId.lastName}` : '';
 });

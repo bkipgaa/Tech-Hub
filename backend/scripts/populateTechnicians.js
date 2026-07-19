@@ -3,11 +3,11 @@
  * ===========================
  * Creates test technicians across different Kenyan towns
  * Updated to use three-level service hierarchy:
- * Level 1: mainCategory
- * Level 2: serviceCategories (with categoryName)
+ * Level 1: mainCategory (string) + mainCategories (array)
+ * Level 2: serviceCategories (with categoryName and mainCategory)
  * Level 3: subServices
  * 
- * @version 2.0.0
+ * @version 3.0.0
  */
 
 const mongoose = require('mongoose');
@@ -527,21 +527,20 @@ async function populateTechnicians() {
         continue;
       }
 
-      // Get the service category data - UPDATED to use serviceCategories
-      const serviceCatData = serviceData[profile.mainCategory]?.serviceCategories?.find(
-        c => c.name === profile.serviceCategory
-      );
-
       // Create technician profile with THREE-LEVEL HIERARCHY
       const technician = new Technician({
         userId: user._id,
         aboutMe: profile.aboutMe,
         profileHeadline: profile.headline,
         skills: profile.skills,
-        // ✅ Level 1: mainCategory (changed from category)
+        
+        // ✅ Level 1: mainCategory (string) + mainCategories (array)
         mainCategory: profile.mainCategory,
-        // ✅ Level 2 & 3: serviceCategories with categoryName and subServices
+        mainCategories: [profile.mainCategory], // NEW: array for multiple (future expansion)
+        
+        // ✅ Level 2 & 3: serviceCategories with categoryName, subServices, and mainCategory
         serviceCategories: [{
+          mainCategory: profile.mainCategory, // Link to Level 1
           categoryName: profile.serviceCategory,
           subServices: profile.subServices,
           description: `${profile.serviceCategory} services for ${town.name} area`,
@@ -550,6 +549,7 @@ async function populateTechnicians() {
           isActive: true,
           displayOrder: 0
         }],
+        
         pricing: {
           hourlyRate: profile.hourlyRate,
           fixedPrice: 0,
