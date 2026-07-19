@@ -19,30 +19,30 @@
  * - Admins viewing other technicians: Read-only access
  * - Regular users (clients): Redirected to home
  * 
- * @version 2.0.0
+ * @version 3.0.0 - Supports multiple main categories with primary sync
  * @author Weba-Hub Team
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 
-// Import tab components - each tab represents a section of the technician profile
-import ProfileTab from './tabs/ProfileTab';          // Basic info, bio, skills
-import ServicesTab from './tabs/ServicesTab';        // Services offered, pricing
-import PortfolioTab from './tabs/PortfolioTab';      // Work samples, gallery
-import CredentialsTab from './tabs/CredentialsTab';  // Education, certifications
-import AvailabilityTab from './tabs/AvailabilityTab'; // Working hours, schedule
-import BusinessTab from './tabs/BusinessTab';        // Business registration, insurance
-import SettingsTab from './tabs/SettingsTab';        // Privacy, notification preferences
+// Import tab components
+import ProfileTab from './tabs/ProfileTab';
+import ServicesTab from './tabs/ServicesTab';
+import PortfolioTab from './tabs/PortfolioTab';
+import CredentialsTab from './tabs/CredentialsTab';
+import AvailabilityTab from './tabs/AvailabilityTab';
+import BusinessTab from './tabs/BusinessTab';
+import SettingsTab from './tabs/SettingsTab';
 
 // Import common UI components
-import Header from './common/Header';                     // Technician stats and profile summary
-import VerificationBanner from './common/VerificationBanner'; // Verification status with actions
-import ProfileCompletionBar from './common/ProfileCompletionBar'; // Visual progress bar
-import TabNavigation from './common/TabNavigation';       // Tab switching interface
+import Header from './common/Header';
+import VerificationBanner from './common/VerificationBanner';
+import ProfileCompletionBar from './common/ProfileCompletionBar';
+import TabNavigation from './common/TabNavigation';
 
-// Import icons from lucide-react for visual elements
+// Import icons
 import { Edit, Save, X, Shield, Eye } from 'lucide-react';
 
 const TechnicianDashboard = () => {
@@ -50,108 +50,60 @@ const TechnicianDashboard = () => {
   // HOOKS & STATE MANAGEMENT
   // ============================================================
   
-  /**
-   * Get technician ID from URL params (for admin viewing specific technician)
-   * Example: /technician-dashboard/12345 where 12345 is the technician ID
-   */
   const { id } = useParams();
   
-  /**
-   * Authentication Context
-   * Provides user data, profile management, and service category functions
-   */
   const { 
     user, 
     technicianProfile, 
     updateTechnicianProfile, 
     getTechnicianProfile, 
     getTechnicianById,
-    addServiceCategory,        // ✅ New: add service category API
-    removeServiceCategory      // ✅ New: remove service category API
+    addServiceCategory,
+    removeServiceCategory
   } = useAuth();
   
-  const navigate = useNavigate(); // For programmatic navigation
+  const navigate = useNavigate();
 
   // ============================================================
   // STATE VARIABLES
   // ============================================================
   
-  /**
-   * LOADING STATES
-   * --------------
-   * isLoading: True while fetching data from API
-   * loading: True while saving data to API
-   * serviceUpdateLoading: True while adding/removing service categories
-   */
   const [isLoading, setIsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [serviceUpdateLoading, setServiceUpdateLoading] = useState(false);
   
-  /**
-   * ADMIN VIEW MODE
-   * ---------------
-   * When an admin is viewing another technician's profile
-   * All fields become read-only
-   */
   const [viewingTechnician, setViewingTechnician] = useState(null);
   const [isAdminView, setIsAdminView] = useState(false);
   
-  /**
-   * UI STATE
-   * ---------
-   * isEditing: Toggles edit mode on/off
-   * error: Stores error messages to display
-   * activeTab: Currently selected tab ('profile', 'services', etc.)
-   */
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('profile');
+
+  // Ref to prevent infinite loops when syncing mainCategory
+  const isSyncingRef = useRef(false);
 
   // ============================================================
   // COMPUTED PROPERTIES
   // ============================================================
   
-  /**
-   * Determine if current user is an admin viewing another technician
-   */
   const isAdminViewing = user?.role === 'admin' && id;
-  
-  /**
-   * Determine if user can edit the profile
-   * - Technicians can edit their own profile when in edit mode
-   * - Admins cannot edit other technicians' profiles
-   */
   const canEdit = !isAdminViewing && user?.role === 'technician' && isEditing;
-  
-  /**
-   * Determine if profile is read-only
-   * - Admin viewing another technician: Read-only
-   * - Admin viewing own profile: Editable (when isEditing is true)
-   */
   const isReadOnly = isAdminViewing || (user?.role === 'admin' && !id);
 
   // ============================================================
-  // FORM DATA STATE
+  // FORM DATA STATE – KEEP BOTH mainCategory AND mainCategories
   // ============================================================
   
-  /**
-   * Complete technician profile data structure
-   * This matches the backend Technician model schema
-   * All fields are initialized with default values
-   */
   const [formData, setFormData] = useState({
-    // --- BASIC INFORMATION ---
     aboutMe: '',
     profileHeadline: '',
-    
-    // --- PROFESSIONAL SKILLS ---
     skills: [],
     
-    // --- SERVICE CATEGORIES (THREE LEVEL HIERARCHY) ---
-    mainCategory: '',
-    serviceCategories: [],
+    // ✅ Keep both: primary single category and array for multiple
+    mainCategory: '',               // ← primary (first one)
+    mainCategories: [],             // ← full list
     
-    // --- PRICING STRUCTURE ---
+    serviceCategories: [],
     pricing: {
       hourlyRate: 0,
       fixedPrice: 0,
@@ -159,21 +111,11 @@ const TechnicianDashboard = () => {
       currency: 'KES',
       paymentMethods: ['Cash', 'M-Pesa']
     },
-    
-    // --- EDUCATIONAL BACKGROUND ---
     education: [],
-    
-    // --- PROFESSIONAL CERTIFICATIONS ---
     certifications: [],
-    
-    // --- WORK EXPERIENCE ---
     yearsOfExperience: 0,
     experience: [],
-    
-    // --- PORTFOLIO/WORK SAMPLES ---
     portfolio: [],
-    
-    // --- LOCATION INFORMATION ---
     address: {
       street: '',
       city: '',
@@ -187,11 +129,7 @@ const TechnicianDashboard = () => {
       placeId: ''
     },
     serviceRadius: 10,
-    
-    // --- LANGUAGES SPOKEN ---
     languages: [{ name: 'English', proficiency: 'Fluent' }],
-    
-    // --- WORKING HOURS (7 days a week) ---
     availability: {
       monday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
       tuesday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
@@ -204,8 +142,6 @@ const TechnicianDashboard = () => {
     emergencyAvailable: false,
     remoteServiceAvailable: false,
     weekendAvailable: false,
-    
-    // --- BUSINESS INFORMATION ---
     businessName: '',
     businessRegistrationNumber: '',
     insuranceInfo: {
@@ -213,8 +149,6 @@ const TechnicianDashboard = () => {
       policyNumber: '',
       expiryDate: ''
     },
-    
-    // --- SOCIAL MEDIA LINKS ---
     socialLinks: {
       website: '',
       facebook: '',
@@ -224,8 +158,6 @@ const TechnicianDashboard = () => {
       youtube: '',
       tiktok: ''
     },
-    
-    // --- ACCOUNT SETTINGS ---
     settings: {
       showEmail: false,
       showPhone: true,
@@ -239,59 +171,67 @@ const TechnicianDashboard = () => {
         push: true
       }
     },
-    
-    // --- STATUS FLAGS ---
     isAvailable: true,
     isActive: true,
-    
-    // --- LEGACY SUPPORT ---
     gallery: []
   });
 
   // ============================================================
-  // EFFECT HOOKS
+  // SYNC: mainCategory ↔ mainCategories[0]
+  // ============================================================
+  
+  /**
+   * Whenever mainCategories changes, update mainCategory to the first item (or empty).
+   * Uses a ref to prevent recursive loops.
+   */
+  useEffect(() => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+
+    const newMainCategory = formData.mainCategories && formData.mainCategories.length > 0
+      ? formData.mainCategories[0]
+      : '';
+
+    if (formData.mainCategory !== newMainCategory) {
+      setFormData(prev => ({
+        ...prev,
+        mainCategory: newMainCategory
+      }));
+    }
+
+    isSyncingRef.current = false;
+  }, [formData.mainCategories, formData.mainCategory]);
+
+  /**
+   * When mainCategory is manually changed (e.g., by ServicesTab filter),
+   * we could optionally reorder mainCategories to put it first.
+   * But we'll keep it simple and only sync one way.
+   */
+
+  // ============================================================
+  // EFFECTS
   // ============================================================
 
   /**
    * EFFECT 1: AUTHENTICATION & AUTHORIZATION CHECK
-   * =============================================
-   * 
-   * Runs when the component mounts or when user/id changes
-   * Ensures only authorized users can access this page
-   * 
-   * Access Rules:
-   * 1. Technicians can access their own dashboard (no ID param)
-   * 2. Admins can access their own dashboard (no ID param) - full edit access
-   * 3. Admins can view any technician's dashboard (with ID param) - read-only
-   * 4. Regular users (customers) are redirected to home
-   * 
-   * Loading Flow:
-   * 1. Set isLoading = true
-   * 2. Check user authentication
-   * 3. Fetch appropriate profile data
-   * 4. Set isLoading = false
    */
   useEffect(() => {
     const initDashboard = async () => {
-      // --- Step 1: Check if user is logged in ---
       if (!user) {
         console.log('🔒 No user found, redirecting to login...');
         navigate('/login');
         return;
       }
 
-      // --- Step 2: Check user role ---
       if (user.role === 'client') {
         console.log('🚫 Client users cannot access technician dashboard');
         navigate('/');
         return;
       }
 
-      // --- Step 3: Start loading ---
       setIsLoading(true);
 
       try {
-        // --- Step 4: Admin viewing specific technician ---
         if (user.role === 'admin' && id) {
           console.log(`🔍 Admin viewing technician ID: ${id}`);
           setIsAdminView(true);
@@ -305,7 +245,6 @@ const TechnicianDashboard = () => {
             navigate('/admin/technicians');
           }
         } 
-        // --- Step 5: Technician or admin viewing own dashboard ---
         else if (user.role === 'technician' || (user.role === 'admin' && !id)) {
           if (technicianProfile) {
             console.log('✅ Technician profile already loaded in context');
@@ -336,18 +275,7 @@ const TechnicianDashboard = () => {
   /**
    * EFFECT 2: POPULATE FORM DATA FROM PROFILE
    * =========================================
-   * 
-   * Runs when technicianProfile or viewingTechnician changes
-   * Copies profile data from context into formData state
-   * 
-   * This separation allows:
-   * - Form data to be edited independently
-   * - Easy reset/cancel functionality
-   * - Clean separation between data and UI state
-   * 
-   * Supports both:
-   * - Self-view (technicianProfile from context)
-   * - Admin-view (viewingTechnician from API)
+   * Reads both mainCategory (single) and mainCategories (array) from profile.
    */
   useEffect(() => {
     const profile = isAdminView ? viewingTechnician : technicianProfile;
@@ -356,15 +284,23 @@ const TechnicianDashboard = () => {
       console.log('📝 Populating form data with profile:', {
         id: profile._id,
         name: profile.userId?.firstName + ' ' + profile.userId?.lastName,
-        mainCategory: profile.mainCategory,
+        mainCategories: profile.mainCategories || (profile.mainCategory ? [profile.mainCategory] : []),
         serviceCount: profile.serviceCategories?.length || 0
       });
+
+      // Determine categories array
+      const categoriesArray = profile.mainCategories || 
+                             (profile.mainCategory ? [profile.mainCategory] : []);
 
       setFormData({
         aboutMe: profile.aboutMe || '',
         profileHeadline: profile.profileHeadline || '',
         skills: profile.skills || [],
-        mainCategory: profile.mainCategory || '',
+        
+        // ✅ Both fields
+        mainCategory: profile.mainCategory || (categoriesArray.length > 0 ? categoriesArray[0] : ''),
+        mainCategories: categoriesArray,
+        
         serviceCategories: profile.serviceCategories || [],
         pricing: profile.pricing || {
           hourlyRate: 0,
@@ -441,70 +377,58 @@ const TechnicianDashboard = () => {
   }, [technicianProfile, viewingTechnician, isAdminView]);
 
   // ============================================================
-  // SERVICE CATEGORY HANDLERS (NEW)
+  // SERVICE CATEGORY HANDLERS (unchanged)
   // ============================================================
 
-  /**
-   * Add a new service category
-   * Calls AuthContext, updates formData, refreshes profile
-   * @param {Object} categoryData - { categoryName, subServices }
-   * @returns {Object} { success: boolean, error: string }
-   */
-  const handleAddServiceCategory = async (categoryData) => {
-    setServiceUpdateLoading(true);
-    try {
-      const result = await addServiceCategory(categoryData);
-      if (result.success) {
-        const updatedProfile = result.technician;
-        setFormData(prev => ({
-          ...prev,
-          serviceCategories: updatedProfile.serviceCategories || []
-        }));
-        await getTechnicianProfile(); // refresh context
-        return { success: true };
-      } else {
-        setError(result.error || 'Failed to add service category');
-        return { success: false, error: result.error };
-      }
-    } catch (error) {
-      console.error('Error adding service category:', error);
-      setError('Failed to add service category');
-      return { success: false, error: 'Failed to add service category' };
-    } finally {
-      setServiceUpdateLoading(false);
+ const handleAddServiceCategory = async (categoryData) => {
+  setServiceUpdateLoading(true);
+  try {
+    const result = await addServiceCategory(categoryData);
+    if (result.success) {
+      const updatedProfile = result.technician;
+      setFormData(prev => ({
+        ...prev,
+        serviceCategories: updatedProfile.serviceCategories || []
+      }));
+      await getTechnicianProfile();
+      return { success: true };
+    } else {
+      setError(result.error || 'Failed to add service category');
+      return { success: false, error: result.error };
     }
-  };
+  } catch (error) {
+    console.error('Error adding service category:', error);
+    setError('Failed to add service category');
+    return { success: false, error: 'Failed to add service category' };
+  } finally {
+    setServiceUpdateLoading(false);
+  }
+};
 
-  /**
-   * Remove a service category
-   * Calls AuthContext, updates formData, refreshes profile
-   * @param {string} categoryName - Name of the category to remove
-   * @returns {Object} { success: boolean, error: string }
-   */
-  const handleRemoveServiceCategory = async (categoryName) => {
-    setServiceUpdateLoading(true);
-    try {
-      const result = await removeServiceCategory(categoryName);
-      if (result.success) {
-        const updatedProfile = result.technician;
-        setFormData(prev => ({
-          ...prev,
-          serviceCategories: updatedProfile.serviceCategories || []
-        }));
-        await getTechnicianProfile();
-        return { success: true };
-      } else {
-        setError(result.error || 'Failed to remove service category');
-        return { success: false, error: result.error };
-      }
-    } catch (error) {
-      console.error('Error removing service category:', error);
-      setError('Failed to remove service category');
-      return { success: false, error: 'Failed to remove service category' };
-    } finally {
-      setServiceUpdateLoading(false);
+const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
+  setServiceUpdateLoading(true);
+  try {
+    const result = await removeServiceCategory(categoryName, mainCategory);
+    if (result.success) {
+      const updatedProfile = result.technician;
+      setFormData(prev => ({
+        ...prev,
+        serviceCategories: updatedProfile.serviceCategories || []
+      }));
+      await getTechnicianProfile();
+      return { success: true };
+    } else {
+      setError(result.error || 'Failed to remove service category');
+      return { success: false, error: result.error };
     }
-  };
+  } catch (error) {
+    console.error('Error removing service category:', error);
+    setError('Failed to remove service category');
+    return { success: false, error: 'Failed to remove service category' };
+  } finally {
+    setServiceUpdateLoading(false);
+  }
+};
 
   // ============================================================
   // EVENT HANDLERS
@@ -513,16 +437,8 @@ const TechnicianDashboard = () => {
   /**
    * HANDLE INPUT CHANGES
    * ====================
-   * 
-   * Supports nested form fields using dot notation
-   * Example: 'pricing.hourlyRate' updates formData.pricing.hourlyRate
-   * 
-   * Also handles checkbox inputs (type === 'checkbox')
-   * Special handling for 'mainCategory' field (no dot notation)
-   * 
-   * @param {Event} e - The input change event
-   * 
-   * @disabled When in admin view mode (isAdminView = true)
+   * Still handles nested fields, but no special case for mainCategory.
+   * mainCategory is synced automatically via useEffect.
    */
   const handleInputChange = (e) => {
     if (isAdminView) {
@@ -532,14 +448,7 @@ const TechnicianDashboard = () => {
     
     const { name, value, type, checked } = e.target;
     
-    if (name === 'mainCategory') {
-      console.log(`📝 Setting mainCategory to: ${value}`);
-      setFormData({
-        ...formData,
-        mainCategory: value
-      });
-      return;
-    }
+    // No special case for 'mainCategory' – it is synced from mainCategories.
     
     if (name.includes('.')) {
       const parts = name.split('.');
@@ -577,18 +486,7 @@ const TechnicianDashboard = () => {
   /**
    * HANDLE FORM SUBMISSION
    * ======================
-   * 
-   * Saves the updated profile data to the backend
-   * 
-   * Flow:
-   * 1. Validate user permissions (admin view blocked)
-   * 2. Validate required fields (mainCategory must be selected)
-   * 3. Remove legacy fields (gallery)
-   * 4. Submit to API via updateTechnicianProfile
-   * 5. On success: Exit edit mode, refresh profile
-   * 6. On error: Display error message
-   * 
-   * @param {Event} e - The form submission event
+   * Validates that at least one main category exists.
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -604,15 +502,20 @@ const TechnicianDashboard = () => {
     
     const { gallery, ...submitData } = formData;
     
-    if (!submitData.mainCategory) {
-      setError('Please select a main category');
+    // ✅ Validate: at least one main category
+    if (!submitData.mainCategories || submitData.mainCategories.length === 0) {
+      setError('Please select at least one main category');
       setLoading(false);
-      console.warn('⚠️ Form submission failed: mainCategory is required');
+      console.warn('⚠️ Form submission failed: mainCategories is required');
       return;
     }
     
+    // Ensure mainCategory is set to the first one (already synced)
+    submitData.mainCategory = submitData.mainCategories[0];
+    
     console.log('📤 Submitting profile update:', {
       mainCategory: submitData.mainCategory,
+      mainCategories: submitData.mainCategories,
       serviceCategories: submitData.serviceCategories?.length || 0,
       skills: submitData.skills?.length || 0,
       isAvailable: submitData.isAvailable
@@ -636,10 +539,6 @@ const TechnicianDashboard = () => {
   // RENDER HELPERS
   // ============================================================
 
-  /**
-   * Get the current profile object
-   * Returns viewingTechnician for admin view, technicianProfile otherwise
-   */
   const currentProfile = isAdminView ? viewingTechnician : technicianProfile;
 
   // ============================================================
@@ -750,35 +649,29 @@ const TechnicianDashboard = () => {
           </div>
         )}
 
-        {/* Header Section */}
         <Header 
           technicianProfile={currentProfile} 
           isAdminView={isAdminView} 
         />
 
-        {/* Verification Banner */}
         <VerificationBanner 
           status={currentProfile?.verificationStatus} 
           isAdminView={isAdminView}
           technicianId={currentProfile?._id}
         />
 
-        {/* Profile Completion Bar */}
         <ProfileCompletionBar 
           percentage={currentProfile?.profileCompletionPercentage} 
           isAdminView={isAdminView}
         />
 
-        {/* Tab Navigation */}
         <TabNavigation 
           activeTab={activeTab} 
           setActiveTab={setActiveTab} 
         />
 
-        {/* Main Content Area */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
           
-          {/* Tab Header */}
           <div className="bg-gray-50 px-6 py-5 border-b border-gray-200 flex justify-between items-center flex-wrap gap-3">
             
             <h2 className="text-2xl font-bold text-gray-800">
@@ -791,7 +684,6 @@ const TechnicianDashboard = () => {
               {activeTab === 'settings' && '⚙️ Account Settings'}
             </h2>
             
-            {/* Edit Button (Technicians only) */}
             {!isAdminView && user?.role === 'technician' && (
               !isEditing ? (
                 <button
@@ -826,7 +718,6 @@ const TechnicianDashboard = () => {
               )
             )}
             
-            {/* Edit Button (Admin viewing own profile) */}
             {user?.role === 'admin' && !id && !isEditing && (
               <button
                 onClick={() => setIsEditing(true)}
@@ -837,7 +728,6 @@ const TechnicianDashboard = () => {
               </button>
             )}
             
-            {/* Read-only indicator (Admin viewing other technician) */}
             {isAdminView && (
               <div className="flex items-center gap-2 text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
                 <Eye className="w-4 h-4" />
@@ -846,17 +736,14 @@ const TechnicianDashboard = () => {
             )}
           </div>
 
-          {/* Error Message Display */}
           {error && (
             <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
               <strong>❌ Error:</strong> {error}
             </div>
           )}
 
-          {/* Profile Form */}
           <form onSubmit={handleSubmit} className="p-6">
             
-            {/* Tab 1: Profile */}
             {activeTab === 'profile' && (
               <ProfileTab 
                 formData={formData}
@@ -867,7 +754,6 @@ const TechnicianDashboard = () => {
               />
             )}
             
-            {/* Tab 2: Services - WITH SERVICE CATEGORY HANDLERS */}
             {activeTab === 'services' && (
               <ServicesTab 
                 formData={formData}
@@ -875,13 +761,12 @@ const TechnicianDashboard = () => {
                 isEditing={canEdit}
                 isReadOnly={isReadOnly}
                 handleInputChange={handleInputChange}
-                onAddServiceCategory={handleAddServiceCategory}       // ✅ new
-                onRemoveServiceCategory={handleRemoveServiceCategory} // ✅ new
-                isSaving={serviceUpdateLoading}                       // ✅ new
+                onAddServiceCategory={handleAddServiceCategory}
+                onRemoveServiceCategory={handleRemoveServiceCategory}
+                isSaving={serviceUpdateLoading}
               />
             )}
             
-            {/* Tab 3: Portfolio */}
             {activeTab === 'portfolio' && (
               <PortfolioTab 
                 formData={formData}
@@ -891,7 +776,6 @@ const TechnicianDashboard = () => {
               />
             )}
             
-            {/* Tab 4: Credentials */}
             {activeTab === 'credentials' && (
               <CredentialsTab 
                 formData={formData}
@@ -902,7 +786,6 @@ const TechnicianDashboard = () => {
               />
             )}
             
-            {/* Tab 5: Availability */}
             {activeTab === 'availability' && (
               <AvailabilityTab 
                 formData={formData}
@@ -913,7 +796,6 @@ const TechnicianDashboard = () => {
               />
             )}
             
-            {/* Tab 6: Business */}
             {activeTab === 'business' && (
               <BusinessTab 
                 formData={formData}
@@ -924,7 +806,6 @@ const TechnicianDashboard = () => {
               />
             )}
             
-            {/* Tab 7: Settings */}
             {activeTab === 'settings' && (
               <SettingsTab 
                 formData={formData}
@@ -936,7 +817,6 @@ const TechnicianDashboard = () => {
               />
             )}
 
-            {/* Save Button */}
             {canEdit && (
               <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end">
                 <button

@@ -482,13 +482,30 @@ const updateServiceCategories = async (serviceCategories) => {
 };
 
 /**
- * Add a service category
+/**
+ * Add a new service category (with main category association)
  * @param {Object} categoryData - Service category data
+ * @param {string} categoryData.mainCategory - The main category this service belongs to
+ * @param {string} categoryData.categoryName - The service category name
+ * @param {string[]} categoryData.subServices - Array of sub-service names
  * @returns {Object} { success: boolean, technician: Object, error: string }
  */
 const addServiceCategory = async (categoryData) => {
   try {
-    const response = await api.post('/technician/profile/service-category', categoryData);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      return {
+        success: false,
+        error: 'Please login first'
+      };
+    }
+
+    const response = await api.post('/technician/profile/service-category', categoryData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
     
     if (response.data.success) {
       const profile = updateProfileState(response);
@@ -509,13 +526,39 @@ const addServiceCategory = async (categoryData) => {
 };
 
 /**
- * Remove a service category
+ * Remove a service category (with optional main category to identify the exact one)
  * @param {string} categoryName - Name of the category to remove
+ * @param {string} [mainCategory] - Optional main category to ensure correct deletion when duplicates exist
  * @returns {Object} { success: boolean, technician: Object, error: string }
+ * 
+ * @example
+ * // Remove by category name only (backward compatible)
+ * await removeServiceCategory('Residential Electrical');
+ * 
+ * // Remove by category name and main category (recommended)
+ * await removeServiceCategory('Residential Electrical', 'Electrical Services');
  */
-const removeServiceCategory = async (categoryName) => {
+const removeServiceCategory = async (categoryName, mainCategory) => {
   try {
-    const response = await api.delete(`/technician/profile/service-category/${encodeURIComponent(categoryName)}`);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      return {
+        success: false,
+        error: 'Please login first'
+      };
+    }
+
+    // Build URL with optional mainCategory query parameter
+    let url = `/technician/profile/service-category/${encodeURIComponent(categoryName)}`;
+    if (mainCategory) {
+      url += `?mainCategory=${encodeURIComponent(mainCategory)}`;
+    }
+
+    const response = await api.delete(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
     
     if (response.data.success) {
       const profile = updateProfileState(response);

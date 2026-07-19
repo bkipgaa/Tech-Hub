@@ -1,141 +1,86 @@
-/**
- * ServicesTab Component
- * ====================
- * Allows technicians to select and manage their services using the three-level hierarchy:
- * Level 1: mainCategory (selected from parent component)
- * Level 2: serviceCategories (categoryName)
- * Level 3: subServices (array of sub-service names)
- * 
- * Features:
- * - Fetches service catalog from backend (read‑only)
- * - Dynamically loads service categories based on selected main category
- * - Dynamically loads sub-services based on selected service category
- * - Allows multiple sub-service selection
- * - Manages adding/removing service categories (via parent handlers)
- * - Prevents duplicate entries
- * 
- * Data Flow:
- * - All write operations (add/remove service categories) are delegated to parent via callbacks.
- * - Parent orchestrates API calls through AuthContext and updates formData.
- * - Sub-service removal is local and saved with the main form submission.
- * 
- * @version 3.0.0
- */
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import api from '../../../services/api';
 
-const ServicesTab = ({ 
-  formData, 
-  setFormData, 
-  isEditing, 
-  isReadOnly, 
+const ServicesTab = ({
+  formData,
+  setFormData,
+  isEditing,
+  isReadOnly,
   handleInputChange,
-  onAddServiceCategory,      // function to add a service category (calls AuthContext)
-  onRemoveServiceCategory,   // function to remove a service category (calls AuthContext)
-  isSaving                   // boolean: true while parent is saving service categories
+  onAddServiceCategory,
+  onRemoveServiceCategory,
+  isSaving
 }) => {
   // ============================================================
-  // STATE VARIABLES
+  // STATE
   // ============================================================
-  
-  // Service catalog data (read‑only)
   const [catalog, setCatalog] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
-  
-  // Dynamic selection UI
+
+  const [selectedMainCategory, setSelectedMainCategory] = useState('');
   const [selectedServiceCategory, setSelectedServiceCategory] = useState('');
   const [availableServiceCategories, setAvailableServiceCategories] = useState([]);
   const [availableSubServices, setAvailableSubServices] = useState([]);
   const [selectedSubServices, setSelectedSubServices] = useState([]);
-  
-  // UI state
+
   const [expandedCategories, setExpandedCategories] = useState({});
   const [validationError, setValidationError] = useState('');
   const [subServicesLoading, setSubServicesLoading] = useState(false);
-  const [isAdding, setIsAdding] = useState(false); // local loading for add/remove actions
+  const [isAdding, setIsAdding] = useState(false);
 
   // ============================================================
-  // MEMOIZED VALUES
+  // MEMOIZED
   // ============================================================
-  
-  const hasMainCategory = useMemo(() => !!formData.mainCategory, [formData.mainCategory]);
-  const categoryCount = useMemo(() => formData.serviceCategories?.length || 0, [formData.serviceCategories]);
+  const mainCategories = useMemo(() => formData.mainCategories || [], [formData.mainCategories]);
+  const serviceCategories = useMemo(() => formData.serviceCategories || [], [formData.serviceCategories]);
+
+  const groupedServices = useMemo(() => {
+    const groups = {};
+    serviceCategories.forEach(item => {
+      const key = item.mainCategory || 'Uncategorized';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
+    return groups;
+  }, [serviceCategories]);
 
   // ============================================================
-  // EFFECT HOOKS
+  // EFFECTS
   // ============================================================
-
-  /**
-   * Fetch service catalog on component mount (read‑only)
-   */
   useEffect(() => {
     const abortController = new AbortController();
-    
-    const fetchServiceCatalog = async () => {
+    const fetchCatalog = async () => {
       try {
         setCatalogLoading(true);
-        setCatalogError('');
-        
         const response = await api.get('/service-catalog/categories-with-counts', {
           signal: abortController.signal
         });
-        
-        console.log('📦 Catalog API Response:', response.data);
-        
         if (response.data?.success !== false) {
-          let catalogData = null;
-          
-          if (response.data?.data && Array.isArray(response.data.data)) {
-            catalogData = response.data.data;
-          } else if (response.data?.categories && Array.isArray(response.data.categories)) {
-            catalogData = response.data.categories;
-          } else if (Array.isArray(response.data)) {
-            catalogData = response.data;
-          } else if (response.data?.data?.items && Array.isArray(response.data.data.items)) {
-            catalogData = response.data.data.items;
-          }
-          
-          if (catalogData && catalogData.length > 0) {
-            setCatalog(catalogData);
-            console.log('✅ Catalog loaded with', catalogData.length, 'items');
-          } else {
-            console.warn('⚠️ No catalog data found in response:', response.data);
-            setCatalogError('No service catalog data available');
-          }
+          let data = response.data?.data || response.data?.categories || response.data;
+          if (Array.isArray(data)) setCatalog(data);
+          else setCatalogError('Invalid catalog format');
         } else {
           setCatalogError(response.data?.message || 'Failed to load catalog');
         }
       } catch (err) {
-        if (err.name === 'AbortError' || err.code === 'ERR_CANCELED') {
-          console.log('Catalog fetch cancelled');
-          return;
+        if (err.name !== 'AbortError') {
+          console.error(err);
+          setCatalogError('Could not load services.');
         }
-        console.error('Failed to load service catalog:', err);
-        setCatalogError('Could not load services. Please refresh the page.');
       } finally {
         setCatalogLoading(false);
       }
     };
-
-    fetchServiceCatalog();
-
-    return () => {
-      abortController.abort();
-    };
+    fetchCatalog();
+    return () => abortController.abort();
   }, []);
 
-  /**
-   * When mainCategory changes, update available service categories
-   */
   useEffect(() => {
-    if (hasMainCategory && catalog.length > 0) {
-      const category = catalog.find(c => c.mainCategory === formData.mainCategory);
-      const services = category?.serviceCategories || [];
-      setAvailableServiceCategories(services);
-      // Reset selections
+    if (selectedMainCategory && catalog.length) {
+      const cat = catalog.find(c => c.mainCategory === selectedMainCategory);
+      setAvailableServiceCategories(cat?.serviceCategories || []);
       setSelectedServiceCategory('');
       setAvailableSubServices([]);
       setSelectedSubServices([]);
@@ -145,136 +90,86 @@ const ServicesTab = ({
       setAvailableSubServices([]);
       setSelectedSubServices([]);
     }
-  }, [formData.mainCategory, catalog, hasMainCategory]);
+  }, [selectedMainCategory, catalog]);
 
-  /**
-   * When service category changes, fetch sub-services
-   */
   useEffect(() => {
-    if (hasMainCategory && selectedServiceCategory) {
-      fetchSubServicesWithLoading(formData.mainCategory, selectedServiceCategory);
+    if (selectedMainCategory && selectedServiceCategory) {
+      fetchSubServicesWithLoading(selectedMainCategory, selectedServiceCategory);
     } else {
       setAvailableSubServices([]);
       setSelectedSubServices([]);
     }
-  }, [selectedServiceCategory, formData.mainCategory, hasMainCategory]);
+  }, [selectedServiceCategory, selectedMainCategory]);
 
   // ============================================================
-  // HELPER FUNCTIONS
+  // HELPERS
   // ============================================================
-
-  /**
-   * Fetch sub-services with loading state (read‑only)
-   */
-  const fetchSubServicesWithLoading = useCallback(async (mainCategory, serviceCategory) => {
-    if (!mainCategory || !serviceCategory) {
-      setAvailableSubServices([]);
-      return;
-    }
-
+  const fetchSubServicesWithLoading = useCallback(async (mainCat, serviceCat) => {
+    if (!mainCat || !serviceCat) return;
     try {
       setSubServicesLoading(true);
-      setValidationError('');
-      
-      const encodedMain = encodeURIComponent(mainCategory);
-      const encodedService = encodeURIComponent(serviceCategory);
-      
+      const encodedMain = encodeURIComponent(mainCat);
+      const encodedService = encodeURIComponent(serviceCat);
       const response = await api.get(
         `/service-catalog/${encodedMain}/${encodedService}/sub-services/detailed`
       );
-      
-      console.log('📦 Sub-services response:', response.data);
-      
-      let subServices = [];
-      
-      if (response.data?.data?.subServices) {
-        subServices = response.data.data.subServices;
-      } else if (response.data?.subServices) {
-        subServices = response.data.subServices;
-      } else if (Array.isArray(response.data?.data)) {
-        subServices = response.data.data;
-      } else if (Array.isArray(response.data)) {
-        subServices = response.data;
-      }
-      
-      if (subServices && subServices.length > 0) {
-        setAvailableSubServices(subServices);
-        console.log('✅ Loaded', subServices.length, 'sub-services');
-      } else {
-        setAvailableSubServices([]);
-        console.log('ℹ️ No sub-services found for this category');
-      }
+      let subs = response.data?.data?.subServices ||
+                 response.data?.subServices ||
+                 response.data?.data ||
+                 [];
+      if (!Array.isArray(subs)) subs = [];
+      setAvailableSubServices(subs);
     } catch (err) {
-      console.error('Failed to load sub-services:', err);
+      console.error(err);
       setAvailableSubServices([]);
-      
       if (err.response?.status !== 404) {
-        setValidationError('Failed to load sub-services. Please try again.');
+        setValidationError('Failed to load sub-services.');
       }
     } finally {
       setSubServicesLoading(false);
     }
   }, []);
 
-  /**
-   * Toggle sub-service selection (local state only)
-   */
-  const toggleSubService = useCallback((subServiceName) => {
-    setSelectedSubServices(prev => {
-      const isSelected = prev.includes(subServiceName);
-      const newSelection = isSelected
-        ? prev.filter(s => s !== subServiceName)
-        : [...prev, subServiceName];
-      
-      if (validationError) setValidationError('');
-      
-      return newSelection;
-    });
-  }, [validationError]);
+  const toggleSubService = (subName) => {
+    setSelectedSubServices(prev =>
+      prev.includes(subName) ? prev.filter(s => s !== subName) : [...prev, subName]
+    );
+    if (validationError) setValidationError('');
+  };
 
-  /**
-   * ADD A NEW SERVICE CATEGORY
-   * ==========================
-   * Calls the parent handler (which calls AuthContext API).
-   * Parent updates formData.serviceCategories on success.
-   * No direct setFormData for adding categories here.
-   */
   const addServiceCategory = useCallback(async () => {
     if (isAdding || isSaving) return;
-    
-    if (!hasMainCategory) {
-      setValidationError('Please select a main category in the Profile tab first.');
+
+    if (!selectedMainCategory) {
+      setValidationError('Please select a main category to add services under.');
       return;
     }
-    
     if (!selectedServiceCategory) {
       setValidationError('Please select a service category.');
       return;
     }
-    
     if (selectedSubServices.length === 0) {
       setValidationError('Please select at least one sub-service.');
       return;
     }
-    
-    if (formData.serviceCategories?.some(sc => sc.categoryName === selectedServiceCategory)) {
-      setValidationError(`"${selectedServiceCategory}" is already added.`);
+
+    const exists = serviceCategories.some(
+      sc => sc.categoryName === selectedServiceCategory && sc.mainCategory === selectedMainCategory
+    );
+    if (exists) {
+      setValidationError(`"${selectedServiceCategory}" is already added under "${selectedMainCategory}".`);
       return;
     }
-    
+
     setIsAdding(true);
-    
     try {
-      const categoryData = {
+      const payload = {
+        mainCategory: selectedMainCategory,
         categoryName: selectedServiceCategory,
         subServices: [...selectedSubServices]
       };
-      
-      // ✅ Call parent handler – it will call AuthContext and update formData
-      const result = await onAddServiceCategory(categoryData);
-      
+      const result = await onAddServiceCategory(payload);
       if (result.success) {
-        // Reset form selections
         setSelectedServiceCategory('');
         setSelectedSubServices([]);
         setAvailableSubServices([]);
@@ -283,116 +178,72 @@ const ServicesTab = ({
         setValidationError(result.error || 'Failed to add service category');
       }
     } catch (err) {
-      console.error('Error adding service category:', err);
-      setValidationError('Failed to add service category. Please try again.');
+      console.error(err);
+      setValidationError('Failed to add service category.');
     } finally {
       setIsAdding(false);
     }
   }, [
-    isAdding,
-    isSaving,
-    hasMainCategory,
-    selectedServiceCategory,
-    selectedSubServices,
-    formData.serviceCategories,
-    onAddServiceCategory
+    isAdding, isSaving,
+    selectedMainCategory, selectedServiceCategory, selectedSubServices,
+    serviceCategories, onAddServiceCategory
   ]);
 
-  /**
-   * REMOVE AN ENTIRE SERVICE CATEGORY
-   * =================================
-   * Calls the parent handler (which calls AuthContext API).
-   * Parent updates formData.serviceCategories on success.
-   */
+  // ✅ UPDATED: Pass both categoryName and mainCategory
   const removeServiceCategory = useCallback(async (index) => {
-    const categoryToRemove = formData.serviceCategories?.[index];
-    if (!categoryToRemove) return;
-    
-    if (!window.confirm(`Remove "${categoryToRemove.categoryName}"? This will remove all its sub-services.`)) {
-      return;
-    }
-    
+    const item = serviceCategories[index];
+    if (!item) return;
+    if (!window.confirm(`Remove "${item.categoryName}" from "${item.mainCategory}"? This will remove all its sub-services.`)) return;
+
     setIsAdding(true);
     try {
-      // ✅ Call parent handler – it will call AuthContext and update formData
-      const result = await onRemoveServiceCategory(categoryToRemove.categoryName);
-      
+      const result = await onRemoveServiceCategory(item.categoryName, item.mainCategory);
       if (!result.success) {
         setValidationError(result.error || 'Failed to remove service category');
       }
     } catch (err) {
-      console.error('Error removing service category:', err);
-      setValidationError('Failed to remove service category. Please try again.');
+      console.error(err);
+      setValidationError('Failed to remove service category.');
     } finally {
       setIsAdding(false);
     }
-  }, [formData.serviceCategories, onRemoveServiceCategory]);
+  }, [serviceCategories, onRemoveServiceCategory]);
 
-  /**
-   * REMOVE A SUB-SERVICE
-   * ====================
-   * This is a local update – it only changes the local formData.
-   * The change will be saved when the user clicks "Save Changes" on the main form.
-   */
   const removeSubService = useCallback((categoryIndex, subIndex) => {
     setFormData(prev => {
-      const updatedCategories = [...(prev.serviceCategories || [])];
-      
-      if (!updatedCategories[categoryIndex]) return prev;
-      
-      updatedCategories[categoryIndex].subServices.splice(subIndex, 1);
-      
-      // If no sub-services left, remove the entire category
-      if (updatedCategories[categoryIndex].subServices.length === 0) {
-        updatedCategories.splice(categoryIndex, 1);
+      const updated = [...(prev.serviceCategories || [])];
+      if (!updated[categoryIndex]) return prev;
+      updated[categoryIndex].subServices.splice(subIndex, 1);
+      if (updated[categoryIndex].subServices.length === 0) {
+        updated.splice(categoryIndex, 1);
       }
-      
-      return {
-        ...prev,
-        serviceCategories: updatedCategories
-      };
+      return { ...prev, serviceCategories: updated };
     });
   }, [setFormData]);
 
-  /**
-   * Toggle category expansion in view mode
-   */
-  const toggleCategoryExpand = useCallback((index) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [index]: !prev[index]
-    }));
+  const toggleCategoryExpand = useCallback((key) => {
+    setExpandedCategories(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  /**
-   * Retry loading catalog
-   */
   const retryLoad = useCallback(() => {
     setCatalogError('');
     setCatalogLoading(true);
-    
     api.get('/service-catalog/categories-with-counts')
-      .then(response => {
-        let catalogData = response.data?.data || response.data?.categories || response.data;
-        if (Array.isArray(catalogData)) {
-          setCatalog(catalogData);
-        } else {
-          setCatalogError('Invalid catalog data received');
-        }
+      .then(res => {
+        let data = res.data?.data || res.data?.categories || res.data;
+        if (Array.isArray(data)) setCatalog(data);
+        else setCatalogError('Invalid catalog data');
       })
       .catch(err => {
-        console.error('Retry failed:', err);
-        setCatalogError('Could not load services. Please refresh the page.');
+        console.error(err);
+        setCatalogError('Could not load services.');
       })
-      .finally(() => {
-        setCatalogLoading(false);
-      });
+      .finally(() => setCatalogLoading(false));
   }, []);
 
   // ============================================================
-  // RENDER: LOADING STATE
+  // RENDER
   // ============================================================
-  
   if (catalogLoading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -402,10 +253,6 @@ const ServicesTab = ({
     );
   }
 
-  // ============================================================
-  // RENDER: ERROR STATE
-  // ============================================================
-  
   if (catalogError) {
     return (
       <div className="bg-red-50 text-red-700 p-4 rounded-lg flex items-start gap-2">
@@ -413,10 +260,7 @@ const ServicesTab = ({
         <div>
           <p className="font-semibold">Error loading services</p>
           <p className="text-sm">{catalogError}</p>
-          <button
-            onClick={retryLoad}
-            className="mt-2 text-sm text-red-600 underline hover:text-red-800"
-          >
+          <button onClick={retryLoad} className="mt-2 text-sm text-red-600 underline hover:text-red-800">
             Retry
           </button>
         </div>
@@ -424,155 +268,123 @@ const ServicesTab = ({
     );
   }
 
-  // ============================================================
-  // RENDER: DISPLAY MODE (Not Editing)
-  // ============================================================
-  
+  // ---------- DISPLAY MODE ----------
   if (!isEditing || isReadOnly) {
     return (
       <div className="space-y-6">
-        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-600 mb-1">Main Category</h4>
-          <p className="text-lg font-semibold text-gray-800">
-            {formData.mainCategory || 'Not selected'}
-          </p>
-        </div>
-
-        <div>
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
-            Services Offered
-          </h3>
-          {formData.serviceCategories && formData.serviceCategories.length > 0 ? (
-            <div className="space-y-3">
-              {formData.serviceCategories.map((cat, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => toggleCategoryExpand(idx)}
-                    className="w-full px-4 py-3 bg-gray-50 flex justify-between items-center hover:bg-gray-100 transition-colors"
-                    type="button"
-                  >
-                    <div className="text-left">
-                      <h4 className="font-semibold text-gray-800">{cat.categoryName}</h4>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                        {cat.subServices?.length || 0} services
-                      </span>
-                      {expandedCategories[idx] ? (
-                        <ChevronUp className="w-4 h-4 text-gray-400" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 text-gray-400" />
-                      )}
-                    </div>
-                  </button>
-                  
-                  {expandedCategories[idx] && (
-                    <div className="px-4 py-3 bg-white">
-                      <div className="flex flex-wrap gap-2">
-                        {cat.subServices && cat.subServices.length > 0 ? (
-                          cat.subServices.map((sub, subIdx) => (
-                            <span
-                              key={subIdx}
-                              className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm"
-                            >
+        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
+          Services Offered
+        </h3>
+        {Object.keys(groupedServices).length === 0 ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+            <p className="text-yellow-700 text-sm">No services added yet.</p>
+          </div>
+        ) : (
+          Object.entries(groupedServices).map(([mainCat, items]) => (
+            <div key={mainCat} className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-100 px-4 py-2 font-semibold text-gray-700">
+                {mainCat}
+              </div>
+              <div className="divide-y divide-gray-100">
+                {items.map((cat, idx) => {
+                  const key = `${mainCat}-${cat.categoryName}`;
+                  return (
+                    <div key={idx}>
+                      <button
+                        onClick={() => toggleCategoryExpand(key)}
+                        className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <span className="font-medium text-gray-800">{cat.categoryName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                            {cat.subServices?.length || 0}
+                          </span>
+                          {expandedCategories[key] ? (
+                            <ChevronUp className="w-4 h-4 text-gray-400" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-gray-400" />
+                          )}
+                        </div>
+                      </button>
+                      {expandedCategories[key] && (
+                        <div className="px-4 py-3 bg-white flex flex-wrap gap-2">
+                          {cat.subServices?.map((sub, i) => (
+                            <span key={i} className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm">
                               {sub}
                             </span>
-                          ))
-                        ) : (
-                          <p className="text-gray-400 italic text-sm">No sub-services listed</p>
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
-          ) : (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-              <p className="text-yellow-700 text-sm">
-                No services added yet. Switch to edit mode to add your services.
-              </p>
-            </div>
-          )}
-        </div>
+          ))
+        )}
       </div>
     );
   }
 
-  // ============================================================
-  // RENDER: EDIT MODE
-  // ============================================================
-  
+  // ---------- EDIT MODE ----------
   return (
     <div className="space-y-6">
-      {/* Main Category Info */}
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-        <div className="flex items-start gap-2">
-          <div className="flex-1">
-            <h4 className="text-sm font-medium text-blue-800">Main Category</h4>
-            <p className="text-blue-900 font-semibold">
-              {hasMainCategory 
-                ? formData.mainCategory 
-                : '⚠️ Please select a main category in Profile tab first'}
-            </p>
-            {!hasMainCategory && (
-              <p className="text-xs text-blue-600 mt-1">
-                You need to select a main category before adding services.
-              </p>
-            )}
-          </div>
-          <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-            {categoryCount} categories added
-          </div>
-        </div>
-      </div>
-
-      {/* Validation Error */}
       {validationError && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg flex items-start gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span className="text-sm">{validationError}</span>
-          <button
-            onClick={() => setValidationError('')}
-            className="ml-auto text-red-500 hover:text-red-700"
-          >
+          <button onClick={() => setValidationError('')} className="ml-auto text-red-500 hover:text-red-700">
             ×
           </button>
         </div>
       )}
 
-      {/* Service Category Selection */}
-      <div className={!hasMainCategory ? 'opacity-50 pointer-events-none' : ''}>
+      <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select Service Category
+          Select Main Category <span className="text-red-500">*</span>
         </label>
         <select
-          value={selectedServiceCategory}
-          onChange={(e) => setSelectedServiceCategory(e.target.value)}
+          value={selectedMainCategory}
+          onChange={(e) => setSelectedMainCategory(e.target.value)}
           className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
-          disabled={!hasMainCategory}
         >
-          <option value="">-- Select a service category --</option>
-          {availableServiceCategories.map(cat => (
-            <option key={cat.name} value={cat.name}>
-              {cat.name} ({cat.subServiceCount} sub-services)
-            </option>
+          <option value="">-- Choose a main category --</option>
+          {mainCategories.map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
           ))}
         </select>
-        {!hasMainCategory && (
+        {mainCategories.length === 0 && (
           <p className="text-xs text-amber-600 mt-1">
-            ⚠️ Please go to Profile tab and select a main category first
+            ⚠️ Please add at least one main category in the Profile tab first.
           </p>
         )}
       </div>
 
-      {/* Sub-services Selection */}
-      {selectedServiceCategory && hasMainCategory && (
+      {selectedMainCategory && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Service Category <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={selectedServiceCategory}
+            onChange={(e) => setSelectedServiceCategory(e.target.value)}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
+          >
+            <option value="">-- Select a service category --</option>
+            {availableServiceCategories.map(cat => (
+              <option key={cat.name} value={cat.name}>
+                {cat.name} ({cat.subServiceCount} sub-services)
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {selectedServiceCategory && selectedMainCategory && (
         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
           <label className="block text-sm font-medium text-gray-700 mb-3">
-            Select Sub-Services You Offer
+            Select Sub-Services You Offer <span className="text-red-500">*</span>
           </label>
-          
           {subServicesLoading ? (
             <div className="flex justify-center items-center py-8 bg-white rounded-lg border border-gray-200">
               <Loader2 className="w-6 h-6 text-gray-600 animate-spin" />
@@ -598,14 +410,8 @@ const ServicesTab = ({
                     />
                     <div className="flex-1">
                       <span className="text-sm font-medium text-gray-700">{sub.name}</span>
-                      {sub.description && (
-                        <p className="text-xs text-gray-500 mt-0.5">{sub.description}</p>
-                      )}
-                      {sub.averagePrice && (
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          Avg. price: {sub.averagePrice}
-                        </p>
-                      )}
+                      {sub.description && <p className="text-xs text-gray-500 mt-0.5">{sub.description}</p>}
+                      {sub.averagePrice && <p className="text-xs text-gray-400 mt-0.5">Avg. price: {sub.averagePrice}</p>}
                     </div>
                     {selectedSubServices.includes(sub.name) && (
                       <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
@@ -613,11 +419,8 @@ const ServicesTab = ({
                   </label>
                 ))}
               </div>
-              
-              <div className="mt-4 flex flex-wrap justify-between items-center gap-2">
-                <p className="text-xs text-gray-500">
-                  {selectedSubServices.length} sub-service(s) selected
-                </p>
+              <div className="mt-4 flex justify-between items-center">
+                <p className="text-xs text-gray-500">{selectedSubServices.length} sub-service(s) selected</p>
                 <button
                   type="button"
                   onClick={addServiceCategory}
@@ -625,15 +428,9 @@ const ServicesTab = ({
                   className="bg-gray-800 text-white px-5 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAdding || isSaving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Adding...
-                    </>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Adding...</>
                   ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      Add {selectedServiceCategory}
-                    </>
+                    <><Plus className="w-4 h-4" /> Add {selectedServiceCategory}</>
                   )}
                 </button>
               </div>
@@ -647,54 +444,57 @@ const ServicesTab = ({
         </div>
       )}
 
-      {/* Display Added Service Categories */}
-      {formData.serviceCategories && formData.serviceCategories.length > 0 && (
+      {serviceCategories.length > 0 && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Your Added Services ({formData.serviceCategories.length} categories)
+            Your Added Services ({serviceCategories.length} total)
           </label>
           <div className="space-y-3">
-            {formData.serviceCategories.map((cat, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-white hover:border-gray-300 transition-colors">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                      <span className="bg-gray-100 px-2 py-0.5 rounded text-xs text-gray-600">
-                        #{idx + 1}
-                      </span>
-                      {cat.categoryName}
-                      <span className="text-xs text-gray-400 font-normal">
-                        ({cat.subServices?.length || 0} sub-services)
-                      </span>
-                    </h4>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {cat.subServices && cat.subServices.map((sub, subIdx) => (
-                        <span
-                          key={subIdx}
-                          className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-green-200"
-                        >
-                          {sub}
+            {Object.entries(groupedServices).map(([mainCat, items]) => (
+              <div key={mainCat} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-100 px-4 py-2 font-semibold text-gray-700">
+                  {mainCat}
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {items.map((cat, idx) => {
+                    const globalIndex = serviceCategories.indexOf(cat);
+                    return (
+                      <div key={idx} className="p-4 bg-white hover:bg-gray-50 transition-colors">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-800">{cat.categoryName}</h4>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {cat.subServices.map((sub, subIdx) => (
+                                <span
+                                  key={subIdx}
+                                  className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-green-200"
+                                >
+                                  {sub}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSubService(globalIndex, subIdx)}
+                                    className="text-red-400 hover:text-red-600 transition-colors ml-1"
+                                    title="Remove this sub-service"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => removeSubService(idx, subIdx)}
-                            className="text-red-400 hover:text-red-600 transition-colors ml-1"
-                            title="Remove this sub-service (local change)"
+                            onClick={() => removeServiceCategory(globalIndex)}
+                            className="text-red-400 hover:text-red-600 transition-colors ml-2 p-1 hover:bg-red-50 rounded"
+                            title="Remove entire category"
+                            disabled={isAdding || isSaving}
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeServiceCategory(idx)}
-                    className="text-red-400 hover:text-red-600 transition-colors ml-2 p-1 hover:bg-red-50 rounded"
-                    title="Remove entire category (persists immediately)"
-                    disabled={isAdding || isSaving}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -702,19 +502,15 @@ const ServicesTab = ({
         </div>
       )}
 
-      {/* Help Text */}
       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
         <h5 className="text-sm font-semibold text-blue-800 mb-2">💡 How to Add Services:</h5>
         <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-          <li>Select a <strong>Service Category</strong> from the dropdown above</li>
-          <li>Check the <strong>Sub-Services</strong> you offer</li>
-          <li>Click <strong>"Add [Category Name]"</strong> to add them to your profile</li>
-          <li>Repeat to add more service categories</li>
-          <li>You can remove individual sub-services (saved with main form) or entire categories (saved immediately)</li>
+          <li>Select a <strong>Main Category</strong> you already added in the Profile tab.</li>
+          <li>Choose a <strong>Service Category</strong> from the list.</li>
+          <li>Check the <strong>Sub-Services</strong> you offer.</li>
+          <li>Click <strong>"Add [Category Name]"</strong> to add them to your profile.</li>
+          <li>You can remove individual sub‑services (local change) or entire categories (saved immediately).</li>
         </ol>
-        <p className="text-xs text-blue-600 mt-2">
-          ⚠️ Make sure you've selected a <strong>Main Category</strong> in the Profile tab first
-        </p>
       </div>
     </div>
   );

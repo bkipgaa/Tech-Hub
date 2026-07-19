@@ -1,5 +1,5 @@
 const Technician = require('../../../models/Technician');
-const { updateCompletionStats } = require('./helpers');
+const { updateCompletionStats } = require('./helpers'); // optional
 
 /**
  * Add a new service category to the technician's profile
@@ -7,9 +7,7 @@ const { updateCompletionStats } = require('./helpers');
  */
 exports.addServiceCategory = async (req, res) => {
   try {
-    // Get technician profile for the logged-in user
     const technician = await Technician.findOne({ userId: req.user.userId });
-    
     if (!technician) {
       return res.status(404).json({
         success: false,
@@ -17,9 +15,15 @@ exports.addServiceCategory = async (req, res) => {
       });
     }
 
-    const { categoryName, subServices } = req.body;
+    const { mainCategory, categoryName, subServices } = req.body;
 
-    // Validate input
+    // Validate required fields
+    if (!mainCategory || typeof mainCategory !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Main category is required'
+      });
+    }
     if (!categoryName || !subServices || !Array.isArray(subServices) || subServices.length === 0) {
       return res.status(400).json({
         success: false,
@@ -27,19 +31,28 @@ exports.addServiceCategory = async (req, res) => {
       });
     }
 
-    // Check if category already exists
+    // Optional: validate that the mainCategory exists in the technician's mainCategories list
+    // if (technician.mainCategories && !technician.mainCategories.includes(mainCategory)) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'Main category not found in your profile. Please add it in the Profile tab first.'
+    //   });
+    // }
+
+    // Check for duplicate category under the same main category
     const exists = technician.serviceCategories.some(
-      cat => cat.categoryName === categoryName
+      cat => cat.categoryName === categoryName && cat.mainCategory === mainCategory
     );
     if (exists) {
       return res.status(400).json({
         success: false,
-        message: 'Service category already exists'
+        message: `Service category "${categoryName}" already exists under "${mainCategory}"`
       });
     }
 
     // Add new category
     technician.serviceCategories.push({
+      mainCategory,
       categoryName,
       subServices,
       description: `${categoryName} services`,
@@ -51,7 +64,9 @@ exports.addServiceCategory = async (req, res) => {
 
     await technician.save();
 
-    // Return updated technician profile
+    // Optionally update completion stats
+    // await updateCompletionStats(technician);
+
     res.status(201).json({
       success: true,
       data: technician
@@ -65,14 +80,15 @@ exports.addServiceCategory = async (req, res) => {
   }
 };
 
+
+
 /**
  * Remove a service category from the technician's profile
- * DELETE /technician/profile/service-category/:categoryName
+ * DELETE /technician/profile/service-category/:categoryName?mainCategory=...
  */
 exports.removeServiceCategory = async (req, res) => {
   try {
     const technician = await Technician.findOne({ userId: req.user.userId });
-    
     if (!technician) {
       return res.status(404).json({
         success: false,
@@ -81,11 +97,21 @@ exports.removeServiceCategory = async (req, res) => {
     }
 
     const { categoryName } = req.params;
+    const { mainCategory } = req.query; // optional query param
 
-    // Find the category
-    const categoryIndex = technician.serviceCategories.findIndex(
-      cat => cat.categoryName === categoryName
-    );
+    // Find the category index
+    let categoryIndex = -1;
+    if (mainCategory) {
+      categoryIndex = technician.serviceCategories.findIndex(
+        cat => cat.categoryName === categoryName && cat.mainCategory === mainCategory
+      );
+    } else {
+      // Fallback: remove the first matching category (backward compatibility)
+      categoryIndex = technician.serviceCategories.findIndex(
+        cat => cat.categoryName === categoryName
+      );
+    }
+
     if (categoryIndex === -1) {
       return res.status(404).json({
         success: false,

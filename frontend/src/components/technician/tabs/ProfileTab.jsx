@@ -3,12 +3,10 @@
  * ====================
  * Manages technician profile information including:
  * - Profile headline and bio
- * - Primary category (fetched from backend)
+ * - Multiple main categories (array)
  * - Skills management
  * - Languages management
  * - Location with geocoding
- * 
- * Updated to use mainCategory (Level 1 of service hierarchy)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -28,6 +26,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
   const [mainCategories, setMainCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState('');
+  const [selectedCategoryToAdd, setSelectedCategoryToAdd] = useState('');
 
   // Static options for dropdowns
   const skillLevels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
@@ -55,27 +54,20 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
 
   /**
    * Get current location using browser's geolocation API
-   * Updates both coordinates and address fields
    */
   const getCurrentLocation = () => {
     setGettingLocation(true);
     setLocationError('');
     
-    // Check if browser supports geolocation
     if (!navigator.geolocation) {
       setLocationError('Geolocation is not supported by your browser');
       setGettingLocation(false);
       return;
     }
     
-    // Request current position
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        
-        console.log('📍 Location captured:', { latitude, longitude });
-        
-        // Update form data with coordinates (GeoJSON format: [longitude, latitude])
         setFormData(prev => ({
           ...prev,
           location: {
@@ -83,15 +75,11 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             coordinates: [longitude, latitude]
           }
         }));
-        
-        // Reverse geocode to get human-readable address
         await reverseGeocode(latitude, longitude);
-        
         setGettingLocation(false);
       },
       (error) => {
         console.error('Location error:', error);
-        // Handle different error types
         switch (error.code) {
           case error.PERMISSION_DENIED:
             setLocationError('Please enable location access to help clients find you');
@@ -113,9 +101,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
 
   /**
    * Reverse geocode coordinates to get address details
-   * Uses OpenStreetMap's Nominatim API (free, no API key required)
-   * @param {number} lat - Latitude
-   * @param {number} lng - Longitude
    */
   const reverseGeocode = async (lat, lng) => {
     try {
@@ -123,9 +108,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
       );
       const data = await response.json();
-      
       if (data.address) {
-        // Update address fields with geocoded data
         setFormData(prev => ({
           ...prev,
           address: {
@@ -144,13 +127,10 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
       }
     } catch (error) {
       console.error('Reverse geocoding failed:', error);
-      // Don't show error to user - coordinates are still saved
     }
   };
 
-  /**
-   * Add a new skill to the skills array
-   */
+  // ---------- Skills ----------
   const addSkill = () => {
     if (newSkill.name) {
       setFormData({
@@ -161,19 +141,13 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
     }
   };
 
-  /**
-   * Remove a skill from the skills array by index
-   * @param {number} index - Index of skill to remove
-   */
   const removeSkill = (index) => {
     const updatedSkills = [...formData.skills];
     updatedSkills.splice(index, 1);
     setFormData({ ...formData, skills: updatedSkills });
   };
 
-  /**
-   * Add a new language to the languages array
-   */
+  // ---------- Languages ----------
   const addLanguage = () => {
     if (newLanguage.name) {
       setFormData({
@@ -184,17 +158,35 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
     }
   };
 
-  /**
-   * Remove a language from the languages array by index
-   * @param {number} index - Index of language to remove
-   */
   const removeLanguage = (index) => {
     const updatedLanguages = [...formData.languages];
     updatedLanguages.splice(index, 1);
     setFormData({ ...formData, languages: updatedLanguages });
   };
 
-  // ========== DISPLAY MODE (Non-editing) ==========
+  // ---------- Main Categories (multiple) ----------
+  const addMainCategory = () => {
+    if (!selectedCategoryToAdd) return;
+    // Avoid duplicates
+    if (formData.mainCategories?.includes(selectedCategoryToAdd)) {
+      alert('This main category is already selected.');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      mainCategories: [...(prev.mainCategories || []), selectedCategoryToAdd]
+    }));
+    setSelectedCategoryToAdd('');
+  };
+
+  const removeMainCategory = (categoryToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      mainCategories: prev.mainCategories.filter(cat => cat !== categoryToRemove)
+    }));
+  };
+
+  // ========== DISPLAY MODE ==========
   if (!isEditing) {
     return (
       <div className="space-y-8">
@@ -204,9 +196,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             <User className="w-3.5 h-3.5 mr-1.5" />
             Profile Headline
           </h3>
-          <p className="text-gray-800 text-base">
-            {formData.profileHeadline || '—'}
-          </p>
+          <p className="text-gray-800 text-base">{formData.profileHeadline || '—'}</p>
         </div>
 
         {/* About Me */}
@@ -214,20 +204,26 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">
             About Me
           </h3>
-          <p className="text-gray-700 leading-relaxed">
-            {formData.aboutMe || '—'}
-          </p>
+          <p className="text-gray-700 leading-relaxed">{formData.aboutMe || '—'}</p>
         </div>
 
-        {/* Main Category - Updated from category to mainCategory */}
+        {/* Main Categories (multiple) */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center">
             <Briefcase className="w-3.5 h-3.5 mr-1.5" />
-            Main Category
+            Main Categories
           </h3>
-          <p className="text-gray-800 font-medium">
-            {formData.mainCategory || '—'}
-          </p>
+          {formData.mainCategories && formData.mainCategories.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {formData.mainCategories.map((cat, idx) => (
+                <span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                  {cat}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-400 italic text-sm">No main categories selected</p>
+          )}
         </div>
 
         {/* Skills */}
@@ -239,10 +235,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           {formData.skills && formData.skills.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {formData.skills.map((skill, idx) => (
-                <span
-                  key={idx}
-                  className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm"
-                >
+                <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
                   {skill.name} ({skill.level})
                   {skill.yearsOfExperience > 0 && ` · ${skill.yearsOfExperience} yrs`}
                 </span>
@@ -262,10 +255,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           {formData.languages && formData.languages.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {formData.languages.map((lang, idx) => (
-                <span
-                  key={idx}
-                  className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm"
-                >
+                <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
                   {lang.name} ({lang.proficiency})
                 </span>
               ))}
@@ -282,9 +272,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             Location
           </h3>
           <div className="space-y-1">
-            {formData.address?.street && (
-              <p className="text-gray-700">{formData.address.street}</p>
-            )}
+            {formData.address?.street && <p className="text-gray-700">{formData.address.street}</p>}
             <p className="text-gray-700">
               {formData.address?.city && `${formData.address.city}, `}
               {formData.address?.state}
@@ -296,14 +284,13 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
               Service radius: {formData.serviceRadius} km
             </p>
             
-            {/* Display coordinates if they exist and are not default */}
+            {/* Coordinates display */}
             {formData.location?.coordinates && 
              formData.location.coordinates[0] !== 0 && 
              formData.location.coordinates[1] !== 0 && (
               <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  📍 Location Coordinates
+                  <MapPin className="w-3 h-3" /> 📍 Location Coordinates
                 </p>
                 <div className="space-y-1">
                   <p className="text-xs text-gray-600 font-mono">
@@ -319,7 +306,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
               </div>
             )}
             
-            {/* Warning if no coordinates set */}
             {(!formData.location?.coordinates || 
               formData.location.coordinates[0] === 0 || 
               formData.location.coordinates[1] === 0) && (
@@ -370,10 +356,10 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
         />
       </div>
 
-      {/* Main Category - Updated from category to mainCategory with proper label */}
+      {/* Main Categories - Multiple selection */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Main Category <span className="text-red-500">*</span>
+          Main Categories <span className="text-red-500">*</span>
         </label>
         {categoriesLoading ? (
           <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
@@ -381,28 +367,49 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             <span className="text-sm text-gray-500">Loading categories...</span>
           </div>
         ) : categoriesError ? (
-          <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-            {categoriesError}
-          </div>
+          <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{categoriesError}</div>
         ) : (
-          <select
-            name="mainCategory" // Changed from "category" to "mainCategory"
-            value={formData.mainCategory || ''}
-            onChange={handleInputChange}
-            required
-            className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
-          >
-            <option value="">Select a main category</option>
-            {mainCategories.map(cat => (
-              <option key={cat.name} value={cat.name}>
-                {cat.name} {!cat.hasServices && '(coming soon)'}
-              </option>
-            ))}
-          </select>
+          <>
+            <div className="flex gap-2 mb-2">
+              <select
+                value={selectedCategoryToAdd}
+                onChange={(e) => setSelectedCategoryToAdd(e.target.value)}
+                className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
+              >
+                <option value="">-- Select a main category --</option>
+                {mainCategories.map(cat => (
+                  <option key={cat.name} value={cat.name}>
+                    {cat.name} {!cat.hasServices && '(coming soon)'}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={addMainCategory}
+                className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1"
+              >
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {formData.mainCategories && formData.mainCategories.map((cat, idx) => (
+                <span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
+                  {cat}
+                  <button
+                    type="button"
+                    onClick={() => removeMainCategory(cat)}
+                    className="ml-2 text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              You can select multiple main categories that best describe your expertise.
+            </p>
+          </>
         )}
-        <p className="text-xs text-gray-400 mt-1">
-          Your main category defines your primary area of expertise
-        </p>
       </div>
 
       {/* Skills */}
@@ -411,7 +418,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           Skills
         </label>
         <div className="space-y-3">
-          {/* Add Skill Form */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <input
@@ -444,14 +450,12 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
                   onClick={addSkill}
                   className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1"
                 >
-                  <Plus className="w-4 h-4" />
-                  Add
+                  <Plus className="w-4 h-4" /> Add
                 </button>
               </div>
             </div>
           </div>
           
-          {/* Skills List */}
           {formData.skills && formData.skills.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Your Skills</p>
@@ -484,7 +488,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           Languages
         </label>
         <div className="space-y-3">
-          {/* Add Language Form */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="flex gap-2">
               <input
@@ -508,20 +511,15 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
                 onClick={addLanguage}
                 className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1"
               >
-                <Plus className="w-4 h-4" />
-                Add
+                <Plus className="w-4 h-4" /> Add
               </button>
             </div>
           </div>
           
-          {/* Languages List */}
           {formData.languages && formData.languages.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {formData.languages.map((lang, index) => (
-                <span
-                  key={index}
-                  className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm flex items-center border border-gray-200"
-                >
+                <span key={index} className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm flex items-center border border-gray-200">
                   {lang.name} ({lang.proficiency})
                   <button
                     type="button"
@@ -543,7 +541,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           Location
         </label>
         
-        {/* Get Current Location Button */}
         <div className="mb-4">
           <button
             type="button"
@@ -554,22 +551,18 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             <Navigation className="w-4 h-4" />
             {gettingLocation ? 'Getting Location...' : 'Update My Current Location'}
           </button>
-          {locationError && (
-            <p className="text-red-500 text-xs mt-2">{locationError}</p>
-          )}
+          {locationError && <p className="text-red-500 text-xs mt-2">{locationError}</p>}
           <p className="text-xs text-gray-500 mt-2">
             Your location helps clients find you. Update when you move to a new area.
           </p>
         </div>
         
-        {/* Show current coordinates status in edit mode */}
         {formData.location?.coordinates && 
          formData.location.coordinates[0] !== 0 && 
          formData.location.coordinates[1] !== 0 && (
           <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
             <p className="text-xs text-green-700 flex items-center gap-1 mb-1">
-              <MapPin className="w-3 h-3" />
-              ✓ Location coordinates saved
+              <MapPin className="w-3 h-3" /> ✓ Location coordinates saved
             </p>
             <p className="text-xs text-gray-600 font-mono">
               Lat: {formData.location.coordinates[1].toFixed(6)}°, Lng: {formData.location.coordinates[0].toFixed(6)}°
@@ -577,7 +570,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           </div>
         )}
         
-        {/* Address Form Fields */}
         <div className="space-y-3">
           <input
             type="text"
