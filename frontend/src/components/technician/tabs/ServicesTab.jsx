@@ -7,26 +7,40 @@
  * Level 3: subServices (array of sub-service names)
  * 
  * Features:
- * - Fetches service catalog from backend
+ * - Fetches service catalog from backend (read‑only)
  * - Dynamically loads service categories based on selected main category
  * - Dynamically loads sub-services based on selected service category
  * - Allows multiple sub-service selection
- * - Manages adding/removing service categories
+ * - Manages adding/removing service categories (via parent handlers)
  * - Prevents duplicate entries
  * 
- * @version 2.0.0
+ * Data Flow:
+ * - All write operations (add/remove service categories) are delegated to parent via callbacks.
+ * - Parent orchestrates API calls through AuthContext and updates formData.
+ * - Sub-service removal is local and saved with the main form submission.
+ * 
+ * @version 3.0.0
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import api from '../../../services/api';
 
-const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInputChange }) => {
+const ServicesTab = ({ 
+  formData, 
+  setFormData, 
+  isEditing, 
+  isReadOnly, 
+  handleInputChange,
+  onAddServiceCategory,      // function to add a service category (calls AuthContext)
+  onRemoveServiceCategory,   // function to remove a service category (calls AuthContext)
+  isSaving                   // boolean: true while parent is saving service categories
+}) => {
   // ============================================================
   // STATE VARIABLES
   // ============================================================
   
-  // Service catalog data
+  // Service catalog data (read‑only)
   const [catalog, setCatalog] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
@@ -41,7 +55,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
   const [expandedCategories, setExpandedCategories] = useState({});
   const [validationError, setValidationError] = useState('');
   const [subServicesLoading, setSubServicesLoading] = useState(false);
-  const [isAdding, setIsAdding] = useState(false);
+  const [isAdding, setIsAdding] = useState(false); // local loading for add/remove actions
 
   // ============================================================
   // MEMOIZED VALUES
@@ -55,7 +69,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
   // ============================================================
 
   /**
-   * Fetch service catalog on component mount
+   * Fetch service catalog on component mount (read‑only)
    */
   useEffect(() => {
     const abortController = new AbortController();
@@ -72,28 +86,16 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
         console.log('📦 Catalog API Response:', response.data);
         
         if (response.data?.success !== false) {
-          // ✅ Handle multiple possible response formats
           let catalogData = null;
           
-          // Option 1: response.data.data
           if (response.data?.data && Array.isArray(response.data.data)) {
             catalogData = response.data.data;
-            console.log('✅ Found catalog in response.data.data');
-          }
-          // Option 2: response.data.categories
-          else if (response.data?.categories && Array.isArray(response.data.categories)) {
+          } else if (response.data?.categories && Array.isArray(response.data.categories)) {
             catalogData = response.data.categories;
-            console.log('✅ Found catalog in response.data.categories');
-          }
-          // Option 3: response.data (if the whole response is the array)
-          else if (Array.isArray(response.data)) {
+          } else if (Array.isArray(response.data)) {
             catalogData = response.data;
-            console.log('✅ Found catalog in response.data itself');
-          }
-          // Option 4: response.data.data.items
-          else if (response.data?.data?.items && Array.isArray(response.data.data.items)) {
+          } else if (response.data?.data?.items && Array.isArray(response.data.data.items)) {
             catalogData = response.data.data.items;
-            console.log('✅ Found catalog in response.data.data.items');
           }
           
           if (catalogData && catalogData.length > 0) {
@@ -133,12 +135,11 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
       const category = catalog.find(c => c.mainCategory === formData.mainCategory);
       const services = category?.serviceCategories || [];
       setAvailableServiceCategories(services);
-      
-      // Reset selections when main category changes
+      // Reset selections
       setSelectedServiceCategory('');
       setAvailableSubServices([]);
       setSelectedSubServices([]);
-    } else if (!hasMainCategory) {
+    } else {
       setAvailableServiceCategories([]);
       setSelectedServiceCategory('');
       setAvailableSubServices([]);
@@ -163,7 +164,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
   // ============================================================
 
   /**
-   * Fetch sub-services with loading state
+   * Fetch sub-services with loading state (read‑only)
    */
   const fetchSubServicesWithLoading = useCallback(async (mainCategory, serviceCategory) => {
     if (!mainCategory || !serviceCategory) {
@@ -184,7 +185,6 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
       
       console.log('📦 Sub-services response:', response.data);
       
-      // ✅ Handle multiple possible response formats
       let subServices = [];
       
       if (response.data?.data?.subServices) {
@@ -217,7 +217,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
   }, []);
 
   /**
-   * Toggle sub-service selection
+   * Toggle sub-service selection (local state only)
    */
   const toggleSubService = useCallback((subServiceName) => {
     setSelectedSubServices(prev => {
@@ -233,10 +233,14 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
   }, [validationError]);
 
   /**
-   * Add a new service category
+   * ADD A NEW SERVICE CATEGORY
+   * ==========================
+   * Calls the parent handler (which calls AuthContext API).
+   * Parent updates formData.serviceCategories on success.
+   * No direct setFormData for adding categories here.
    */
-  const addServiceCategory = useCallback(() => {
-    if (isAdding) return;
+  const addServiceCategory = useCallback(async () => {
+    if (isAdding || isSaving) return;
     
     if (!hasMainCategory) {
       setValidationError('Please select a main category in the Profile tab first.');
@@ -261,26 +265,23 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
     setIsAdding(true);
     
     try {
-      const newServiceCategory = {
+      const categoryData = {
         categoryName: selectedServiceCategory,
-        subServices: [...selectedSubServices],
-        description: `${selectedServiceCategory} services`,
-        basePrice: 0,
-        estimatedDuration: '2-4 hours',
-        isActive: true,
-        displayOrder: formData.serviceCategories?.length || 0
+        subServices: [...selectedSubServices]
       };
       
-      setFormData(prev => ({
-        ...prev,
-        serviceCategories: [...(prev.serviceCategories || []), newServiceCategory]
-      }));
+      // ✅ Call parent handler – it will call AuthContext and update formData
+      const result = await onAddServiceCategory(categoryData);
       
-      // Reset form
-      setSelectedServiceCategory('');
-      setSelectedSubServices([]);
-      setAvailableSubServices([]);
-      setValidationError('');
+      if (result.success) {
+        // Reset form selections
+        setSelectedServiceCategory('');
+        setSelectedSubServices([]);
+        setAvailableSubServices([]);
+        setValidationError('');
+      } else {
+        setValidationError(result.error || 'Failed to add service category');
+      }
     } catch (err) {
       console.error('Error adding service category:', err);
       setValidationError('Failed to add service category. Please try again.');
@@ -289,25 +290,49 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
     }
   }, [
     isAdding,
+    isSaving,
     hasMainCategory,
     selectedServiceCategory,
     selectedSubServices,
     formData.serviceCategories,
-    setFormData
+    onAddServiceCategory
   ]);
 
   /**
-   * Remove a service category
+   * REMOVE AN ENTIRE SERVICE CATEGORY
+   * =================================
+   * Calls the parent handler (which calls AuthContext API).
+   * Parent updates formData.serviceCategories on success.
    */
-  const removeServiceCategory = useCallback((index) => {
-    setFormData(prev => ({
-      ...prev,
-      serviceCategories: prev.serviceCategories?.filter((_, i) => i !== index) || []
-    }));
-  }, [setFormData]);
+  const removeServiceCategory = useCallback(async (index) => {
+    const categoryToRemove = formData.serviceCategories?.[index];
+    if (!categoryToRemove) return;
+    
+    if (!window.confirm(`Remove "${categoryToRemove.categoryName}"? This will remove all its sub-services.`)) {
+      return;
+    }
+    
+    setIsAdding(true);
+    try {
+      // ✅ Call parent handler – it will call AuthContext and update formData
+      const result = await onRemoveServiceCategory(categoryToRemove.categoryName);
+      
+      if (!result.success) {
+        setValidationError(result.error || 'Failed to remove service category');
+      }
+    } catch (err) {
+      console.error('Error removing service category:', err);
+      setValidationError('Failed to remove service category. Please try again.');
+    } finally {
+      setIsAdding(false);
+    }
+  }, [formData.serviceCategories, onRemoveServiceCategory]);
 
   /**
-   * Remove a sub-service
+   * REMOVE A SUB-SERVICE
+   * ====================
+   * This is a local update – it only changes the local formData.
+   * The change will be saved when the user clicks "Save Changes" on the main form.
    */
   const removeSubService = useCallback((categoryIndex, subIndex) => {
     setFormData(prev => {
@@ -317,6 +342,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
       
       updatedCategories[categoryIndex].subServices.splice(subIndex, 1);
       
+      // If no sub-services left, remove the entire category
       if (updatedCategories[categoryIndex].subServices.length === 0) {
         updatedCategories.splice(categoryIndex, 1);
       }
@@ -329,7 +355,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
   }, [setFormData]);
 
   /**
-   * Toggle category expansion
+   * Toggle category expansion in view mode
    */
   const toggleCategoryExpand = useCallback((index) => {
     setExpandedCategories(prev => ({
@@ -399,7 +425,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
   }
 
   // ============================================================
-  // RENDER: DISPLAY MODE
+  // RENDER: DISPLAY MODE (Not Editing)
   // ============================================================
   
   if (!isEditing || isReadOnly) {
@@ -595,10 +621,10 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
                 <button
                   type="button"
                   onClick={addServiceCategory}
-                  disabled={selectedSubServices.length === 0 || isAdding}
+                  disabled={selectedSubServices.length === 0 || isAdding || isSaving}
                   className="bg-gray-800 text-white px-5 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isAdding ? (
+                  {isAdding || isSaving ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Adding...
@@ -652,7 +678,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
                             type="button"
                             onClick={() => removeSubService(idx, subIdx)}
                             className="text-red-400 hover:text-red-600 transition-colors ml-1"
-                            title="Remove this sub-service"
+                            title="Remove this sub-service (local change)"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -664,7 +690,8 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
                     type="button"
                     onClick={() => removeServiceCategory(idx)}
                     className="text-red-400 hover:text-red-600 transition-colors ml-2 p-1 hover:bg-red-50 rounded"
-                    title="Remove entire category"
+                    title="Remove entire category (persists immediately)"
+                    disabled={isAdding || isSaving}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -683,7 +710,7 @@ const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, handleInput
           <li>Check the <strong>Sub-Services</strong> you offer</li>
           <li>Click <strong>"Add [Category Name]"</strong> to add them to your profile</li>
           <li>Repeat to add more service categories</li>
-          <li>You can remove individual sub-services or entire categories</li>
+          <li>You can remove individual sub-services (saved with main form) or entire categories (saved immediately)</li>
         </ol>
         <p className="text-xs text-blue-600 mt-2">
           ⚠️ Make sure you've selected a <strong>Main Category</strong> in the Profile tab first

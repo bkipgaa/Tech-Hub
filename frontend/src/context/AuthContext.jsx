@@ -449,6 +449,93 @@ export const AuthProvider = ({ children }) => {
   const updatePrivacySettings = (privacyData) => updateProfileSection('/technician/profile/settings', privacyData);
   const updateAvailabilitySchedule = (scheduleData) => updateProfileSection('/technician/profile/availability', scheduleData);
 
+
+
+
+// AuthContext.js - Add service-specific update functions
+
+/**
+ * Update service categories for a technician
+ * @param {Array} serviceCategories - Array of service category objects
+ * @returns {Object} { success: boolean, technician: Object, error: string }
+ */
+const updateServiceCategories = async (serviceCategories) => {
+  try {
+    const response = await api.put('/technician/profile/services', { serviceCategories });
+    
+    if (response.data.success) {
+      const profile = updateProfileState(response);
+      return { success: true, technician: profile };
+    }
+    
+    return { 
+      success: false, 
+      error: response.data.message || 'Failed to update services' 
+    };
+  } catch (error) {
+    console.error('Update services error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Failed to update services',
+    };
+  }
+};
+
+/**
+ * Add a service category
+ * @param {Object} categoryData - Service category data
+ * @returns {Object} { success: boolean, technician: Object, error: string }
+ */
+const addServiceCategory = async (categoryData) => {
+  try {
+    const response = await api.post('/technician/profile/service-category', categoryData);
+    
+    if (response.data.success) {
+      const profile = updateProfileState(response);
+      return { success: true, technician: profile };
+    }
+    
+    return { 
+      success: false, 
+      error: response.data.message || 'Failed to add service category' 
+    };
+  } catch (error) {
+    console.error('Add service category error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Failed to add service category',
+    };
+  }
+};
+
+/**
+ * Remove a service category
+ * @param {string} categoryName - Name of the category to remove
+ * @returns {Object} { success: boolean, technician: Object, error: string }
+ */
+const removeServiceCategory = async (categoryName) => {
+  try {
+    const response = await api.delete(`/technician/profile/service-category/${encodeURIComponent(categoryName)}`);
+    
+    if (response.data.success) {
+      const profile = updateProfileState(response);
+      return { success: true, technician: profile };
+    }
+    
+    return { 
+      success: false, 
+      error: response.data.message || 'Failed to remove service category' 
+    };
+  } catch (error) {
+    console.error('Remove service category error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.message || 'Failed to remove service category',
+    };
+  }
+};
+
+
   /**
    * Toggle technician availability status
    * @returns {Object} { success: boolean, isAvailable: boolean, error: string }
@@ -733,6 +820,8 @@ export const AuthProvider = ({ children }) => {
     updateTechnicianProfile,
     fetchTechnicianProfile,
     getTechnicianById,
+     addServiceCategory,        // ✅ New
+  removeServiceCategory,
     
     // Section-specific update functions
     updateBasicInfo,
