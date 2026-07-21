@@ -289,8 +289,9 @@ const TechnicianDashboard = () => {
       });
 
       // Determine categories array
-      const categoriesArray = profile.mainCategories || 
-                             (profile.mainCategory ? [profile.mainCategory] : []);
+      const categoriesArray = (profile.mainCategories && profile.mainCategories.length > 0) 
+                         ? profile.mainCategories 
+                         : (profile.mainCategory ? [profile.mainCategory] : []);
 
       setFormData({
         aboutMe: profile.aboutMe || '',
