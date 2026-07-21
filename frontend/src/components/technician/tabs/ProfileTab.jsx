@@ -207,12 +207,24 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           <p className="text-gray-700 leading-relaxed">{formData.aboutMe || '—'}</p>
         </div>
 
-        {/* Main Categories (multiple) */}
+        {/* Main Categories - Primary + Full List */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center">
             <Briefcase className="w-3.5 h-3.5 mr-1.5" />
             Main Categories
           </h3>
+          
+          {/* Primary Category */}
+          {formData.mainCategory && (
+            <div className="mb-2">
+              <span className="text-xs text-gray-500 mr-2">Primary:</span>
+              <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm">
+                {formData.mainCategory}
+              </span>
+            </div>
+          )}
+
+          {/* Full List */}
           {formData.mainCategories && formData.mainCategories.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {formData.mainCategories.map((cat, idx) => (
@@ -222,7 +234,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
               ))}
             </div>
           ) : (
-            <p className="text-gray-400 italic text-sm">No main categories selected</p>
+            <p className="text-gray-400 italic text-sm">No additional main categories</p>
           )}
         </div>
 

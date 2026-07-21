@@ -4,7 +4,7 @@
  * Update technician profile (generic update)
  * Updated for three-level service hierarchy and multiple main categories
  * 
- * @version 3.0.0
+ * @version 3.1.0
  */
 
 const Technician = require('../../../models/Technician');
@@ -21,11 +21,42 @@ exports.updateProfile = async (req, res) => {
     }
 
     // ============================================================
-    // 1. VALIDATE & HANDLE SERVICE CATEGORIES
+    // 1. HANDLE MAIN CATEGORIES (array)
+    // ============================================================
+    if (req.body.mainCategories !== undefined) {
+      // Ensure it's an array and clean
+      let categories = req.body.mainCategories;
+      if (!Array.isArray(categories)) {
+        categories = [categories];
+      }
+      // Remove duplicates and empty strings
+      technician.mainCategories = [...new Set(categories.filter(cat => cat && cat.trim() !== ''))];
+      // The pre‑save hook will set mainCategory = mainCategories[0] automatically
+      delete req.body.mainCategories; // remove to avoid double-assign
+    }
+
+    // ============================================================
+    // 2. HANDLE SINGLE MAIN CATEGORY (backward compatibility)
+    // ============================================================
+    if (req.body.mainCategory !== undefined) {
+      technician.mainCategory = req.body.mainCategory;
+      delete req.body.mainCategory;
+    }
+    // Migrate old 'category' field to mainCategory
+    if (req.body.category !== undefined) {
+      technician.mainCategory = req.body.category;
+      delete req.body.category;
+    }
+
+    // ============================================================
+    // 3. VALIDATE & HANDLE SERVICE CATEGORIES
     // ============================================================
     if (req.body.serviceCategories !== undefined) {
-      if (req.body.serviceCategories.length > 0) {
-        for (const category of req.body.serviceCategories) {
+      const serviceCategories = req.body.serviceCategories;
+      
+      // Validate each category
+      if (serviceCategories.length > 0) {
+        for (const category of serviceCategories) {
           if (!category.categoryName) {
             return res.status(400).json({
               success: false,
@@ -40,61 +71,35 @@ exports.updateProfile = async (req, res) => {
           }
         }
       }
-    }
 
-    // ============================================================
-    // 2. HANDLE MAIN CATEGORY – multiple & single (backward compat)
-    // ============================================================
-    // NEW: mainCategories array (frontend sends this)
-    if (req.body.mainCategories !== undefined) {
-      // Ensure it's an array and remove duplicates/empty strings
-      if (Array.isArray(req.body.mainCategories)) {
-        technician.mainCategories = [...new Set(req.body.mainCategories.filter(cat => cat && cat.trim() !== ''))];
-      } else {
-        // If it's a string, convert to array (fallback)
-        technician.mainCategories = [req.body.mainCategories];
-      }
-      // The pre‑save hook will automatically set mainCategory = mainCategories[0]
-      delete req.body.mainCategories; // avoid double-assign via Object.assign
-    }
+      // Ensure each service category has a mainCategory set
+      // If missing, use the technician's primary mainCategory (or first in array)
+      const primaryMainCategory = technician.mainCategory || (technician.mainCategories && technician.mainCategories[0]) || '';
+      
+      const updatedServiceCategories = serviceCategories.map(cat => ({
+        ...cat,
+        // If mainCategory is missing, set it to the primary one
+        mainCategory: cat.mainCategory || primaryMainCategory
+      }));
 
-    // OLD: single mainCategory (kept for backward compatibility)
-    // If the frontend sends mainCategory, we store it, but the pre‑save hook will
-    // override it if mainCategories is also present. To avoid conflict, we let the hook handle it.
-    // However, if the frontend sends only mainCategory (old clients), we respect it.
-    // We'll store it; the pre‑save hook will later sync if mainCategories exists.
-    if (req.body.mainCategory !== undefined) {
-      technician.mainCategory = req.body.mainCategory;
-      delete req.body.mainCategory;
-    }
-    // Migrate old 'category' field to mainCategory
-    if (req.body.category !== undefined) {
-      technician.mainCategory = req.body.category;
-      delete req.body.category;
-    }
-
-    // ============================================================
-    // 3. MERGE OTHER FIELDS
-    // ============================================================
-    // Remove the fields we already handled to avoid overriding
-    delete req.body.serviceCategories; // handled above (but we might want to keep it if we want to merge)
-    // Actually, we want to keep serviceCategories because we assign it manually below.
-    // Let's NOT delete it, because we want to preserve the existing logic.
-    // But we already validated it, so we can let Object.assign handle it.
-    // However, we need to ensure that serviceCategories is properly assigned.
-    // We'll handle serviceCategories separately below:
-
-    if (req.body.serviceCategories !== undefined) {
-      technician.serviceCategories = req.body.serviceCategories;
+      // Optional: Validate that each mainCategory exists in technician.mainCategories
+      // (but we don't want to block updates if the mainCategories list is being updated simultaneously)
+      // We'll just assign them
+      technician.serviceCategories = updatedServiceCategories;
+      
+      // Remove from req.body to avoid Object.assign double-write
       delete req.body.serviceCategories;
     }
 
-    // Now merge the rest of the fields
+    // ============================================================
+    // 4. MERGE REMAINING FIELDS
+    // ============================================================
+    // Now merge the rest of the fields (excluding those already handled)
     Object.assign(technician, req.body);
     technician.lastActive = new Date();
 
     // ============================================================
-    // 4. UPDATE COMPLETION STATS & SAVE
+    // 5. UPDATE COMPLETION STATS & SAVE
     // ============================================================
     await updateCompletionStats(technician);
     await technician.save();

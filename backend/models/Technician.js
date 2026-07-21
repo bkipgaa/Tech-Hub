@@ -103,6 +103,30 @@ const TechnicianSchema = new Schema({
   // Level 2 & 3: Service Categories with Sub-Services
   // Matches ServiceCatalog.serviceCategories structure
   serviceCategories: [{
+
+    mainCategory: { type: String, enum: [
+      'IT & Networking',
+      'Electrical Services',
+      'Mechanical Services',
+      'Plumbing',
+      'Programming & AI',
+      'Hairdressing & Beauty',
+      'Carpentry & Furniture',
+      'Laundry & Dry Cleaning',
+      'Cleaning Services',
+      'Painting & Decorating',
+      'Welding & Fabrication',
+      'Automotive Repair',
+      'Tutoring & Training',
+      'Photography & Videography',
+      'Event Planning',
+      'Construction & Renovation',
+      'HVAC Services',
+      'Appliance Repair',
+      'Moving & Logistics',
+      'Gardening & Landscaping'
+    ], 
+    required: true },
     // Level 2: Service Category Name
     categoryName: { 
       type: String,

@@ -86,6 +86,7 @@ exports.createProfile = async (req, res) => {
       skills: req.body.skills || [],
       mainCategory: mainCategory, // ✅ Only use mainCategory
       serviceCategories: serviceCategories.map(sc => ({
+        mainCategory: mainCategory, // from req.body.mainCategory
         categoryName: sc.categoryName.trim(),
         subServices: sc.subServices.map(s => s.trim()).filter(Boolean)
       })),
