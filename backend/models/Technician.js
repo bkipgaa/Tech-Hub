@@ -6,15 +6,45 @@
  * Level 2: serviceCategories (e.g., "Internet Services")
  * Level 3: subServices (e.g., "WiFi Setup & Configuration")
  * 
- * @version 2.0.0
+ * @version 3.0.0 (Pre-save hook removed for seeding)
  * @author Weba-Hub Team
  */
 
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+const MAIN_CATEGORIES = [
+  'IT & Networking',
+  'Electrical Services',
+  'Mechanical Services',
+  'Plumbing',
+  'Programming & AI',
+  'Hairdressing & Beauty',
+  'Carpentry & Furniture',
+  'Laundry & Dry Cleaning',
+  'Cleaning Services',
+  'Painting & Decorating',
+  'Welding & Fabrication',
+  'Automotive Repair',
+  'Tutoring & Training',
+  'Photography & Videography',
+  'Event Planning',
+  'Construction & Renovation',
+  'HVAC Services',
+  'Appliance Repair',
+  'Moving & Logistics',
+  'Gardening & Landscaping'
+];
+
+// ============================================================
+// SCHEMA DEFINITION
+// ============================================================
+
 const TechnicianSchema = new Schema({
-  // ========== BASIC INFO (from User) ==========
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -22,7 +52,6 @@ const TechnicianSchema = new Schema({
     unique: true
   },
 
-  // ========== ABOUT ME ==========
   aboutMe: {
     type: String,
     maxlength: 2000,
@@ -34,90 +63,45 @@ const TechnicianSchema = new Schema({
     default: ''
   },
 
-  // ========== SKILLS ==========
   skills: [{
     name: { type: String, required: true },
-    level: { 
-      type: String, 
+    level: {
+      type: String,
       enum: ['Beginner', 'Intermediate', 'Advanced', 'Expert'],
       default: 'Intermediate'
     },
     yearsOfExperience: { type: Number, min: 0, default: 0 }
   }],
 
-  // ========== SERVICES OFFERED (THREE-LEVEL HIERARCHY) ==========
-  // Level 1: Main Category - Matches ServiceCatalog.mainCategory
-  mainCategory: { 
-    type: String, 
-    enum: [
-      'IT & Networking',
-      'Electrical Services',
-      'Mechanical Services',
-      'Plumbing',
-      'Programming & AI',
-      'Hairdressing & Beauty',
-      'Carpentry & Furniture',
-      'Laundry & Dry Cleaning',
-      'Cleaning Services',
-      'Painting & Decorating',
-      'Welding & Fabrication',
-      'Automotive Repair',
-      'Tutoring & Training',
-      'Photography & Videography',
-      'Event Planning',
-      'Construction & Renovation',
-      'HVAC Services',
-      'Appliance Repair',
-      'Moving & Logistics',
-      'Gardening & Landscaping'
-    ]
+  mainCategory: {
+    type: String,
+    enum: MAIN_CATEGORIES,
+    required: true,
+    default: MAIN_CATEGORIES[0]
   },
 
-  // NEW: array for multiple main categories
   mainCategories: [{
     type: String,
-    enum: ['IT & Networking',
-      'Electrical Services',
-      'Mechanical Services',
-      'Plumbing',
-      'Programming & AI',
-      'Hairdressing & Beauty',
-      'Carpentry & Furniture',
-      'Laundry & Dry Cleaning',
-      'Cleaning Services',
-      'Painting & Decorating',
-      'Welding & Fabrication',
-      'Automotive Repair',
-      'Tutoring & Training',
-      'Photography & Videography',
-      'Event Planning',
-      'Construction & Renovation',
-      'HVAC Services',
-      'Appliance Repair',
-      'Moving & Logistics',
-      'Gardening & Landscaping'],
+    enum: MAIN_CATEGORIES,
     trim: true
   }],
 
-  
-  // Level 2 & 3: Service Categories with Sub-Services
-  // Matches ServiceCatalog.serviceCategories structure
   serviceCategories: [{
-
-    
-    // Level 2: Service Category Name
-    categoryName: { 
+    mainCategory: {
+      type: String,
+      enum: MAIN_CATEGORIES,
+      required: true
+    },
+    categoryName: {
       type: String,
       required: true,
       trim: true
     },
-    // Level 3: Sub-Services
     subServices: [{
       type: String,
       required: true,
       trim: true
     }],
-    // Additional metadata
     description: {
       type: String,
       trim: true,
@@ -143,7 +127,6 @@ const TechnicianSchema = new Schema({
     }
   }],
 
-  // ========== PRICING ==========
   pricing: {
     hourlyRate: { type: Number, min: 0, default: 0 },
     fixedPrice: { type: Number, min: 0, default: 0 },
@@ -155,7 +138,6 @@ const TechnicianSchema = new Schema({
     }]
   },
 
-  // ========== EDUCATION ==========
   education: [{
     institution: { type: String, required: true },
     degree: { type: String, required: true },
@@ -167,7 +149,6 @@ const TechnicianSchema = new Schema({
     grade: String
   }],
 
-  // ========== CERTIFICATIONS ==========
   certifications: [{
     name: { type: String, required: true },
     issuingOrganization: { type: String, required: true },
@@ -179,14 +160,13 @@ const TechnicianSchema = new Schema({
     verified: { type: Boolean, default: false }
   }],
 
-  // ========== YEARS OF EXPERIENCE ==========
   yearsOfExperience: {
     type: Number,
     min: 0,
     default: 0,
     required: true
   },
-  
+
   experience: [{
     title: { type: String, required: true },
     company: { type: String, required: true },
@@ -198,15 +178,14 @@ const TechnicianSchema = new Schema({
     achievements: [String]
   }],
 
-  // ========== PORTFOLIO ==========
   portfolio: [{
     title: { type: String, required: true },
     description: String,
     category: String,
-    mediaType: { 
-      type: String, 
+    mediaType: {
+      type: String,
       enum: ['image', 'video', 'document'],
-      required: true 
+      required: true
     },
     mediaUrl: { type: String, required: true },
     thumbnailUrl: String,
@@ -217,7 +196,6 @@ const TechnicianSchema = new Schema({
     views: { type: Number, default: 0 }
   }],
 
-  // ========== LOCATION ==========
   address: {
     street: String,
     city: { type: String, required: true },
@@ -225,68 +203,44 @@ const TechnicianSchema = new Schema({
     zipCode: String,
     country: { type: String, default: 'Kenya' }
   },
-  
+
   location: {
     type: { type: String, enum: ['Point'], default: 'Point' },
-    coordinates: { type: [Number], default: [0, 0] }, // [longitude, latitude]
+    coordinates: { type: [Number], default: [0, 0] },
     formattedAddress: String,
     placeId: String
   },
-  
+
   serviceRadius: {
-    type: Number, // in kilometers
+    type: Number,
     default: 10,
     min: 1,
     max: 1000
   },
 
-  // ========== LANGUAGES ==========
   languages: [{
     name: { type: String, required: true },
-    proficiency: { 
-      type: String, 
+    proficiency: {
+      type: String,
       enum: ['Basic', 'Conversational', 'Fluent', 'Native'],
       default: 'Fluent'
     }
   }],
 
-  // ========== AVAILABILITY ==========
   availability: {
-    monday: { 
-      enabled: { type: Boolean, default: true }, 
-      hours: [{ start: String, end: String }] 
-    },
-    tuesday: { 
-      enabled: { type: Boolean, default: true }, 
-      hours: [{ start: String, end: String }] 
-    },
-    wednesday: { 
-      enabled: { type: Boolean, default: true }, 
-      hours: [{ start: String, end: String }] 
-    },
-    thursday: { 
-      enabled: { type: Boolean, default: true }, 
-      hours: [{ start: String, end: String }] 
-    },
-    friday: { 
-      enabled: { type: Boolean, default: true }, 
-      hours: [{ start: String, end: String }] 
-    },
-    saturday: { 
-      enabled: { type: Boolean, default: false }, 
-      hours: [{ start: String, end: String }] 
-    },
-    sunday: { 
-      enabled: { type: Boolean, default: false }, 
-      hours: [{ start: String, end: String }] 
-    }
+    monday: { enabled: { type: Boolean, default: true }, hours: [{ start: String, end: String }] },
+    tuesday: { enabled: { type: Boolean, default: true }, hours: [{ start: String, end: String }] },
+    wednesday: { enabled: { type: Boolean, default: true }, hours: [{ start: String, end: String }] },
+    thursday: { enabled: { type: Boolean, default: true }, hours: [{ start: String, end: String }] },
+    friday: { enabled: { type: Boolean, default: true }, hours: [{ start: String, end: String }] },
+    saturday: { enabled: { type: Boolean, default: false }, hours: [{ start: String, end: String }] },
+    sunday: { enabled: { type: Boolean, default: false }, hours: [{ start: String, end: String }] }
   },
-  
+
   emergencyAvailable: { type: Boolean, default: false },
   remoteServiceAvailable: { type: Boolean, default: false },
   weekendAvailable: { type: Boolean, default: false },
 
-  // ========== RATINGS & REVIEWS ==========
   rating: {
     average: { type: Number, default: 0, min: 0, max: 5 },
     count: { type: Number, default: 0 },
@@ -298,7 +252,7 @@ const TechnicianSchema = new Schema({
       5: { type: Number, default: 0 }
     }
   },
-  
+
   reviews: [{
     clientId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     bookingId: { type: Schema.Types.ObjectId, ref: 'Booking' },
@@ -314,13 +268,12 @@ const TechnicianSchema = new Schema({
     updatedAt: Date
   }],
 
-  // ========== STATISTICS ==========
   statistics: {
     totalJobs: { type: Number, default: 0 },
     completedJobs: { type: Number, default: 0 },
     cancelledJobs: { type: Number, default: 0 },
-    responseTime: { type: Number, default: 0 }, // in hours
-    completionRate: { type: Number, default: 0 }, // percentage
+    responseTime: { type: Number, default: 0 },
+    completionRate: { type: Number, default: 0 },
     repeatClients: { type: Number, default: 0 },
     earnings: {
       total: { type: Number, default: 0 },
@@ -329,17 +282,16 @@ const TechnicianSchema = new Schema({
     }
   },
 
-  // ========== VERIFICATION ==========
   verificationStatus: {
     type: String,
     enum: ['pending', 'verified', 'rejected'],
     default: 'pending'
   },
-  
+
   verifiedDocuments: [{
-    type: { 
-      type: String, 
-      enum: ['id', 'certificate', 'license', 'insurance', 'business_registration'] 
+    type: {
+      type: String,
+      enum: ['id', 'certificate', 'license', 'insurance', 'business_registration']
     },
     documentUrl: String,
     documentNumber: String,
@@ -353,7 +305,6 @@ const TechnicianSchema = new Schema({
     remarks: String
   }],
 
-  // ========== SOCIAL LINKS ==========
   socialLinks: {
     website: String,
     facebook: String,
@@ -364,7 +315,6 @@ const TechnicianSchema = new Schema({
     tiktok: String
   },
 
-  // ========== BUSINESS INFO ==========
   businessName: String,
   businessRegistrationNumber: String,
   insuranceInfo: {
@@ -373,7 +323,6 @@ const TechnicianSchema = new Schema({
     expiryDate: Date
   },
 
-  // ========== SETTINGS ==========
   settings: {
     showEmail: { type: Boolean, default: false },
     showPhone: { type: Boolean, default: true },
@@ -388,16 +337,15 @@ const TechnicianSchema = new Schema({
     jobReminders: { type: Boolean, default: true }
   },
 
-  // ========== SUBSCRIPTION ==========
   subscription: {
-    plan: { 
-      type: String, 
+    plan: {
+      type: String,
       enum: ['free', 'basic', 'premium', 'business', 'enterprise', 'trial', 'unlimited'],
       default: 'free'
     },
     planDetails: {
-      name: { type: String },
-      visibilityRadius: { type: Number, default: 10 }, // in km
+      name: String,
+      visibilityRadius: { type: Number, default: 10 },
       price: { type: Number, default: 0 },
       features: [String]
     },
@@ -415,7 +363,6 @@ const TechnicianSchema = new Schema({
     }]
   },
 
-  // ========== STATUS ==========
   isActive: { type: Boolean, default: true },
   isAvailable: { type: Boolean, default: true },
   isFeatured: { type: Boolean, default: false },
@@ -423,19 +370,21 @@ const TechnicianSchema = new Schema({
   completedProfile: { type: Boolean, default: false },
   profileCompletionPercentage: { type: Number, default: 0, min: 0, max: 100 },
 
-  // ========== METADATA ==========
   views: { type: Number, default: 0 },
   saves: { type: Number, default: 0 },
   shares: { type: Number, default: 0 },
   searchAppearances: { type: Number, default: 0 }
 
-}, { 
+}, {
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
-// ========== INDEXES ==========
+// ============================================================
+// INDEXES
+// ============================================================
+
 TechnicianSchema.index({ location: "2dsphere" });
 TechnicianSchema.index({ mainCategory: 1, 'rating.average': -1 });
 TechnicianSchema.index({ 'address.city': 1, mainCategory: 1 });
@@ -445,9 +394,10 @@ TechnicianSchema.index({ 'rating.average': -1 });
 TechnicianSchema.index({ createdAt: -1 });
 TechnicianSchema.index({ 'serviceCategories.categoryName': 1 });
 TechnicianSchema.index({ 'serviceCategories.subServices': 1 });
+TechnicianSchema.index({ 'serviceCategories.mainCategory': 1 });
 
 // Text search index
-TechnicianSchema.index({ 
+TechnicianSchema.index({
   'aboutMe': 'text',
   'profileHeadline': 'text',
   'skills.name': 'text',
@@ -460,26 +410,9 @@ TechnicianSchema.index({
   'certifications.name': 'text'
 });
 
-// ========== VIRTUALS ==========
-TechnicianSchema.pre('save', function(next) {
-  // Ensure mainCategories is an array
-  if (!this.mainCategories || !Array.isArray(this.mainCategories)) {
-    this.mainCategories = [];
-  }
-
-  // Remove duplicates and empty strings
-  this.mainCategories = [...new Set(this.mainCategories.filter(cat => cat && cat.trim() !== ''))];
-
-  // If mainCategories has items, set mainCategory to the first one
-  if (this.mainCategories.length > 0) {
-    this.mainCategory = this.mainCategories[0];
-  } else {
-    // Optionally keep existing or clear
-    this.mainCategories = this.mainCategory ? [this.mainCategory] : [];
-  }
-
-  next();
-});
+// ============================================================
+// VIRTUALS
+// ============================================================
 
 TechnicianSchema.virtual('fullName').get(function() {
   return this.userId ? `${this.userId.firstName} ${this.userId.lastName}` : '';
@@ -501,7 +434,6 @@ TechnicianSchema.virtual('featuredPortfolio').get(function() {
   return this.portfolio.filter(item => item.isFeatured);
 });
 
-// Virtual to get all sub-services as a flat array
 TechnicianSchema.virtual('allSubServices').get(function() {
   const all = [];
   this.serviceCategories.forEach(category => {
@@ -510,7 +442,7 @@ TechnicianSchema.virtual('allSubServices').get(function() {
         all.push({
           subService: sub,
           categoryName: category.categoryName,
-          mainCategory: this.mainCategory
+          mainCategory: category.mainCategory || this.mainCategory || ''
         });
       });
     }
@@ -518,31 +450,30 @@ TechnicianSchema.virtual('allSubServices').get(function() {
   return all;
 });
 
-// Virtual to get category names only
 TechnicianSchema.virtual('categoryNames').get(function() {
   return this.serviceCategories.map(cat => cat.categoryName);
 });
 
-// ========== METHODS ==========
+// ============================================================
+// METHODS
+// ============================================================
+
 TechnicianSchema.methods.updateRating = function(newRating) {
   const total = this.rating.average * this.rating.count + newRating;
   this.rating.count += 1;
   this.rating.average = total / this.rating.count;
-  
   const star = Math.floor(newRating);
   this.rating.distribution[star] = (this.rating.distribution[star] || 0) + 1;
-  
   return this.save();
 };
 
 TechnicianSchema.methods.calculateProfileCompletion = function() {
   let completed = 0;
   const totalFields = 15;
-  
   if (this.aboutMe) completed++;
   if (this.profileHeadline) completed++;
   if (this.skills && this.skills.length > 0) completed++;
-  if (this.mainCategory) completed++;
+  if (this.mainCategories && this.mainCategories.length > 0) completed++;
   if (this.serviceCategories && this.serviceCategories.length > 0) completed++;
   if (this.pricing.hourlyRate > 0) completed++;
   if (this.education && this.education.length > 0) completed++;
@@ -555,10 +486,8 @@ TechnicianSchema.methods.calculateProfileCompletion = function() {
   if (this.businessName) completed++;
   if (this.availability) completed++;
   if (this.socialLinks && Object.keys(this.socialLinks).length > 0) completed++;
-  
   this.profileCompletionPercentage = Math.round((completed / totalFields) * 100);
   this.completedProfile = this.profileCompletionPercentage >= 70;
-  
   return this.save();
 };
 
@@ -569,29 +498,19 @@ TechnicianSchema.methods.incrementViews = function() {
 
 TechnicianSchema.methods.isWithinServiceRadius = function(clientCoordinates) {
   if (!this.location.coordinates || !clientCoordinates) return false;
-  
   const [lng1, lat1] = this.location.coordinates;
   const [lng2, lat2] = clientCoordinates;
-  
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
-  
   const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
             Math.sin(dLng/2) * Math.sin(dLng/2);
-  
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   const distance = R * c;
-  
   return distance <= this.serviceRadius;
 };
 
-/**
- * Check if technician offers a specific sub-service
- * @param {string} subServiceName - Name of the sub-service to check
- * @returns {boolean} True if technician offers the sub-service
- */
 TechnicianSchema.methods.offersSubService = function(subServiceName) {
   return this.serviceCategories.some(category =>
     category.subServices && category.subServices.some(
@@ -600,10 +519,6 @@ TechnicianSchema.methods.offersSubService = function(subServiceName) {
   );
 };
 
-/**
- * Get all sub-service names as a flat array
- * @returns {string[]} Array of all sub-service names
- */
 TechnicianSchema.methods.getAllSubServiceNames = function() {
   const names = [];
   this.serviceCategories.forEach(category => {
@@ -616,7 +531,10 @@ TechnicianSchema.methods.getAllSubServiceNames = function() {
   return names;
 };
 
-// ========== STATICS ==========
+// ============================================================
+// STATICS
+// ============================================================
+
 TechnicianSchema.statics.findNearby = function(coordinates, maxDistance = 10000) {
   return this.find({
     location: {
@@ -631,7 +549,10 @@ TechnicianSchema.statics.findNearby = function(coordinates, maxDistance = 10000)
 };
 
 TechnicianSchema.statics.findByCategory = function(mainCategory, limit = 20) {
-  return this.find({ mainCategory, isActive: true })
+  const query = Array.isArray(mainCategory)
+    ? { mainCategory: { $in: mainCategory }, isActive: true }
+    : { mainCategory, isActive: true };
+  return this.find(query)
     .sort({ 'rating.average': -1, isFeatured: -1 })
     .limit(limit)
     .populate('userId', 'firstName lastName profileImage');
@@ -662,20 +583,18 @@ TechnicianSchema.statics.search = function(query, options = {}) {
     limit = 20,
     skip = 0
   } = options;
-  
+
   let filter = { isActive: true };
-  
-  if (query) {
-    filter.$text = { $search: query };
+  if (query) filter.$text = { $search: query };
+  if (mainCategory) {
+    if (Array.isArray(mainCategory)) filter.mainCategory = { $in: mainCategory };
+    else filter.mainCategory = mainCategory;
   }
-  
-  if (mainCategory) filter.mainCategory = mainCategory;
   if (serviceCategory) filter['serviceCategories.categoryName'] = serviceCategory;
   if (subService) filter['serviceCategories.subServices'] = subService;
   if (city) filter['address.city'] = { $regex: city, $options: 'i' };
   if (minRating) filter['rating.average'] = { $gte: minRating };
   if (skills) filter['skills.name'] = { $in: Array.isArray(skills) ? skills : [skills] };
-  
   if (lat && lng && radius) {
     filter.location = {
       $near: {
@@ -684,7 +603,6 @@ TechnicianSchema.statics.search = function(query, options = {}) {
       }
     };
   }
-  
   return this.find(filter)
     .populate('userId', 'firstName lastName profileImage')
     .skip(skip)

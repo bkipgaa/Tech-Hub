@@ -1,17 +1,16 @@
-// scripts/backfillServiceCategoryMainCategory.js
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const Technician = require('../models/Technician');
 
 dotenv.config();
 
-async function backfillMainCategory() {
+async function backfill() {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ Connected to MongoDB');
 
     const technicians = await Technician.find({});
-    console.log(`📦 Found ${technicians.length} technicians to check.`);
+    console.log(`📦 Found ${technicians.length} technicians to process.`);
 
     let updatedCount = 0;
 
@@ -44,7 +43,7 @@ async function backfillMainCategory() {
       }
     }
 
-    console.log(`✅ Migration complete! Updated ${updatedCount} technicians.`);
+    console.log(`✅ Backfill complete! Updated ${updatedCount} technicians.`);
   } catch (error) {
     console.error('❌ Migration failed:', error);
   } finally {
@@ -53,4 +52,4 @@ async function backfillMainCategory() {
   }
 }
 
-backfillMainCategory();
+backfill();

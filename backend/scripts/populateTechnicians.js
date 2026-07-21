@@ -7,7 +7,7 @@
  * Level 2: serviceCategories (with categoryName and mainCategory)
  * Level 3: subServices
  * 
- * @version 3.0.0
+ * @version 3.1.0 - Now clears old technicians before creating new ones
  */
 
 const mongoose = require('mongoose');
@@ -278,7 +278,7 @@ const serviceData = {
   }
 };
 
-// Technician profiles to create - UPDATED with mainCategory
+// Technician profiles to create
 const technicianProfiles = [
   // ========== MALINDI (2 technicians) ==========
   {
@@ -489,7 +489,15 @@ async function populateTechnicians() {
     await mongoose.connect(mongoURI);
     console.log('Connected to MongoDB');
 
-    // First, check if users exist or create temporary ones
+    // ============================================================
+    // 🔥 DELETE ALL EXISTING TECHNICIANS
+    // ============================================================
+    const deleteResult = await Technician.deleteMany({});
+    console.log(`🗑️ Cleared existing technicians: ${deleteResult.deletedCount} removed`);
+
+    // ============================================================
+    // CREATE NEW TECHNICIANS
+    // ============================================================
     console.log('\n📋 Creating technicians...\n');
 
     for (const profile of technicianProfiles) {
@@ -519,9 +527,8 @@ async function populateTechnicians() {
         console.log(`  ✓ Using existing user: ${profile.firstName} ${profile.lastName}`);
       }
 
-      // Check if technician profile already exists
+      // Check if technician profile already exists (shouldn't, because we deleted all)
       const existingTech = await Technician.findOne({ userId: user._id });
-      
       if (existingTech) {
         console.log(`  ⚠ Technician profile already exists for ${profile.firstName} ${profile.lastName}, skipping...`);
         continue;
@@ -536,11 +543,11 @@ async function populateTechnicians() {
         
         // ✅ Level 1: mainCategory (string) + mainCategories (array)
         mainCategory: profile.mainCategory,
-        mainCategories: [profile.mainCategory], // NEW: array for multiple (future expansion)
+        mainCategories: [profile.mainCategory], // future multiple categories
         
         // ✅ Level 2 & 3: serviceCategories with categoryName, subServices, and mainCategory
         serviceCategories: [{
-          mainCategory: profile.mainCategory, // Link to Level 1
+          mainCategory: profile.mainCategory,
           categoryName: profile.serviceCategory,
           subServices: profile.subServices,
           description: `${profile.serviceCategory} services for ${town.name} area`,
