@@ -6,7 +6,7 @@
  * Level 2: serviceCategories (e.g., "Internet Services")
  * Level 3: subServices (e.g., "WiFi Setup & Configuration")
  * 
- * @version 3.0.0 (Pre-save hook removed for seeding)
+ * @version 3.0.0
  * @author Weba-Hub Team
  */
 
@@ -45,6 +45,7 @@ const MAIN_CATEGORIES = [
 // ============================================================
 
 const TechnicianSchema = new Schema({
+  // ========== BASIC INFO (from User) ==========
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -52,6 +53,7 @@ const TechnicianSchema = new Schema({
     unique: true
   },
 
+  // ========== ABOUT ME ==========
   aboutMe: {
     type: String,
     maxlength: 2000,
@@ -63,6 +65,7 @@ const TechnicianSchema = new Schema({
     default: ''
   },
 
+  // ========== SKILLS ==========
   skills: [{
     name: { type: String, required: true },
     level: {
@@ -73,6 +76,7 @@ const TechnicianSchema = new Schema({
     yearsOfExperience: { type: Number, min: 0, default: 0 }
   }],
 
+  // ========== SERVICES OFFERED (THREE-LEVEL HIERARCHY) ==========
   mainCategory: {
     type: String,
     enum: MAIN_CATEGORIES,
@@ -127,6 +131,7 @@ const TechnicianSchema = new Schema({
     }
   }],
 
+  // ========== PRICING ==========
   pricing: {
     hourlyRate: { type: Number, min: 0, default: 0 },
     fixedPrice: { type: Number, min: 0, default: 0 },
@@ -138,6 +143,7 @@ const TechnicianSchema = new Schema({
     }]
   },
 
+  // ========== EDUCATION ==========
   education: [{
     institution: { type: String, required: true },
     degree: { type: String, required: true },
@@ -149,6 +155,7 @@ const TechnicianSchema = new Schema({
     grade: String
   }],
 
+  // ========== CERTIFICATIONS ==========
   certifications: [{
     name: { type: String, required: true },
     issuingOrganization: { type: String, required: true },
@@ -160,6 +167,7 @@ const TechnicianSchema = new Schema({
     verified: { type: Boolean, default: false }
   }],
 
+  // ========== YEARS OF EXPERIENCE ==========
   yearsOfExperience: {
     type: Number,
     min: 0,
@@ -178,6 +186,7 @@ const TechnicianSchema = new Schema({
     achievements: [String]
   }],
 
+  // ========== PORTFOLIO ==========
   portfolio: [{
     title: { type: String, required: true },
     description: String,
@@ -196,6 +205,7 @@ const TechnicianSchema = new Schema({
     views: { type: Number, default: 0 }
   }],
 
+  // ========== LOCATION ==========
   address: {
     street: String,
     city: { type: String, required: true },
@@ -218,6 +228,7 @@ const TechnicianSchema = new Schema({
     max: 1000
   },
 
+  // ========== LANGUAGES ==========
   languages: [{
     name: { type: String, required: true },
     proficiency: {
@@ -227,6 +238,7 @@ const TechnicianSchema = new Schema({
     }
   }],
 
+  // ========== AVAILABILITY ==========
   availability: {
     monday: { enabled: { type: Boolean, default: true }, hours: [{ start: String, end: String }] },
     tuesday: { enabled: { type: Boolean, default: true }, hours: [{ start: String, end: String }] },
@@ -241,6 +253,7 @@ const TechnicianSchema = new Schema({
   remoteServiceAvailable: { type: Boolean, default: false },
   weekendAvailable: { type: Boolean, default: false },
 
+  // ========== RATINGS & REVIEWS ==========
   rating: {
     average: { type: Number, default: 0, min: 0, max: 5 },
     count: { type: Number, default: 0 },
@@ -268,6 +281,7 @@ const TechnicianSchema = new Schema({
     updatedAt: Date
   }],
 
+  // ========== STATISTICS ==========
   statistics: {
     totalJobs: { type: Number, default: 0 },
     completedJobs: { type: Number, default: 0 },
@@ -282,6 +296,7 @@ const TechnicianSchema = new Schema({
     }
   },
 
+  // ========== VERIFICATION ==========
   verificationStatus: {
     type: String,
     enum: ['pending', 'verified', 'rejected'],
@@ -305,6 +320,7 @@ const TechnicianSchema = new Schema({
     remarks: String
   }],
 
+  // ========== SOCIAL LINKS ==========
   socialLinks: {
     website: String,
     facebook: String,
@@ -315,6 +331,7 @@ const TechnicianSchema = new Schema({
     tiktok: String
   },
 
+  // ========== BUSINESS INFO ==========
   businessName: String,
   businessRegistrationNumber: String,
   insuranceInfo: {
@@ -323,6 +340,7 @@ const TechnicianSchema = new Schema({
     expiryDate: Date
   },
 
+  // ========== SETTINGS ==========
   settings: {
     showEmail: { type: Boolean, default: false },
     showPhone: { type: Boolean, default: true },
@@ -337,6 +355,7 @@ const TechnicianSchema = new Schema({
     jobReminders: { type: Boolean, default: true }
   },
 
+  // ========== SUBSCRIPTION ==========
   subscription: {
     plan: {
       type: String,
@@ -363,6 +382,7 @@ const TechnicianSchema = new Schema({
     }]
   },
 
+  // ========== STATUS ==========
   isActive: { type: Boolean, default: true },
   isAvailable: { type: Boolean, default: true },
   isFeatured: { type: Boolean, default: false },
@@ -370,6 +390,7 @@ const TechnicianSchema = new Schema({
   completedProfile: { type: Boolean, default: false },
   profileCompletionPercentage: { type: Number, default: 0, min: 0, max: 100 },
 
+  // ========== METADATA ==========
   views: { type: Number, default: 0 },
   saves: { type: Number, default: 0 },
   shares: { type: Number, default: 0 },
@@ -408,6 +429,52 @@ TechnicianSchema.index({
   'experience.title': 'text',
   'experience.company': 'text',
   'certifications.name': 'text'
+});
+
+// ============================================================
+// PRE-SAVE HOOK – Sync mainCategory & mainCategories
+// ============================================================
+
+// ========== PRE-SAVE HOOK – Sync mainCategory & mainCategories ==========
+
+TechnicianSchema.pre('save', function(next) {
+  try {
+    // Ensure mainCategories is an array
+    if (!this.mainCategories || !Array.isArray(this.mainCategories)) {
+      this.mainCategories = [];
+    }
+
+    // Remove duplicates and empty strings
+    this.mainCategories = [...new Set(this.mainCategories.filter(cat => cat && cat.trim() !== ''))];
+
+    // If mainCategories is empty but mainCategory exists, use it
+    if (this.mainCategories.length === 0 && this.mainCategory) {
+      this.mainCategories = [this.mainCategory];
+    }
+
+    // If mainCategories has items, set mainCategory to the first one
+    if (this.mainCategories.length > 0) {
+      this.mainCategory = this.mainCategories[0];
+    } else {
+      // Set defaults if both are empty
+      this.mainCategory = MAIN_CATEGORIES[0];
+      this.mainCategories = [this.mainCategory];
+    }
+
+    // Ensure each service category has a mainCategory
+    const primary = this.mainCategory || (this.mainCategories && this.mainCategories[0]) || '';
+    if (this.serviceCategories && this.serviceCategories.length > 0) {
+      for (const service of this.serviceCategories) {
+        if (!service.mainCategory) {
+          service.mainCategory = primary;
+        }
+      }
+    }
+
+    next(); // ✅ Always call next()
+  } catch (err) {
+    next(err); // ✅ Pass errors to next()
+  }
 });
 
 // ============================================================
@@ -462,14 +529,17 @@ TechnicianSchema.methods.updateRating = function(newRating) {
   const total = this.rating.average * this.rating.count + newRating;
   this.rating.count += 1;
   this.rating.average = total / this.rating.count;
+
   const star = Math.floor(newRating);
   this.rating.distribution[star] = (this.rating.distribution[star] || 0) + 1;
+
   return this.save();
 };
 
 TechnicianSchema.methods.calculateProfileCompletion = function() {
   let completed = 0;
   const totalFields = 15;
+
   if (this.aboutMe) completed++;
   if (this.profileHeadline) completed++;
   if (this.skills && this.skills.length > 0) completed++;
@@ -486,8 +556,10 @@ TechnicianSchema.methods.calculateProfileCompletion = function() {
   if (this.businessName) completed++;
   if (this.availability) completed++;
   if (this.socialLinks && Object.keys(this.socialLinks).length > 0) completed++;
+
   this.profileCompletionPercentage = Math.round((completed / totalFields) * 100);
   this.completedProfile = this.profileCompletionPercentage >= 70;
+
   return this.save();
 };
 
@@ -498,16 +570,21 @@ TechnicianSchema.methods.incrementViews = function() {
 
 TechnicianSchema.methods.isWithinServiceRadius = function(clientCoordinates) {
   if (!this.location.coordinates || !clientCoordinates) return false;
+
   const [lng1, lat1] = this.location.coordinates;
   const [lng2, lat2] = clientCoordinates;
+
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLng/2) * Math.sin(dLng/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c;
+
   return distance <= this.serviceRadius;
 };
 
@@ -552,6 +629,7 @@ TechnicianSchema.statics.findByCategory = function(mainCategory, limit = 20) {
   const query = Array.isArray(mainCategory)
     ? { mainCategory: { $in: mainCategory }, isActive: true }
     : { mainCategory, isActive: true };
+
   return this.find(query)
     .sort({ 'rating.average': -1, isFeatured: -1 })
     .limit(limit)
@@ -585,16 +663,24 @@ TechnicianSchema.statics.search = function(query, options = {}) {
   } = options;
 
   let filter = { isActive: true };
-  if (query) filter.$text = { $search: query };
+
+  if (query) {
+    filter.$text = { $search: query };
+  }
+
   if (mainCategory) {
-    if (Array.isArray(mainCategory)) filter.mainCategory = { $in: mainCategory };
-    else filter.mainCategory = mainCategory;
+    if (Array.isArray(mainCategory)) {
+      filter.mainCategory = { $in: mainCategory };
+    } else {
+      filter.mainCategory = mainCategory;
+    }
   }
   if (serviceCategory) filter['serviceCategories.categoryName'] = serviceCategory;
   if (subService) filter['serviceCategories.subServices'] = subService;
   if (city) filter['address.city'] = { $regex: city, $options: 'i' };
   if (minRating) filter['rating.average'] = { $gte: minRating };
   if (skills) filter['skills.name'] = { $in: Array.isArray(skills) ? skills : [skills] };
+
   if (lat && lng && radius) {
     filter.location = {
       $near: {
@@ -603,6 +689,7 @@ TechnicianSchema.statics.search = function(query, options = {}) {
       }
     };
   }
+
   return this.find(filter)
     .populate('userId', 'firstName lastName profileImage')
     .skip(skip)
