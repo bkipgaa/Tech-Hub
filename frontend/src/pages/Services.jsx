@@ -3,6 +3,7 @@
  * Displays all available services from the backend service catalog
  * Fetches main categories, service categories, and sub-services dynamically
  * Features a rotating background image slider for the hero section
+ * Now includes a distance filter that is passed to the search page.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -30,6 +31,9 @@ const Services = () => {
   
   // State for background image slider
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // 🆕 State for maximum distance (empty = not selected)
+  const [maxDistance, setMaxDistance] = useState('');
 
   // Background images for the hero section
   const backgroundImages = [
@@ -126,9 +130,14 @@ const Services = () => {
 
   /**
    * Navigate to technicians page with search parameters
+   * 🆕 Now includes the selected distance as 'radius'
    */
   const handleViewTechnicians = (mainCategory, serviceCategory, subService) => {
-    navigate(`/technicians?mainCategory=${encodeURIComponent(mainCategory)}&serviceCategory=${encodeURIComponent(serviceCategory)}&subService=${encodeURIComponent(subService)}`);
+    let url = `/technicians?mainCategory=${encodeURIComponent(mainCategory)}&serviceCategory=${encodeURIComponent(serviceCategory)}&subService=${encodeURIComponent(subService)}`;
+    if (maxDistance) {
+      url += `&radius=${maxDistance}`;
+    }
+    navigate(url);
   };
 
   if (loading) {
@@ -187,6 +196,34 @@ const Services = () => {
               From IT solutions to home services, find qualified professionals ready to help with your needs
             </p>
             
+            {/* 🆕 Distance Filter Dropdown */}
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 animate-fadeInUp">
+              <label htmlFor="distanceSelect" className="text-white text-sm font-medium">
+                Max distance:
+              </label>
+              <select
+                id="distanceSelect"
+                value={maxDistance}
+                onChange={(e) => setMaxDistance(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:border-green-500 focus:outline-none bg-white text-gray-800 text-sm w-full sm:w-auto"
+              >
+                <option value="">Select distance</option>
+                <option value="5">5 km</option>
+                <option value="10">10 km</option>
+                <option value="20">20 km</option>
+                <option value="50">50 km</option>
+                <option value="100">100 km</option>
+                <option value="200">200 km</option>
+                <option value="500">500 km</option>
+                <option value="1000">1000 km</option>
+              </select>
+              {!maxDistance && (
+                <span className="text-yellow-300 text-xs font-medium">
+                  ⚠️ Please select a distance to view technicians
+                </span>
+              )}
+            </div>
+
             {/* Image Indicator Dots */}
             <div className="flex justify-center gap-2 mt-6">
               {backgroundImages.map((_, index) => (
@@ -282,12 +319,17 @@ const Services = () => {
                                 )}
                               </div>
                               
-                              {/* View Technicians Button */}
+                              {/* 🆕 View Technicians Button – disabled if no distance selected */}
                               <button
                                 onClick={() => handleViewTechnicians(category.mainCategory, serviceCat.name, sub.name)}
-                                className="w-full mt-3 bg-gray-800 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-600 transition-colors text-sm"
+                                disabled={!maxDistance}
+                                className={`w-full mt-3 px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                                  maxDistance
+                                    ? 'bg-gray-800 text-white hover:bg-green-600'
+                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
                               >
-                                View Technicians
+                                View Technicians {maxDistance && `within ${maxDistance} km`}
                               </button>
                             </div>
                           ))}
