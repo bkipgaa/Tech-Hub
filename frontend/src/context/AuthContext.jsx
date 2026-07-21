@@ -861,7 +861,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     // Technician profile functions
     createTechnicianProfile,
     updateTechnicianProfile,
-    fetchTechnicianProfile,
+     getTechnicianProfile: fetchTechnicianProfile,
     getTechnicianById,
      addServiceCategory,        // ✅ New
   removeServiceCategory,
