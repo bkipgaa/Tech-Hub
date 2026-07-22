@@ -3,37 +3,44 @@
  * Displays all available services from the backend service catalog
  * Fetches main categories, service categories, and sub-services dynamically
  * Features a rotating background image slider for the hero section
- * Now includes a distance filter that is passed to the search page.
+ * Now fetches and displays technicians inline based on selected distance.
  */
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wrench, ChevronDown, ChevronUp, Clock, DollarSign } from 'lucide-react';
+import {
+  Wrench,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  DollarSign,
+  MapPin,
+  Star,
+  X,
+  Loader2,
+} from 'lucide-react';
 import api from '../services/api';
 
 const Services = () => {
   const navigate = useNavigate();
   
-  // State for storing the complete service catalog data from backend
+  // ============================================================
+  // STATE
+  // ============================================================
   const [catalog, setCatalog] = useState([]);
-  
-  // Loading state - shows spinner while fetching data
   const [loading, setLoading] = useState(true);
-  
-  // Error state - displays error message if API call fails
   const [error, setError] = useState('');
-  
-  // State for tracking which service categories are expanded/collapsed
   const [expandedCategories, setExpandedCategories] = useState({});
-  
-  // State for storing fetched sub-services data
   const [subServicesData, setSubServicesData] = useState({});
-  
-  // State for background image slider
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-
-  // 🆕 State for maximum distance (empty = not selected)
   const [maxDistance, setMaxDistance] = useState('');
+
+  // 🆕 State for inline technician results
+  const [technicians, setTechnicians] = useState([]);
+  const [techniciansLoading, setTechniciansLoading] = useState(false);
+  const [techniciansError, setTechniciansError] = useState('');
+  const [selectedServiceKey, setSelectedServiceKey] = useState(''); // key to identify which sub-service we searched for
+  const [showTechnicians, setShowTechnicians] = useState(false);
 
   // Background images for the hero section
   const backgroundImages = [
@@ -64,16 +71,17 @@ const Services = () => {
     const interval = setInterval(() => {
       setCurrentImageIndex((prevIndex) => (prevIndex + 1) % backgroundImages.length);
     }, 5000);
-    
     return () => clearInterval(interval);
   }, []);
 
-  /**
-   * Fetch service catalog when component mounts
-   */
+  // Fetch service catalog when component mounts
   useEffect(() => {
     fetchServiceCatalog();
   }, []);
+
+  // ============================================================
+  // API CALLS
+  // ============================================================
 
   /**
    * Fetch the main service catalog from backend
@@ -95,13 +103,11 @@ const Services = () => {
    */
   const fetchSubServices = async (mainCategory, serviceCategory) => {
     const key = `${mainCategory}-${serviceCategory}`;
-    
     if (subServicesData[key]) return;
     
     try {
       const encodedMain = encodeURIComponent(mainCategory);
       const encodedService = encodeURIComponent(serviceCategory);
-      
       const response = await api.get(`/service-catalog/${encodedMain}/${encodedService}/sub-services/detailed`);
       setSubServicesData(prev => ({
         ...prev,
@@ -113,15 +119,57 @@ const Services = () => {
   };
 
   /**
+   * 🆕 Fetch technicians for a specific sub-service using the search endpoint
+   */
+  const fetchTechniciansForSubService = async (mainCategory, serviceCategory, subService) => {
+    if (!maxDistance) {
+      setTechniciansError('Please select a distance first.');
+      return;
+    }
+
+    setTechniciansLoading(true);
+    setTechniciansError('');
+    setShowTechnicians(true);
+    setSelectedServiceKey(`${mainCategory}-${serviceCategory}-${subService}`);
+
+    try {
+      const params = new URLSearchParams({
+        mainCategory,
+        serviceCategory,
+        subService,
+        radius: maxDistance,
+        // You can also add lat/lng if you have the user's location
+      });
+
+      // Use the existing search endpoint
+      const response = await api.get(`/search/technicians?${params.toString()}`);
+
+      if (response.data.success) {
+        setTechnicians(response.data.data || []);
+        if (response.data.data.length === 0) {
+          setTechniciansError('No technicians found within this distance.');
+        }
+      } else {
+        setTechniciansError(response.data.message || 'Failed to fetch technicians.');
+        setTechnicians([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch technicians:', err);
+      setTechniciansError('Could not load technicians. Please try again.');
+      setTechnicians([]);
+    } finally {
+      setTechniciansLoading(false);
+    }
+  };
+
+  /**
    * Toggle category expansion/collapse
    */
   const toggleCategory = async (mainCategory, categoryName) => {
     const key = `${mainCategory}-${categoryName}`;
-    
     if (!expandedCategories[key]) {
       await fetchSubServices(mainCategory, categoryName);
     }
-    
     setExpandedCategories(prev => ({
       ...prev,
       [key]: !prev[key]
@@ -129,16 +177,134 @@ const Services = () => {
   };
 
   /**
-   * Navigate to technicians page with search parameters
-   * 🆕 Now includes the selected distance as 'radius'
+   * Handle "View Technicians" click – fetch inline instead of navigating
    */
   const handleViewTechnicians = (mainCategory, serviceCategory, subService) => {
-    let url = `/technicians?mainCategory=${encodeURIComponent(mainCategory)}&serviceCategory=${encodeURIComponent(serviceCategory)}&subService=${encodeURIComponent(subService)}`;
-    if (maxDistance) {
-      url += `&radius=${maxDistance}`;
-    }
-    navigate(url);
+    fetchTechniciansForSubService(mainCategory, serviceCategory, subService);
   };
+
+  /**
+   * Clear the technician results
+   */
+  const clearTechnicians = () => {
+    setTechnicians([]);
+    setShowTechnicians(false);
+    setTechniciansError('');
+    setSelectedServiceKey('');
+  };
+
+  // ============================================================
+  // RENDER HELPERS
+  // ============================================================
+
+  const renderTechnicians = () => {
+    if (!showTechnicians) return null;
+
+    return (
+      <div className="mt-8 border-t border-gray-200 pt-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-gray-800">
+            Technicians for {selectedServiceKey.split('-').slice(1).join(' - ')}
+            <span className="text-sm font-normal text-gray-500 ml-2">
+              (within {maxDistance} km)
+            </span>
+          </h3>
+          <button
+            onClick={clearTechnicians}
+            className="text-gray-400 hover:text-red-600 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {techniciansLoading ? (
+          <div className="flex justify-center items-center py-8">
+            <Loader2 className="w-6 h-6 text-gray-600 animate-spin" />
+            <span className="ml-2 text-gray-600">Loading technicians...</span>
+          </div>
+        ) : techniciansError ? (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg">
+            {techniciansError}
+          </div>
+        ) : technicians.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No technicians found for this service within the selected distance.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {technicians.map((tech) => (
+              <div key={tech._id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    {tech.user?.profileImage ? (
+                      <img
+                        src={tech.user.profileImage}
+                        alt={tech.user.firstName}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span className="text-lg font-semibold text-gray-500">
+                          {tech.user?.firstName?.[0]}{tech.user?.lastName?.[0]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-semibold text-gray-800">
+                        {tech.user?.firstName} {tech.user?.lastName}
+                      </h4>
+                      {tech.verificationStatus === 'verified' && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                          ✓ Verified
+                        </span>
+                      )}
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                        {tech.distance !== undefined && tech.distance !== null
+                          ? `${tech.distance} km away`
+                          : 'Distance unknown'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {tech.profileHeadline || tech.businessName || 'Professional Technician'}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                        {tech.rating?.average?.toFixed(1) || 'New'}
+                        ({tech.rating?.count || 0})
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <DollarSign className="w-4 h-4" />
+                        KES {tech.pricing?.hourlyRate || 0}/hr
+                      </span>
+                      {tech.yearsOfExperience > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          {tech.yearsOfExperience}+ yrs
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/technician/${tech._id}`)}
+                    className="bg-gray-800 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-green-600 transition-colors"
+                  >
+                    View Profile
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   if (loading) {
     return (
@@ -165,9 +331,8 @@ const Services = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Section with Rotating Background Images - Full Width */}
+      {/* Hero Section with Rotating Background Images */}
       <div className="relative h-[400px] w-full overflow-hidden">
-        {/* Rotating Background Images */}
         {backgroundImages.map((image, index) => (
           <div
             key={index}
@@ -183,7 +348,6 @@ const Services = () => {
           />
         ))}
         
-        {/* Hero Content Overlay */}
         <div className="relative z-10 h-full flex items-center justify-center text-center px-4">
           <div className="max-w-4xl mx-auto">
             <h1 className="text-3xl md:text-4xl font-bold text-green-500 mb-3 animate-fadeIn">
@@ -196,7 +360,7 @@ const Services = () => {
               From IT solutions to home services, find qualified professionals ready to help with your needs
             </p>
             
-            {/* 🆕 Distance Filter Dropdown */}
+            {/* Distance Filter Dropdown */}
             <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 animate-fadeInUp">
               <label htmlFor="distanceSelect" className="text-white text-sm font-medium">
                 Max distance:
@@ -240,7 +404,7 @@ const Services = () => {
         </div>
       </div>
 
-      {/* Services by Category - Main content area */}
+      {/* Services by Category */}
       <div className="max-w-6xl mx-auto py-12 px-4">
         <div className="space-y-8">
           {catalog.map((category) => (
@@ -319,7 +483,7 @@ const Services = () => {
                                 )}
                               </div>
                               
-                              {/* 🆕 View Technicians Button – disabled if no distance selected */}
+                              {/* View Technicians Button – fetches inline */}
                               <button
                                 onClick={() => handleViewTechnicians(category.mainCategory, serviceCat.name, sub.name)}
                                 disabled={!maxDistance}
@@ -342,6 +506,9 @@ const Services = () => {
             </div>
           ))}
         </div>
+
+        {/* 🆕 Inline Technician Results Section */}
+        {renderTechnicians()}
 
         {/* Call to Action Section */}
         <div className="mt-12 text-center">

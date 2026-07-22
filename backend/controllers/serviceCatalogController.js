@@ -25,6 +25,7 @@
 
 const ServiceCatalog = require('../models/ServiceCatalog');
 const Technician = require('../models/Technician');
+const searchController = require('./searchController'); // adjust path if needed
 const mongoose = require('mongoose');
 
 // ===========================================
@@ -299,6 +300,68 @@ exports.getServiceCategoriesByMain = async (req, res) => {
       message: 'Server error while fetching service categories',
       error: error.message,
       timestamp: new Date().toISOString()
+    });
+  }
+};
+
+
+/**
+ * @desc    Get technicians for a specific service category with distance filtering
+ * @route   GET /api/service-catalog/:mainCategory/:serviceCategory/technicians
+ * @access  Public
+ * 
+ * This endpoint reuses the search controller's logic to fetch technicians
+ * who offer the given service, within the specified distance.
+ */
+exports.getTechniciansForService = async (req, res) => {
+  try {
+    const { mainCategory, serviceCategory } = req.params;
+    const { radius, lat, lng, page, limit, minRating, minHourlyRate, maxHourlyRate } = req.query;
+
+    // Validate required parameters
+    if (!mainCategory || !serviceCategory) {
+      return res.status(400).json({
+        success: false,
+        message: 'mainCategory and serviceCategory are required'
+      });
+    }
+
+    // Build the query object as the search controller expects
+    const searchQuery = {
+      mainCategory,
+      serviceCategory,
+      radius: radius || 50, // default to 50km if not provided
+      page: page || 1,
+      limit: limit || 20,
+      minRating: minRating || '',
+      minHourlyRate: minHourlyRate || '',
+      maxHourlyRate: maxHourlyRate || ''
+    };
+
+    // Add location if provided
+    if (lat && lng) {
+      searchQuery.lat = lat;
+      searchQuery.lng = lng;
+    }
+
+    // We need to call the search controller's function
+    // But we must pass the request and response objects.
+    // We'll create a mock request object with the query parameters.
+    const mockReq = {
+      query: searchQuery
+    };
+
+    // We'll call the search controller function and let it handle the response.
+    // We need to import the search controller at the top:
+    // const searchController = require('./searchController');
+    await searchController.searchTechnicians(mockReq, res);
+
+  } catch (error) {
+    console.error('[ServiceCatalog] Error in getTechniciansForService:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching technicians for service',
+      error: error.message
     });
   }
 };

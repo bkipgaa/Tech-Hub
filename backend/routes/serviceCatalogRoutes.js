@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+
 const {
   getMainCategories,
   getServiceCategoriesByMain,
@@ -15,6 +16,7 @@ const {
 // =============================================
 // 1️⃣ PUBLIC ROUTES (No parameters)
 // =============================================
+router.get('/:mainCategory/:serviceCategory/technicians', serviceCatalogController.getTechniciansForService);
 router.get('/main-categories', getMainCategories);
 router.get('/search', searchServices);
 router.get('/popular', getPopularServices);
