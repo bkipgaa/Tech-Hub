@@ -131,7 +131,7 @@ const Services = () => {
   const fetchServiceCatalog = async () => {
     try {
       const response = await api.get('/service-catalog/categories-with-counts');
-      setCatalog(response.data.data);
+      setCatalog(response.data);
       setLoading(false);
     } catch (err) {
       console.error('Failed to load services:', err);
@@ -150,7 +150,7 @@ const Services = () => {
       const response = await api.get(`/service-catalog/${encodedMain}/${encodedService}/sub-services/detailed`);
       setSubServicesData(prev => ({
         ...prev,
-        [key]: response.data.data
+        [key]: response.data
       }));
     } catch (error) {
       console.error('Failed to load sub-services:', error);
@@ -191,8 +191,8 @@ const Services = () => {
       const response = await api.get(`/search/technicians?${params.toString()}`);
 
       if (response.data.success) {
-        setTechnicians(response.data.data || []);
-        if (response.data.data.length === 0) {
+        setTechnicians(response.data || []);
+        if (response.data.length === 0) {
           setTechniciansError('No technicians found within this distance.');
         }
       } else {
