@@ -3,7 +3,7 @@
  * Displays all available services from the backend service catalog
  * Fetches main categories, service categories, and sub-services dynamically
  * Features a rotating background image slider for the hero section
- * Now fetches and displays technicians inline based on selected distance.
+ * Now fetches and displays technicians inline based on selected distance + user location.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -39,8 +39,13 @@ const Services = () => {
   const [technicians, setTechnicians] = useState([]);
   const [techniciansLoading, setTechniciansLoading] = useState(false);
   const [techniciansError, setTechniciansError] = useState('');
-  const [selectedServiceKey, setSelectedServiceKey] = useState(''); // key to identify which sub-service we searched for
+  const [selectedServiceKey, setSelectedServiceKey] = useState('');
   const [showTechnicians, setShowTechnicians] = useState(false);
+
+  // 🆕 Geolocation state
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('idle'); // idle | loading | success | error
+  const [locationMessage, setLocationMessage] = useState('');
 
   // Background images for the hero section
   const backgroundImages = [
@@ -79,13 +84,50 @@ const Services = () => {
     fetchServiceCatalog();
   }, []);
 
+  // 🆕 Request user location on mount
+  useEffect(() => {
+    requestUserLocation();
+  }, []);
+
+  // ============================================================
+  // GEOLOCATION
+  // ============================================================
+
+  const requestUserLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('error');
+      setLocationMessage('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setLocationStatus('loading');
+    setLocationMessage('Detecting your location...');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setLocationStatus('success');
+        setLocationMessage('Location detected.');
+      },
+      (err) => {
+        let msg = 'Unable to retrieve your location.';
+        if (err.code === 1) msg = 'Location access denied. Please enable location services to find nearby technicians.';
+        else if (err.code === 2) msg = 'Location information is unavailable.';
+        else if (err.code === 3) msg = 'Location request timed out.';
+        setLocationStatus('error');
+        setLocationMessage(msg);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
   // ============================================================
   // API CALLS
   // ============================================================
 
-  /**
-   * Fetch the main service catalog from backend
-   */
   const fetchServiceCatalog = async () => {
     try {
       const response = await api.get('/service-catalog/categories-with-counts');
@@ -98,9 +140,6 @@ const Services = () => {
     }
   };
 
-  /**
-   * Fetch detailed sub-services for a specific service category
-   */
   const fetchSubServices = async (mainCategory, serviceCategory) => {
     const key = `${mainCategory}-${serviceCategory}`;
     if (subServicesData[key]) return;
@@ -120,10 +159,17 @@ const Services = () => {
 
   /**
    * 🆕 Fetch technicians for a specific sub-service using the search endpoint
+   * NOW INCLUDES lat/lng for proper distance filtering
    */
   const fetchTechniciansForSubService = async (mainCategory, serviceCategory, subService) => {
     if (!maxDistance) {
       setTechniciansError('Please select a distance first.');
+      return;
+    }
+
+    if (!userLocation) {
+      setTechniciansError('Please allow location access to find technicians within your selected distance.');
+      requestUserLocation();
       return;
     }
 
@@ -138,10 +184,10 @@ const Services = () => {
         serviceCategory,
         subService,
         radius: maxDistance,
-        // You can also add lat/lng if you have the user's location
+        lat: userLocation.lat,
+        lng: userLocation.lng,
       });
 
-      // Use the existing search endpoint
       const response = await api.get(`/search/technicians?${params.toString()}`);
 
       if (response.data.success) {
@@ -162,9 +208,6 @@ const Services = () => {
     }
   };
 
-  /**
-   * Toggle category expansion/collapse
-   */
   const toggleCategory = async (mainCategory, categoryName) => {
     const key = `${mainCategory}-${categoryName}`;
     if (!expandedCategories[key]) {
@@ -176,16 +219,10 @@ const Services = () => {
     }));
   };
 
-  /**
-   * Handle "View Technicians" click – fetch inline instead of navigating
-   */
   const handleViewTechnicians = (mainCategory, serviceCategory, subService) => {
     fetchTechniciansForSubService(mainCategory, serviceCategory, subService);
   };
 
-  /**
-   * Clear the technician results
-   */
   const clearTechnicians = () => {
     setTechnicians([]);
     setShowTechnicians(false);
@@ -360,7 +397,7 @@ const Services = () => {
               From IT solutions to home services, find qualified professionals ready to help with your needs
             </p>
             
-            {/* Distance Filter Dropdown */}
+            {/* Distance Filter & Location Status */}
             <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 animate-fadeInUp">
               <label htmlFor="distanceSelect" className="text-white text-sm font-medium">
                 Max distance:
@@ -381,6 +418,32 @@ const Services = () => {
                 <option value="500">500 km</option>
                 <option value="1000">1000 km</option>
               </select>
+
+              {/* 🆕 Location Status Indicator */}
+              <div className="flex items-center gap-2 min-h-[24px]">
+                {locationStatus === 'loading' && (
+                  <span className="text-yellow-300 text-xs flex items-center gap-1 font-medium">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Detecting location...
+                  </span>
+                )}
+                {locationStatus === 'error' && (
+                  <button
+                    onClick={requestUserLocation}
+                    className="text-red-300 text-xs underline hover:text-red-200 font-medium flex items-center gap-1"
+                  >
+                    <MapPin className="w-3 h-3" />
+                    {locationMessage} (Retry)
+                  </button>
+                )}
+                {locationStatus === 'success' && (
+                  <span className="text-green-400 text-xs flex items-center gap-1 font-medium">
+                    <MapPin className="w-3 h-3" />
+                    Location active
+                  </span>
+                )}
+              </div>
+
               {!maxDistance && (
                 <span className="text-yellow-300 text-xs font-medium">
                   ⚠️ Please select a distance to view technicians
@@ -483,17 +546,21 @@ const Services = () => {
                                 )}
                               </div>
                               
-                              {/* View Technicians Button – fetches inline */}
+                              {/* 🆕 View Technicians Button – requires distance + location */}
                               <button
                                 onClick={() => handleViewTechnicians(category.mainCategory, serviceCat.name, sub.name)}
-                                disabled={!maxDistance}
+                                disabled={!maxDistance || !userLocation}
                                 className={`w-full mt-3 px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                                  maxDistance
+                                  maxDistance && userLocation
                                     ? 'bg-gray-800 text-white hover:bg-green-600'
                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                               >
-                                View Technicians {maxDistance && `within ${maxDistance} km`}
+                                {!maxDistance
+                                  ? 'Select Distance First'
+                                  : !userLocation
+                                  ? 'Enable Location Access'
+                                  : `View Technicians within ${maxDistance} km`}
                               </button>
                             </div>
                           ))}
@@ -507,7 +574,7 @@ const Services = () => {
           ))}
         </div>
 
-        {/* 🆕 Inline Technician Results Section */}
+        {/* Inline Technician Results Section */}
         {renderTechnicians()}
 
         {/* Call to Action Section */}
