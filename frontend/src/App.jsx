@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Services from './pages/Services';
 import Technicians from './pages/Technicians';
 import TechnicianProfile from './pages/TechnicianProfile';
+import TechnicianSearchResults from './pages/TechnicianSearchResults';
 import Search from './pages/Search';
 import BookService from './pages/BookService';
 import SignUp from './pages/SignUp';
@@ -51,6 +52,7 @@ function App() {
             <Route path="login" element={<Login />} />
             <Route path="become-technician" element={<BecomeTechnician />} />
             <Route path="create-technician-profile" element={<CreateTechnicianProfile />} />
+            <Route path="/technicians/search" element={<TechnicianSearchResults />} />
             
             {/* Protected Routes - Any authenticated user */}
             {/* ==================== ADMIN ROUTES (Separate Layout) ==================== */}

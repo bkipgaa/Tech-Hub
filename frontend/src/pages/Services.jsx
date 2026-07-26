@@ -1,9 +1,7 @@
 /**
  * Services Page Component
  * Displays all available services from the backend service catalog
- * Fetches main categories, service categories, and sub-services dynamically
- * Features a rotating background image slider for the hero section
- * Now fetches and displays technicians inline based on selected distance + user location.
+ * Navigates to TechnicianSearchResults page when "View Technicians" is clicked
  */
 
 import React, { useState, useEffect } from 'react';
@@ -15,8 +13,6 @@ import {
   Clock,
   DollarSign,
   MapPin,
-  Star,
-  X,
   Loader2,
 } from 'lucide-react';
 import api from '../services/api';
@@ -24,9 +20,6 @@ import api from '../services/api';
 const Services = () => {
   const navigate = useNavigate();
   
-  // ============================================================
-  // STATE
-  // ============================================================
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -35,19 +28,11 @@ const Services = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [maxDistance, setMaxDistance] = useState('');
 
-  // 🆕 State for inline technician results
-  const [technicians, setTechnicians] = useState([]);
-  const [techniciansLoading, setTechniciansLoading] = useState(false);
-  const [techniciansError, setTechniciansError] = useState('');
-  const [selectedServiceKey, setSelectedServiceKey] = useState('');
-  const [showTechnicians, setShowTechnicians] = useState(false);
-
-  // 🆕 Geolocation state
+  // Geolocation state
   const [userLocation, setUserLocation] = useState(null);
-  const [locationStatus, setLocationStatus] = useState('idle'); // idle | loading | success | error
+  const [locationStatus, setLocationStatus] = useState('idle');
   const [locationMessage, setLocationMessage] = useState('');
 
-  // Background images for the hero section
   const backgroundImages = [
     {
       url: "https://images.unsplash.com/photo-1581091226033-d5c48150dbaa?w=1920&h=500&fit=crop",
@@ -71,7 +56,6 @@ const Services = () => {
     }
   ];
 
-  // Rotate background images every 5 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentImageIndex((prevIndex) => (prevIndex + 1) % backgroundImages.length);
@@ -79,19 +63,13 @@ const Services = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch service catalog when component mounts
   useEffect(() => {
     fetchServiceCatalog();
   }, []);
 
-  // 🆕 Request user location on mount
   useEffect(() => {
     requestUserLocation();
   }, []);
-
-  // ============================================================
-  // GEOLOCATION
-  // ============================================================
 
   const requestUserLocation = () => {
     if (!navigator.geolocation) {
@@ -99,10 +77,7 @@ const Services = () => {
       setLocationMessage('Geolocation is not supported by your browser.');
       return;
     }
-
     setLocationStatus('loading');
-    setLocationMessage('Detecting your location...');
-
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setUserLocation({
@@ -110,12 +85,11 @@ const Services = () => {
           lng: position.coords.longitude,
         });
         setLocationStatus('success');
-        setLocationMessage('Location detected.');
       },
       (err) => {
         let msg = 'Unable to retrieve your location.';
-        if (err.code === 1) msg = 'Location access denied. Please enable location services to find nearby technicians.';
-        else if (err.code === 2) msg = 'Location information is unavailable.';
+        if (err.code === 1) msg = 'Location access denied.';
+        else if (err.code === 2) msg = 'Location unavailable.';
         else if (err.code === 3) msg = 'Location request timed out.';
         setLocationStatus('error');
         setLocationMessage(msg);
@@ -124,14 +98,11 @@ const Services = () => {
     );
   };
 
-  // ============================================================
-  // API CALLS
-  // ============================================================
-
   const fetchServiceCatalog = async () => {
     try {
       const response = await api.get('/service-catalog/categories-with-counts');
-      setCatalog(response.data);
+      const payload = response.data ?? response;
+      setCatalog(payload.data ?? payload ?? []);
       setLoading(false);
     } catch (err) {
       console.error('Failed to load services:', err);
@@ -143,68 +114,14 @@ const Services = () => {
   const fetchSubServices = async (mainCategory, serviceCategory) => {
     const key = `${mainCategory}-${serviceCategory}`;
     if (subServicesData[key]) return;
-    
     try {
       const encodedMain = encodeURIComponent(mainCategory);
       const encodedService = encodeURIComponent(serviceCategory);
       const response = await api.get(`/service-catalog/${encodedMain}/${encodedService}/sub-services/detailed`);
-      setSubServicesData(prev => ({
-        ...prev,
-        [key]: response.data
-      }));
+      const payload = response.data ?? response;
+      setSubServicesData(prev => ({ ...prev, [key]: payload.data ?? payload }));
     } catch (error) {
       console.error('Failed to load sub-services:', error);
-    }
-  };
-
-  /**
-   * 🆕 Fetch technicians for a specific sub-service using the search endpoint
-   * NOW INCLUDES lat/lng for proper distance filtering
-   */
-  const fetchTechniciansForSubService = async (mainCategory, serviceCategory, subService) => {
-    if (!maxDistance) {
-      setTechniciansError('Please select a distance first.');
-      return;
-    }
-
-    if (!userLocation) {
-      setTechniciansError('Please allow location access to find technicians within your selected distance.');
-      requestUserLocation();
-      return;
-    }
-
-    setTechniciansLoading(true);
-    setTechniciansError('');
-    setShowTechnicians(true);
-    setSelectedServiceKey(`${mainCategory}-${serviceCategory}-${subService}`);
-
-    try {
-      const params = new URLSearchParams({
-        mainCategory,
-        serviceCategory,
-        subService,
-        radius: maxDistance,
-        lat: userLocation.lat,
-        lng: userLocation.lng,
-      });
-
-      const response = await api.get(`/search/technicians?${params.toString()}`);
-
-      if (response.data.success) {
-        setTechnicians(response.data || []);
-        if (response.data.length === 0) {
-          setTechniciansError('No technicians found within this distance.');
-        }
-      } else {
-        setTechniciansError(response.data.message || 'Failed to fetch technicians.');
-        setTechnicians([]);
-      }
-    } catch (err) {
-      console.error('Failed to fetch technicians:', err);
-      setTechniciansError('Could not load technicians. Please try again.');
-      setTechnicians([]);
-    } finally {
-      setTechniciansLoading(false);
     }
   };
 
@@ -213,135 +130,34 @@ const Services = () => {
     if (!expandedCategories[key]) {
       await fetchSubServices(mainCategory, categoryName);
     }
-    setExpandedCategories(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+    setExpandedCategories(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  /**
+   * Navigate to dedicated search results page
+   */
   const handleViewTechnicians = (mainCategory, serviceCategory, subService) => {
-    fetchTechniciansForSubService(mainCategory, serviceCategory, subService);
+    if (!maxDistance) {
+      alert('Please select a maximum distance first.');
+      return;
+    }
+    if (!userLocation) {
+      alert('Please allow location access to find nearby technicians.');
+      requestUserLocation();
+      return;
+    }
+
+    const params = new URLSearchParams({
+      mainCategory,
+      serviceCategory,
+      subService,
+      radius: maxDistance,
+      lat: userLocation.lat,
+      lng: userLocation.lng,
+    });
+
+    navigate(`/technicians/search?${params.toString()}`);
   };
-
-  const clearTechnicians = () => {
-    setTechnicians([]);
-    setShowTechnicians(false);
-    setTechniciansError('');
-    setSelectedServiceKey('');
-  };
-
-  // ============================================================
-  // RENDER HELPERS
-  // ============================================================
-
-  const renderTechnicians = () => {
-    if (!showTechnicians) return null;
-
-    return (
-      <div className="mt-8 border-t border-gray-200 pt-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-gray-800">
-            Technicians for {selectedServiceKey.split('-').slice(1).join(' - ')}
-            <span className="text-sm font-normal text-gray-500 ml-2">
-              (within {maxDistance} km)
-            </span>
-          </h3>
-          <button
-            onClick={clearTechnicians}
-            className="text-gray-400 hover:text-red-600 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {techniciansLoading ? (
-          <div className="flex justify-center items-center py-8">
-            <Loader2 className="w-6 h-6 text-gray-600 animate-spin" />
-            <span className="ml-2 text-gray-600">Loading technicians...</span>
-          </div>
-        ) : techniciansError ? (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg">
-            {techniciansError}
-          </div>
-        ) : technicians.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No technicians found for this service within the selected distance.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {technicians.map((tech) => (
-              <div key={tech._id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0">
-                    {tech.user?.profileImage ? (
-                      <img
-                        src={tech.user.profileImage}
-                        alt={tech.user.firstName}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-lg font-semibold text-gray-500">
-                          {tech.user?.firstName?.[0]}{tech.user?.lastName?.[0]}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-semibold text-gray-800">
-                        {tech.user?.firstName} {tech.user?.lastName}
-                      </h4>
-                      {tech.verificationStatus === 'verified' && (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                          ✓ Verified
-                        </span>
-                      )}
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                        {tech.distance !== undefined && tech.distance !== null
-                          ? `${tech.distance} km away`
-                          : 'Distance unknown'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {tech.profileHeadline || tech.businessName || 'Professional Technician'}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                        {tech.rating?.average?.toFixed(1) || 'New'}
-                        ({tech.rating?.count || 0})
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="w-4 h-4" />
-                        KES {tech.pricing?.hourlyRate || 0}/hr
-                      </span>
-                      {tech.yearsOfExperience > 0 && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          {tech.yearsOfExperience}+ yrs
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => navigate(`/technician/${tech._id}`)}
-                    className="bg-gray-800 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-green-600 transition-colors"
-                  >
-                    View Profile
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   if (loading) {
     return (
@@ -368,7 +184,7 @@ const Services = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Section with Rotating Background Images */}
+      {/* Hero Section */}
       <div className="relative h-[400px] w-full overflow-hidden">
         {backgroundImages.map((image, index) => (
           <div
@@ -393,9 +209,6 @@ const Services = () => {
             <p className="text-base md:text-lg text-gray-200 mb-4 animate-fadeInUp">
               Browse through our comprehensive range of professional services offered by verified technicians
             </p>
-            <p className="text-sm md:text-base text-gray-300 max-w-3xl mx-auto animate-fadeInUp">
-              From IT solutions to home services, find qualified professionals ready to help with your needs
-            </p>
             
             {/* Distance Filter & Location Status */}
             <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 animate-fadeInUp">
@@ -419,7 +232,6 @@ const Services = () => {
                 <option value="1000">1000 km</option>
               </select>
 
-              {/* 🆕 Location Status Indicator */}
               <div className="flex items-center gap-2 min-h-[24px]">
                 {locationStatus === 'loading' && (
                   <span className="text-yellow-300 text-xs flex items-center gap-1 font-medium">
@@ -446,12 +258,11 @@ const Services = () => {
 
               {!maxDistance && (
                 <span className="text-yellow-300 text-xs font-medium">
-                  ⚠️ Please select a distance to view technicians
+                  ⚠️ Please select a distance
                 </span>
               )}
             </div>
 
-            {/* Image Indicator Dots */}
             <div className="flex justify-center gap-2 mt-6">
               {backgroundImages.map((_, index) => (
                 <button
@@ -473,55 +284,49 @@ const Services = () => {
           {catalog.map((category) => (
             <div key={category.mainCategory} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               
-              {/* Main Category Header */}
               <div className="bg-gray-100 px-6 py-4 transition-colors duration-300 hover:bg-green-50 group">
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2 group-hover:text-green-600 transition-colors duration-300">
                   <Wrench className="w-6 h-6" />
                   {category.mainCategory}
                 </h2>
                 <p className="text-gray-600 text-sm mt-1 group-hover:text-gray-700 transition-colors duration-300 font-medium">
-                  {category.serviceCategories.length} service categories available
+                  {category.serviceCategories?.length ?? 0} service categories available
                 </p>
               </div>
 
-              {/* Service Categories List */}
               <div className="divide-y divide-gray-200">
-                {category.serviceCategories.map((serviceCat) => (
+                {category.serviceCategories?.map((serviceCat) => (
                   <div key={serviceCat.name} className="bg-white">
                     
-                    {/* Service Category Header */}
                     <button
                       onClick={() => toggleCategory(category.mainCategory, serviceCat.name)}
                       className="w-full px-6 py-4 flex justify-between items-center hover:bg-gray-50 transition-colors text-left"
                     >
-                      <div>
-                        <h3 className="text-lg font-bold text-gray-800">
-                          {serviceCat.name}
-                        </h3>
+                      <div className="pr-4">
+                        <h3 className="text-lg font-bold text-gray-800">{serviceCat.name}</h3>
                         <p className="text-sm text-gray-600 font-medium mt-1">{serviceCat.description}</p>
                       </div>
                       
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-green-700 bg-green-100 px-3 py-1 rounded-full font-semibold">
-                          {serviceCat.subServiceCount} services
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-xs text-green-700 bg-green-100 px-3 py-1 rounded-full font-semibold whitespace-nowrap">
+                          {serviceCat.subServiceCount ?? 0} services
                         </span>
                         {expandedCategories[`${category.mainCategory}-${serviceCat.name}`] ? (
-                          <ChevronUp className="w-5 h-5 text-gray-400" />
+                          <ChevronUp className="w-5 h-5 text-gray-400 flex-shrink-0" />
                         ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                          <ChevronDown className="w-5 h-5 text-gray-400 flex-shrink-0" />
                         )}
                       </div>
                     </button>
 
-                    {/* Expanded Sub-services Section with View Technicians Button */}
                     {expandedCategories[`${category.mainCategory}-${serviceCat.name}`] && 
                      subServicesData[`${category.mainCategory}-${serviceCat.name}`] && (
                       <div className="px-6 pb-4 bg-gray-50">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-                          {subServicesData[`${category.mainCategory}-${serviceCat.name}`].subServices.map((sub, idx) => (
-                            <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                          {subServicesData[`${category.mainCategory}-${serviceCat.name}`]?.subServices?.map((sub, idx) => (
+                            <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow flex flex-col">
                               <h4 className="font-bold text-gray-800">{sub.name}</h4>
-                              <p className="text-sm text-gray-600 font-medium mt-1">{sub.description}</p>
+                              <p className="text-sm text-gray-600 font-medium mt-1 flex-grow">{sub.description}</p>
                               
                               <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-500 font-medium">
                                 {sub.typicalDuration && (
@@ -530,14 +335,12 @@ const Services = () => {
                                     {sub.typicalDuration.value} {sub.typicalDuration.unit}
                                   </span>
                                 )}
-                                
                                 {sub.suggestedPriceRange && (
                                   <span className="flex items-center gap-1">
                                     <DollarSign className="w-3 h-3" /> 
-                                    KES {sub.suggestedPriceRange.min.toLocaleString()} - {sub.suggestedPriceRange.max.toLocaleString()}
+                                    KES {sub.suggestedPriceRange.min?.toLocaleString?.() ?? sub.suggestedPriceRange.min} - {sub.suggestedPriceRange.max?.toLocaleString?.() ?? sub.suggestedPriceRange.max}
                                   </span>
                                 )}
-                                
                                 {sub.expertiseLevel && (
                                   <span className="flex items-center gap-1">
                                     <Wrench className="w-3 h-3" /> 
@@ -546,7 +349,6 @@ const Services = () => {
                                 )}
                               </div>
                               
-                              {/* 🆕 View Technicians Button – requires distance + location */}
                               <button
                                 onClick={() => handleViewTechnicians(category.mainCategory, serviceCat.name, sub.name)}
                                 disabled={!maxDistance || !userLocation}
@@ -574,10 +376,6 @@ const Services = () => {
           ))}
         </div>
 
-        {/* Inline Technician Results Section */}
-        {renderTechnicians()}
-
-        {/* Call to Action Section */}
         <div className="mt-12 text-center">
           <p className="text-gray-600 mb-4">Need a specific service not listed?</p>
           <button className="bg-gray-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-600 transition-colors">
@@ -586,28 +384,17 @@ const Services = () => {
         </div>
       </div>
 
-      {/* Add animation keyframes */}
       <style jsx>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
         }
         @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fadeIn {
-          animation: fadeIn 0.8s ease-out;
-        }
-        .animate-fadeInUp {
-          animation: fadeInUp 0.8s ease-out;
-        }
+        .animate-fadeIn { animation: fadeIn 0.8s ease-out; }
+        .animate-fadeInUp { animation: fadeInUp 0.8s ease-out; }
       `}</style>
     </div>
   );
