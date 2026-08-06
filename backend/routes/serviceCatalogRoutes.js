@@ -10,13 +10,14 @@ const {
   getPopularServices,
   getCategoriesWithCounts,
   validateServices,
-  getDetailedSubServices
+  getDetailedSubServices,
+  getTechniciansForService  // ✅ Add this missing import
 } = require('../controllers/serviceCatalogController');
 
 // =============================================
 // 1️⃣ PUBLIC ROUTES (No parameters)
 // =============================================
-router.get('/:mainCategory/:serviceCategory/technicians', serviceCatalogController.getTechniciansForService);
+router.get('/:mainCategory/:serviceCategory/technicians', getTechniciansForService);
 router.get('/main-categories', getMainCategories);
 router.get('/search', searchServices);
 router.get('/popular', getPopularServices);
