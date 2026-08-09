@@ -6,54 +6,24 @@ const ServiceCatalogSchema = new Schema({
     type: String,
     required: true,
     enum: [
-      'IT & Networking',
-      'Electrical Services',
-      'Mechanical Services',
-      'Plumbing',
-      'Programming & AI',
-      'Hairdressing & Beauty',
-      'Carpentry & Furniture',
-      'Laundry & Dry Cleaning',
-      'Cleaning Services',
-      'Painting & Decorating',
-      'Welding & Fabrication',
-      'Automotive Repair',
-      'Tutoring & Training',
-      'Photography & Videography',
-      'Event Planning',
-      'Construction & Renovation',
-      'HVAC Services',
-      'Appliance Repair',
-      'Moving & Logistics',
-      'Gardening & Landscaping'
+      'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
+      'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
+      'Laundry & Dry Cleaning', 'Cleaning Services', 'Painting & Decorating',
+      'Welding & Fabrication', 'Automotive Repair', 'Tutoring & Training',
+      'Photography & Videography', 'Event Planning', 'Construction & Renovation',
+      'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping'
     ]
   },
-  
   serviceCategories: [{
-    name: {
-      type: String,
-      required: true,
-      trim: true
-    },
+    name: { type: String, required: true, trim: true },
     description: String,
     icon: String,
     image: String,
-    displayOrder: {
-      type: Number,
-      default: 0
-    },
-    isActive: {
-      type: Boolean,
-      default: true
-    },
+    displayOrder: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true },
     tags: [String],
-    
     subServices: [{
-      name: {
-        type: String,
-        required: true,
-        trim: true
-      },
+      name: { type: String, required: true, trim: true },
       description: String,
       suggestedPriceRange: {
         min: { type: Number, default: 0 },
@@ -62,20 +32,13 @@ const ServiceCatalogSchema = new Schema({
       },
       typicalDuration: {
         value: { type: Number, default: 1 },
-        unit: { 
-          type: String, 
-          enum: ['minutes', 'hours', 'days'], 
-          default: 'hours' 
-        }
+        unit: { type: String, enum: ['minutes', 'hours', 'days'], default: 'hours' }
       },
       commonRequirements: [String],
       requiredSkills: [String],
       commonQuestions: [{
         question: String,
-        type: { 
-          type: String, 
-          enum: ['text', 'number', 'boolean', 'multiple_choice'] 
-        },
+        type: { type: String, enum: ['text', 'number', 'boolean', 'multiple_choice'] },
         options: [String],
         required: { type: Boolean, default: false }
       }],
@@ -92,29 +55,39 @@ const ServiceCatalogSchema = new Schema({
       },
       isActive: { type: Boolean, default: true },
       displayOrder: { type: Number, default: 0 },
-      
-      images: [{
-        url: String,
-        caption: String,
-        isPrimary: { type: Boolean, default: false }
-      }]
+      images: [{ url: String, caption: String, isPrimary: { type: Boolean, default: false } }]
     }],
-    
     metadata: {
       createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
       lastUpdatedBy: { type: Schema.Types.ObjectId, ref: 'User' }
     }
   }],
-  
   version: { type: Number, default: 1 },
   isActive: { type: Boolean, default: true }
-}, {
-  timestamps: true
+}, { timestamps: true });
+
+// ===========================================
+// INDEXES — these make queries fast
+// ===========================================
+
+// For looking up a main category quickly
+ServiceCatalogSchema.index({ mainCategory: 1, isActive: 1 });
+
+// For searching service category names
+ServiceCatalogSchema.index({ 'serviceCategories.name': 1 });
+
+// For searching sub-service names
+ServiceCatalogSchema.index({ 'serviceCategories.subServices.name': 1 });
+
+// Text search across categories and sub-services
+ServiceCatalogSchema.index({
+  mainCategory: 'text',
+  'serviceCategories.name': 'text',
+  'serviceCategories.subServices.name': 'text'
 });
 
-// Indexes
-ServiceCatalogSchema.index({ mainCategory: 1 });
-ServiceCatalogSchema.index({ 'serviceCategories.name': 1 });
-ServiceCatalogSchema.index({ 'serviceCategories.subServices.name': 1 });
+// For sorting popular services quickly
+ServiceCatalogSchema.index({ 'serviceCategories.subServices.popularity.bookingCount': -1 });
+ServiceCatalogSchema.index({ 'serviceCategories.subServices.popularity.searchCount': -1 });
 
 module.exports = mongoose.model('ServiceCatalog', ServiceCatalogSchema);
