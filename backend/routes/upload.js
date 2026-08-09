@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { uploadPortfolio, uploadProfile } = require('../config/cloudinary');
-const auth = require('../middleware/auth'); // your auth middleware
+const {auth} = require('../middleware/auth'); // your auth middleware
 
 // Upload portfolio image/video
 router.post('/portfolio', auth, uploadPortfolio.single('media'), (req, res) => {
