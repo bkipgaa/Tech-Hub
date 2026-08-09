@@ -23,10 +23,10 @@ const searchRoutes = require('./routes/searchRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const technicianRoutes = require('./routes/technicianRoutes');
-
+const uploads = require('./routes/upload');
 // Job and Application routes
 const jobRoutes = require('./routes/jobRoutes');
-const jobApplicationRoutes = require('./routes/jobApplicationRoutes');
+const jobA = require('./routes/jobApplicationRoutes');
 
 dotenv.config();
 
@@ -136,6 +136,7 @@ app.use('/api/technician-public', technicianRoutes);
 
 // Search routes - find technicians, jobs, services
 app.use('/api/search', searchRoutes);
+app.use('/api/upload', uploads);
 
 // ===========================================
 // JOB & APPLICATION ROUTES

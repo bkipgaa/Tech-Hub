@@ -188,6 +188,7 @@ const TechnicianSchema = new Schema({
       required: true
     },
     mediaUrl: { type: String, required: true },
+    publicId: { type: String },        // ← ADD THIS (Cloudinary public_id)
     thumbnailUrl: String,
     clientName: String,
     completionDate: Date,
