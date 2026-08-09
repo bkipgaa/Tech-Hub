@@ -260,7 +260,7 @@ export const AuthProvider = ({ children }) => {
    */
   const updateUserProfile = async (userData) => {
     try {
-      const response = await api.put('/users/profile', userData);
+      const response = await api.put('/auth/profile', userData);
       setUser(response.data.user);
       return { success: true, user: response.data.user };
     } catch (error) {
