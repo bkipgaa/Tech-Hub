@@ -54,72 +54,52 @@ const SearchPage = () => {
    * Fetch complete catalog data from service-catalog API
    * This includes all three levels: mainCategory -> serviceCategories -> subServices
    */
+    // ===== LOAD CATALOG FROM BACKEND =====
+  useEffect(() => {
+    // Check sessionStorage first (instant load on revisit)
+    const cached = sessionStorage.getItem('catalogData');
+    if (cached) {
+      setCatalogData(JSON.parse(cached));
+      setCatalogLoading(false);
+      return;
+    }
+    fetchCatalogData();
+  }, []);
+
   const fetchCatalogData = async () => {
     setCatalogLoading(true);
     try {
-      // Step 1: Get main categories from service-catalog API
-      const mainCategoriesResponse = await api.get('/service-catalog/main-categories');
+      // ONE request gets everything: mainCategory → serviceCategories → subServices
+      const response = await api.get('/search/categories/full');
       
-      if (mainCategoriesResponse.data.success) {
-        const mainCategories = mainCategoriesResponse.data.data.map(cat => cat.name);
-        
-        // Step 2: For each main category, fetch its service categories and sub-services
+      if (response.data.success) {
+        const categories = response.data.categories || [];
+        const mainCategories = [];
         const serviceCategoriesMap = {};
         const subServicesMap = {};
-        
-        for (const mainCategory of mainCategories) {
-          try {
-            // Fetch service categories for this main category
-            const serviceResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCategory)}/service-categories`);
-            
-            if (serviceResponse.data.success) {
-              const services = serviceResponse.data.data;
-              serviceCategoriesMap[mainCategory] = services.map(s => s.name);
-              
-              // Fetch sub-services for each service category
-              for (const service of services) {
-                try {
-                  const subResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCategory)}/${encodeURIComponent(service.name)}/sub-services`);
-                  
-                  if (subResponse.data.success) {
-                    const subs = subResponse.data.data.subServices || [];
-                    subServicesMap[service.name] = subs.map(s => s.name);
-                  }
-                } catch (subError) {
-                  console.error(`Failed to fetch sub-services for ${service.name}:`, subError);
-                  subServicesMap[service.name] = [];
-                }
-              }
-            }
-          } catch (serviceError) {
-            console.error(`Failed to fetch service categories for ${mainCategory}:`, serviceError);
-            serviceCategoriesMap[mainCategory] = [];
-          }
-        }
-        
-        setCatalogData({
-          mainCategories,
-          serviceCategoriesMap,
-          subServicesMap
+
+        categories.forEach(cat => {
+          mainCategories.push(cat.mainCategory);
+          serviceCategoriesMap[cat.mainCategory] = (cat.serviceCategories || []).map(s => s.name);
+          
+          (cat.serviceCategories || []).forEach(sc => {
+            subServicesMap[sc.name] = sc.subServices || [];
+          });
         });
-        
-        console.log('✅ Catalog loaded from service-catalog API:', {
-          mainCategories: mainCategories.length,
-          serviceCategories: Object.keys(serviceCategoriesMap).length,
-          subServices: Object.keys(subServicesMap).length
-        });
+
+        const payload = { mainCategories, serviceCategoriesMap, subServicesMap };
+        setCatalogData(payload);
+        sessionStorage.setItem('catalogData', JSON.stringify(payload));
       } else {
-        // If API returns success: false, use defaults
         useDefaultCatalog();
       }
     } catch (error) {
-      console.error('Failed to load catalog from backend:', error);
+      console.error('Failed to load catalog:', error);
       useDefaultCatalog();
     } finally {
       setCatalogLoading(false);
     }
   };
-
   /**
    * Use default catalog data when backend is unavailable
    */
@@ -589,9 +569,9 @@ const SearchPage = () => {
                                 {tech.user?.firstName} {tech.user?.lastName}
                               </h3>
                               {/* Main Category Badge - NEW */}
-                              {tech.category && (
+                              {tech.mainCategory && (
                                 <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                                  {tech.category}
+                                  {tech.mainCategory}
                                 </span>
                               )}
                               {/* Plan Badge */}
