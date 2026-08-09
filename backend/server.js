@@ -26,7 +26,7 @@ const technicianRoutes = require('./routes/technicianRoutes');
 const uploads = require('./routes/upload');
 // Job and Application routes
 const jobRoutes = require('./routes/jobRoutes');
-const jobA = require('./routes/jobApplicationRoutes');
+const jobApplicationRoutes = require('./routes/jobApplicationRoutes');
 
 dotenv.config();
 
