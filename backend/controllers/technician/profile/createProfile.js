@@ -78,6 +78,44 @@ exports.createProfile = async (req, res) => {
       });
     }
 
+
+    // ===========================================
+// COMPLETE CATALOG — single query, flat response
+// ===========================================
+exports.getCompleteCatalog = async (req, res) => {
+  try {
+    if (!dbConnected()) {
+      return res.status(503).json({ success: false, message: 'Database unavailable' });
+    }
+
+    // One lightweight query — only the fields the frontend needs
+    const catalogs = await ServiceCatalog.find({ isActive: true })
+      .select('mainCategory serviceCategories.name serviceCategories.isActive serviceCategories.subServices.name serviceCategories.subServices.isActive')
+      .lean();
+
+    // Reshape into the exact structure the frontend expects
+    const data = {};
+    catalogs.forEach(catalog => {
+      data[catalog.mainCategory] = (catalog.serviceCategories || [])
+        .filter(c => c.isActive !== false)
+        .map(c => ({
+          name: c.name,
+          subServices: (c.subServices || [])
+            .filter(s => s.isActive !== false)
+            .map(s => s.name)
+        }));
+    });
+
+    res.json({
+      success: true,
+      count: Object.keys(data).length,
+      data,
+      metadata: { lastUpdated: new Date().toISOString() }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
     // 5. Build technician data
     const technicianData = {
       userId: req.user.userId,

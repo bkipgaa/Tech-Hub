@@ -186,52 +186,35 @@ const CreateTechnicianProfile = () => {
   });
 
   // Fetch catalog data
+  // Fetch catalog data — ONE API CALL instead of 100+
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
         setCatalogLoading(true);
         
-        const mainResponse = await api.get('/service-catalog/main-categories');
+        const response = await api.get('/service-catalog/complete');
         
-        if (mainResponse.data.success) {
-          const mainCats = mainResponse.data.data.map(cat => cat.name);
+        if (response.data.success) {
+          const catalogData = response.data.data;
+          const mainCats = Object.keys(catalogData);
+          
           setMainCategories(mainCats);
           
           const servicesMap = {};
           const subsMap = {};
           
-          for (const mainCat of mainCats) {
-            try {
-              const serviceResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCat)}/service-categories`);
-              
-              if (serviceResponse.data.success) {
-                const services = serviceResponse.data.data;
-                servicesMap[mainCat] = services.map(s => s.name);
-                
-                for (const service of services) {
-                  try {
-                    const subResponse = await api.get(`/service-catalog/${encodeURIComponent(mainCat)}/${encodeURIComponent(service.name)}/sub-services`);
-                    
-                    if (subResponse.data.success) {
-                      const subs = subResponse.data.data.subServices || [];
-                      subsMap[service.name] = subs.map(s => s.name);
-                    }
-                  } catch (subError) {
-                    console.error(`Failed to fetch sub-services for ${service.name}:`, subError);
-                    subsMap[service.name] = [];
-                  }
-                }
-              }
-            } catch (serviceError) {
-              console.error(`Failed to fetch service categories for ${mainCat}:`, serviceError);
-              servicesMap[mainCat] = [];
-            }
-          }
+          mainCats.forEach(mainCat => {
+            const categories = catalogData[mainCat] || [];
+            servicesMap[mainCat] = categories.map(c => c.name);
+            categories.forEach(c => {
+              subsMap[c.name] = c.subServices || [];
+            });
+          });
           
           setServiceCategoriesMap(servicesMap);
           setSubServicesMap(subsMap);
           
-          console.log('✅ Catalog loaded:', {
+          console.log('✅ Catalog loaded in 1 request:', {
             mainCategories: mainCats.length,
             serviceCategories: Object.keys(servicesMap).length,
             subServices: Object.keys(subsMap).length
@@ -250,7 +233,6 @@ const CreateTechnicianProfile = () => {
     
     fetchCatalog();
   }, []);
-
   // Default categories (fallback)
   const useDefaultCategories = () => {
     const fallbackCategories = [
