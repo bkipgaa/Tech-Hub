@@ -2,7 +2,6 @@
  * ProfileTab Component
  * ====================
  * Manages technician profile information including:
- * - Profile photo (Cloudinary upload)
  * - Profile headline and bio
  * - Multiple main categories (array)
  * - Skills management
@@ -11,7 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, MapPin, Globe, Award, Languages, User, Briefcase, Navigation, Camera, Loader2 } from 'lucide-react';
+import { Plus, Trash2, MapPin, Globe, Award, Languages, User, Briefcase, Navigation } from 'lucide-react';
 import api from '../../../services/api';
 
 const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => {
@@ -28,10 +27,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState('');
   const [selectedCategoryToAdd, setSelectedCategoryToAdd] = useState('');
-
-  // State for profile image upload
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [imageError, setImageError] = useState('');
 
   // Static options for dropdowns
   const skillLevels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
@@ -135,42 +130,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
     }
   };
 
-  /**
-   * Upload profile image to Cloudinary
-   */
-  const handleProfileImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      setImageError('Image must be less than 5MB');
-      return;
-    }
-
-    setUploadingImage(true);
-    setImageError('');
-    const uploadData = new FormData();
-    uploadData.append('image', file);
-
-    try {
-      const res = await api.post('/upload/profile-image', uploadData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      if (res.data.success) {
-        setFormData(prev => ({
-          ...prev,
-          profileImage: res.data.imageUrl
-        }));
-      }
-    } catch (err) {
-      console.error('Profile image upload error:', err);
-      setImageError(err.response?.data?.message || 'Failed to upload image');
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
   // ---------- Skills ----------
   const addSkill = () => {
     if (newSkill.name) {
@@ -208,6 +167,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
   // ---------- Main Categories (multiple) ----------
   const addMainCategory = () => {
     if (!selectedCategoryToAdd) return;
+    // Avoid duplicates
     if (formData.mainCategories?.includes(selectedCategoryToAdd)) {
       alert('This main category is already selected.');
       return;
@@ -230,29 +190,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
   if (!isEditing) {
     return (
       <div className="space-y-8">
-        {/* Profile Photo */}
-        <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
-          {formData.profileImage ? (
-            <img 
-              src={formData.profileImage} 
-              alt="Profile" 
-              className="w-20 h-20 rounded-full object-cover border-2 border-green-500"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-600 to-red-600 flex items-center justify-center text-white text-2xl font-bold">
-              <User className="w-8 h-8" />
-            </div>
-          )}
-          <div>
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
-              Profile Photo
-            </h3>
-            <p className="text-gray-400 text-sm">
-              {formData.profileImage ? 'Your profile photo is set' : 'No profile photo uploaded'}
-            </p>
-          </div>
-        </div>
-
         {/* Profile Headline */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center">
@@ -277,6 +214,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             Main Categories
           </h3>
           
+          {/* Primary Category */}
           {formData.mainCategory && (
             <div className="mb-2">
               <span className="text-xs text-gray-500 mr-2">Primary:</span>
@@ -286,6 +224,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             </div>
           )}
 
+          {/* Full List */}
           {formData.mainCategories && formData.mainCategories.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {formData.mainCategories.map((cat, idx) => (
@@ -357,6 +296,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
               Service radius: {formData.serviceRadius} km
             </p>
             
+            {/* Coordinates display */}
             {formData.location?.coordinates && 
              formData.location.coordinates[0] !== 0 && 
              formData.location.coordinates[1] !== 0 && (
@@ -396,43 +336,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
   // ========== EDIT MODE ==========
   return (
     <div className="space-y-6">
-      {/* Profile Photo Upload */}
-      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Profile Photo
-        </label>
-        <div className="flex items-center gap-4">
-          {formData.profileImage ? (
-            <img 
-              src={formData.profileImage} 
-              alt="Profile Preview" 
-              className="w-24 h-24 rounded-full object-cover border-2 border-green-500"
-            />
-          ) : (
-            <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">
-              <User className="w-10 h-10" />
-            </div>
-          )}
-          <div className="flex-1">
-            <label className={`cursor-pointer inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors ${uploadingImage ? 'opacity-50' : ''}`}>
-              {uploadingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-              {uploadingImage ? 'Uploading...' : 'Change Photo'}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleProfileImageUpload}
-                disabled={uploadingImage}
-                className="hidden"
-              />
-            </label>
-            {imageError && <p className="text-red-500 text-xs mt-2">{imageError}</p>}
-            <p className="text-xs text-gray-500 mt-2">
-              JPG, PNG, or WebP. Max 5MB.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Profile Headline */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
