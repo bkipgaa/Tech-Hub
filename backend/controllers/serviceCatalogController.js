@@ -694,6 +694,47 @@ exports.healthCheck = async (req, res) => {
   }
 };
 
+
+// ===========================================
+// COMPLETE CATALOG — single query, flat response
+// ===========================================
+exports.getCompleteCatalog = async (req, res) => {
+  try {
+    if (!dbConnected()) {
+      return res.status(503).json({ success: false, message: 'Database unavailable' });
+    }
+
+    // One lightweight query — only the fields the frontend needs
+    const catalogs = await ServiceCatalog.find({ isActive: true })
+      .select('mainCategory serviceCategories.name serviceCategories.isActive serviceCategories.subServices.name serviceCategories.subServices.isActive')
+      .lean();
+
+    // Reshape into the exact structure the frontend expects
+    const data = {};
+    catalogs.forEach(catalog => {
+      data[catalog.mainCategory] = (catalog.serviceCategories || [])
+        .filter(c => c.isActive !== false)
+        .map(c => ({
+          name: c.name,
+          subServices: (c.subServices || [])
+            .filter(s => s.isActive !== false)
+            .map(s => s.name)
+        }));
+    });
+    // Inside getCompleteCatalog, before res.json():
+res.set('Cache-Control', 'public, max-age=300'); // 5 min browser cache
+
+    res.json({
+      success: true,
+      count: Object.keys(data).length,
+      data,
+      metadata: { lastUpdated: new Date().toISOString() }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 // Helper to clear cache (call this from an admin route after editing catalog)
 exports.clearCatalogCache = () => {
   cache.mainCategories = { data: null, timestamp: 0 };

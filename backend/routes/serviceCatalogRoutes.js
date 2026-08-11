@@ -11,47 +11,35 @@ const {
   getCategoriesWithCounts,
   validateServices,
   getDetailedSubServices,
-  getTechniciansForService  // ✅ Add this missing import
+  getTechniciansForService,
+  getCompleteCatalog
 } = require('../controllers/serviceCatalogController');
 
 // =============================================
-// 1️⃣ PUBLIC ROUTES (No parameters)
+// 1️⃣ STATIC ROUTES (no parameters) — ALWAYS FIRST
 // =============================================
-router.get('/:mainCategory/:serviceCategory/technicians', getTechniciansForService);
 router.get('/main-categories', getMainCategories);
 router.get('/search', searchServices);
 router.get('/popular', getPopularServices);
 router.get('/categories-with-counts', getCategoriesWithCounts);
+router.get('/complete', getCompleteCatalog);        // ← your new single-call endpoint
 router.post('/validate', validateServices);
 
 // =============================================
-// 2️⃣ SPECIFIC ROUTES WITH PARAMETERS
-// (Most specific to least specific)
+// 2️⃣ PARAMETERIZED ROUTES — most specific to least specific
 // =============================================
 
-// ✅ MOST SPECIFIC: Detailed sub-services with multiple parameters
-router.get(
-  '/:mainCategory/:serviceCategory/sub-services/detailed', 
-  getDetailedSubServices
-);
+// 3 segments, specific suffix
+router.get('/:mainCategory/:serviceCategory/technicians', getTechniciansForService);
 
-// ✅ SECOND MOST SPECIFIC: Sub-services by service category
-router.get(
-  '/:mainCategory/:serviceCategory/sub-services', 
-  getSubServices
-);
+// 4 segments (must come before the 3-segment /sub-services)
+router.get('/:mainCategory/:serviceCategory/sub-services/detailed', getDetailedSubServices);
 
-// ✅ THIRD: Full catalog for a main category
-router.get(
-  '/:mainCategory/full', 
-  getFullCatalog
-);
+// 3 segments
+router.get('/:mainCategory/:serviceCategory/sub-services', getSubServices);
 
-// ✅ LEAST SPECIFIC: Service categories by main category
-// This must come LAST among parameterized routes
-router.get(
-  '/:mainCategory/service-categories', 
-  getServiceCategoriesByMain
-);
+// 2 segments
+router.get('/:mainCategory/full', getFullCatalog);
+router.get('/:mainCategory/service-categories', getServiceCategoriesByMain);
 
 module.exports = router;
