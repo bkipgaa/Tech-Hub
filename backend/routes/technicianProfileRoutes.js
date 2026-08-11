@@ -24,7 +24,7 @@ const { updateSettings } = require('../controllers/technician/profile/updateSett
 const { updateSkills } = require('../controllers/technician/profile/updateSkills');
 const { updateSocialLinks } = require('../controllers/technician/profile/updateSocialLinks');
 const { getPublicProfile } = require('../controllers/technician/publicController');
-const { getCompleteCatalog } = require('../controllers/technician/profile/getCompleteCatalog');
+const { getCompleteCatalog } = require('../controllers/serviceCatalogController');
 const { addServiceCategory, removeServiceCategory } = require('../controllers/technician/profile/addService-category');
 
 
