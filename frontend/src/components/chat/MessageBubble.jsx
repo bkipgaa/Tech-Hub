@@ -59,13 +59,7 @@ const MessageBubble = ({ message, isOwn, showAvatar }) => {
     <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-1`}>
       <div className={`flex max-w-[75%] ${isOwn ? 'flex-row-reverse' : 'flex-row'} gap-2`}>
         
-        {/* ─── AVATAR ───────────────────────────── */}
-        {/* 
-          We only render the avatar on the FIRST message of a consecutive 
-          block from the same sender. For every subsequent message in that 
-          block, showAvatar is false and we render an empty spacer div 
-          so the bubble stays aligned vertically. 
-        */}
+       
         {!isOwn && showAvatar && (
           <div className="flex-shrink-0 self-end">
             {message.sender?.profileImage ? (

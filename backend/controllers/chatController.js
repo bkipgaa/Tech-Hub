@@ -2,6 +2,8 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
 const Technician = require('../models/Technician');
+const mongoose = require('mongoose'); // ← ADD THIS
+
 
 // ===========================================
 // GET /api/chat/conversations
@@ -315,12 +317,7 @@ exports.markAsRead = async (req, res) => {
 exports.getUnreadCount = async (req, res) => {
   try {
     const userId = req.user.userId;
-    
-    // Aggregation pipeline:
-    // 1. Match conversations where I'm a participant.
-    // 2. Unwind the participants array.
-    // 3. Keep only MY participant sub-document.
-    // 4. Sum all unreadCount values.
+
     const result = await Conversation.aggregate([
       { $match: { 'participants.user': new mongoose.Types.ObjectId(userId) } },
       { $unwind: '$participants' },
