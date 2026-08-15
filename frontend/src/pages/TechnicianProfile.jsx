@@ -50,6 +50,33 @@ const TechnicianProfile = () => {
     navigate(-1);
   };
 
+  /**
+ * handleMessage()
+ * ---------------
+ * Triggered when client clicks "Message" on a technician's public profile.
+ * 
+ * 1. Calls backend to create (or fetch existing) conversation.
+ * 2. Sends an initial greeting so the technician has context.
+ * 3. Navigates to /chat/<conversationId> to open the thread immediately.
+ */
+const handleMessage = async () => {
+  try {
+    const res = await api.post('/chat/conversations', {
+      technicianUserId: technician.userId?._id || technician.userId,
+      technicianProfileId: technician._id,
+      initialMessage: `Hi, I'm interested in your ${technician.mainCategory} services.`
+    });
+    
+    if (res.data.success) {
+      navigate(`/chat/${res.data.data._id}`);
+    }
+  } catch (err) {
+    console.error('Failed to start conversation:', err);
+    navigate('/chat'); // Fallback: open chat page without specific thread
+  }
+};
+
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -144,10 +171,14 @@ const TechnicianProfile = () => {
                     <PhoneCall className="w-4 h-4" />
                     Contact
                   </button>
-                  <button className="bg-white text-green-700 px-6 py-2 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium shadow-sm">
-                    <MessageCircle className="w-4 h-4" />
-                    Message
-                  </button>
+                  // JSX for the button:
+<button 
+  onClick={handleMessage}
+  className="bg-white text-green-700 px-6 py-2 rounded-lg hover:bg-gray-100 flex items-center gap-2 font-medium shadow-sm"
+>
+  <MessageCircle className="w-4 h-4" />
+  Message
+</button>
                 </div>
                 
                 {showContact && (

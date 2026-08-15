@@ -14,6 +14,7 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
+const http = require('http');              // ← NEW: Required for Socket.i
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -24,6 +25,10 @@ const adminRoutes = require('./routes/adminRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const technicianRoutes = require('./routes/technicianRoutes');
 const uploads = require('./routes/upload');
+const chatRoutes = require('./routes/chatRoutes');  // ← NEW: Chat REST routes
+
+// Import Socket.io chat handler
+const chatSocket = require('./socket/chatSocket');  // ← NEW: Real-time chat socket
 // Job and Application routes
 const jobRoutes = require('./routes/jobRoutes');
 const jobApplicationRoutes = require('./routes/jobApplicationRoutes');
@@ -31,6 +36,58 @@ const jobApplicationRoutes = require('./routes/jobApplicationRoutes');
 dotenv.config();
 
 const app = express();
+
+// ===========================================
+// CREATE HTTP SERVER (Required for Socket.io)
+// ===========================================
+/**
+ * We create an HTTP server manually instead of using app.listen().
+ * Socket.io needs to attach to this raw HTTP server to intercept
+ * WebSocket upgrade requests on the same port.
+ */
+const httpServer = http.createServer(app);
+
+// ===========================================
+// INITIALIZE SOCKET.IO
+// ===========================================
+/**
+ * Attach Socket.io to the HTTP server with CORS settings.
+ * 'transports' prioritizes websocket for speed, falls back to polling.
+ */
+const io = require('socket.io')(httpServer, {
+  cors: {
+    origin: process.env.FRONTEND_URL 
+      ? [process.env.FRONTEND_URL, 'https://tech-hub-frontend-lime.vercel.app']
+      : ['http://localhost:3000', 'http://localhost:5173'],
+    credentials: true,
+    methods: ['GET', 'POST']
+  },
+  transports: ['websocket', 'polling']
+});
+
+// Initialize chat event handlers (typing, send_message, mark_read, etc.)
+chatSocket(io);
+
+// Make io accessible globally for controllers that need to emit outside sockets
+app.set('io', io);
+
+// ===========================================
+// GLOBAL ERROR HANDLERS
+// ===========================================
+
+process.on('uncaughtException', (err) => {
+  if (err.code === 'ECONNRESET') {
+    console.log('🔌 Client disconnected during operation (expected, ignoring)');
+    return;
+  }
+  console.error('💥 Uncaught Exception:', err);
+  if (typeof gracefulShutdown === 'function') {
+    gracefulShutdown();
+  } else {
+    process.exit(1);
+  }
+});
+
 
 // ===========================================
 // GLOBAL ERROR HANDLERS (Must be before any other code)

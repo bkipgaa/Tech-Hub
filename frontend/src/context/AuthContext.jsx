@@ -788,6 +788,131 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     }
   };
 
+
+    // ============================================================
+  // CHAT FUNCTIONS
+  // ============================================================
+
+  /**
+   * Get all conversations for the logged-in user's inbox
+   * @returns {Object} { success: boolean, data: Array, count: number, error: string }
+   */
+  const getConversations = async () => {
+    try {
+      const response = await api.get('/chat/conversations');
+      if (response.data.success) {
+        return { success: true, data: response.data.data, count: response.data.count };
+      }
+      return { success: false, error: response.data.message };
+    } catch (error) {
+      console.error('Get conversations error:', error);
+      return { success: false, error: error.response?.data?.message || 'Failed to load conversations' };
+    }
+  };
+
+  /**
+   * Start a new conversation with a technician (or return existing)
+   * @param {string} technicianUserId - The technician's User._id
+   * @param {string} technicianProfileId - The Technician._id
+   * @param {string} initialMessage - Optional first message
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
+  const createConversation = async (technicianUserId, technicianProfileId, initialMessage = '') => {
+    try {
+      const response = await api.post('/chat/conversations', {
+        technicianUserId,
+        technicianProfileId,
+        initialMessage
+      });
+      if (response.data.success) {
+        return { success: true, data: response.data.data };
+      }
+      return { success: false, error: response.data.message };
+    } catch (error) {
+      console.error('Create conversation error:', error);
+      return { success: false, error: error.response?.data?.message || 'Failed to start conversation' };
+    }
+  };
+
+  /**
+   * Get paginated messages for a conversation
+   * @param {string} conversationId - Conversation ID
+   * @param {number} page - Page number (default 1)
+   * @param {number} limit - Messages per page (default 30)
+   * @returns {Object} { success: boolean, data: Array, pagination: Object, error: string }
+   */
+  const getMessages = async (conversationId, page = 1, limit = 30) => {
+    try {
+      const response = await api.get(`/chat/conversations/${conversationId}/messages?page=${page}&limit=${limit}`);
+      if (response.data.success) {
+        return { 
+          success: true, 
+          data: response.data.data, 
+          pagination: response.data.pagination 
+        };
+      }
+      return { success: false, error: response.data.message };
+    } catch (error) {
+      console.error('Get messages error:', error);
+      return { success: false, error: error.response?.data?.message || 'Failed to load messages' };
+    }
+  };
+
+  /**
+   * Send a message via HTTP (fallback when Socket.io is unavailable)
+   * @param {string} conversationId - Conversation ID
+   * @param {string} content - Message text
+   * @param {string} messageType - 'text' | 'image' | 'file'
+   * @returns {Object} { success: boolean, data: Object, error: string }
+   */
+  const sendMessage = async (conversationId, content, messageType = 'text') => {
+    try {
+      const response = await api.post(`/chat/conversations/${conversationId}/messages`, {
+        content,
+        messageType
+      });
+      if (response.data.success) {
+        return { success: true, data: response.data.data };
+      }
+      return { success: false, error: response.data.message };
+    } catch (error) {
+      console.error('Send message error:', error);
+      return { success: false, error: error.response?.data?.message || 'Failed to send message' };
+    }
+  };
+
+  /**
+   * Mark all messages in a conversation as read
+   * @param {string} conversationId - Conversation ID
+   * @returns {Object} { success: boolean, message: string, error: string }
+   */
+  const markAsRead = async (conversationId) => {
+    try {
+      const response = await api.put(`/chat/conversations/${conversationId}/read`);
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      console.error('Mark as read error:', error);
+      return { success: false, error: error.response?.data?.message || 'Failed to mark as read' };
+    }
+  };
+
+  /**
+   * Get total unread message count (for navbar badge)
+   * @returns {Object} { success: boolean, count: number, error: string }
+   */
+  const getUnreadCount = async () => {
+    try {
+      const response = await api.get('/chat/unread-count');
+      if (response.data.success) {
+        return { success: true, count: response.data.count };
+      }
+      return { success: false, count: 0, error: response.data.message };
+    } catch (error) {
+      console.error('Get unread count error:', error);
+      return { success: false, count: 0, error: error.response?.data?.message || 'Failed to get unread count' };
+    }
+  };
+
   // ============================================================
   // ROLE CHECK HELPER PROPERTIES
   // ============================================================
@@ -891,6 +1016,14 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     activateTrial,
     upgradeSubscription,
     cancelAutoRenew,
+// Chat functions  ← ADD THESE
+    getConversations,
+    createConversation,
+    getMessages,
+    sendMessage,
+    markAsRead,
+    getUnreadCount,
+
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

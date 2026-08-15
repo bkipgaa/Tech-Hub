@@ -25,6 +25,7 @@ import SubscriptionStats from './components/admin/SubscriptionStats';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import TechnicianRoute from './components/TechnicianRoute';
+import ChatPage from './components/chat/ChatPage';
 
 import JobsPage from './pages/jobsPage';
 import PostJob from './components/jobs/postJob';
@@ -59,6 +60,10 @@ function App() {
           {/* Admin Authentication - No main layout, separate styling */}
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/register" element={<AdminRegister />} />
+
+          // In your Routes / Switch:
+<Route path="/chat" element={<ChatPage />} />           {/* No chat selected */}
+<Route path="/chat/:conversationId" element={<ChatPage />} />  {/* Active chat */}
 
             <Route path="profile" element={
               <PrivateRoute>
