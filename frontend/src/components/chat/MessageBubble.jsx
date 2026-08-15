@@ -60,12 +60,12 @@ const MessageBubble = ({ message, isOwn, showAvatar }) => {
       <div className={`flex max-w-[75%] ${isOwn ? 'flex-row-reverse' : 'flex-row'} gap-2`}>
         
         {/* ─── AVATAR ───────────────────────────── */}
-        /**
-         * We only render the avatar on the FIRST message of a consecutive
-         * block from the same sender. For every subsequent message in that
-         * block, showAvatar is false and we render an empty spacer div
-         * so the bubble stays aligned vertically.
-         */
+        {/* 
+          We only render the avatar on the FIRST message of a consecutive 
+          block from the same sender. For every subsequent message in that 
+          block, showAvatar is false and we render an empty spacer div 
+          so the bubble stays aligned vertically. 
+        */}
         {!isOwn && showAvatar && (
           <div className="flex-shrink-0 self-end">
             {message.sender?.profileImage ? (
@@ -112,17 +112,23 @@ const MessageBubble = ({ message, isOwn, showAvatar }) => {
             {isOwn && (
               <span className="ml-0.5">
                 {message.readAt ? (
-                  /**
-                   * Double BLUE checkmark = recipient has opened the chat
-                   * and the 'mark_read' event fired (readAt timestamp exists).
-                   */
+                  /* 
+                    Double BLUE checkmark = recipient has opened the chat 
+                    and the 'mark_read' event fired (readAt timestamp exists). 
+                  */
                   <CheckCheck className="w-3 h-3 text-blue-300" />
+                ) : message.deliveredAt ? (
+                  /* 
+                    Double GREY checkmark = message was delivered to the 
+                    recipient's device but not yet read. 
+                  */
+                  <CheckCheck className="w-3 h-3 text-current opacity-60" />
                 ) : (
-                  /**
-                   * Single grey checkmark = message was delivered to the server
-                   * but we don't yet know if the recipient has seen it.
-                   */
-                  <Check className="w-3 h-3" />
+                  /* 
+                    Single checkmark = message was sent to the server 
+                    but delivery status is unknown. 
+                  */
+                  <Check className="w-3 h-3 text-current opacity-60" />
                 )}
               </span>
             )}
