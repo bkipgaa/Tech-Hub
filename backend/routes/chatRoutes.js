@@ -9,7 +9,7 @@ const chatController = require('../controllers/chatController');
  * Every endpoint below requires a valid JWT token.
  * The authenticate middleware sets req.user.userId.
  */
-router.use(authenticate);
+router.use(auth);
 
 // ─── INBOX ──────────────────────────────────────
 // GET  /api/chat/conversations          → List all my chats (sidebar)
