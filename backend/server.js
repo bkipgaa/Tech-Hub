@@ -389,7 +389,7 @@ const startServer = async () => {
   const PORT = process.env.PORT || 5000;
   
   // Start HTTP server
-  server = app.listen(PORT, () => {
+  server = httpServer.listen(PORT, () => {
     console.log(`\n🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 API URL: http://localhost:${PORT}/api`);
