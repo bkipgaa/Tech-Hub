@@ -7,25 +7,24 @@ let currentToken = null;
  * initSocket(token)
  * -----------------
  * Creates or returns the singleton socket.
- * Sets up reconnection logic so the user re-authenticates
- * automatically after every reconnect (network blip, server restart).
  */
 export const initSocket = (token) => {
   currentToken = token;
 
   if (!socket) {
-    // Use the same base URL as your API to avoid CORS mismatches
-    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-    
+    // Vite uses import.meta.env, NOT process.env
+    // Strip '/api' from the end because Socket.IO mounts at root, not /api
+    const baseURL = (import.meta.env.VITE_API_URL || 'https://tech-hub-backend-ecno.onrender.com')
+      .replace(/\/api\/?$/, '');
+
     socket = io(baseURL, {
-      transports: ['websocket', 'polling'], // Fallback for strict firewalls
+      transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
     });
 
-    // Authenticate on initial connect
     socket.on('connect', () => {
       console.log('🔌 Socket connected:', socket.id);
       if (currentToken) {
@@ -33,7 +32,6 @@ export const initSocket = (token) => {
       }
     });
 
-    // Auto-reauthenticate after every reconnect
     socket.on('reconnect', () => {
       console.log('🔄 Socket reconnected');
       if (currentToken) {
@@ -55,12 +53,6 @@ export const initSocket = (token) => {
 
 export const getSocket = () => socket;
 
-/**
- * updateSocketToken(token)
- * ------------------------
- * Call this after login/token refresh to update the token
- * used during reconnections.
- */
 export const updateSocketToken = (token) => {
   currentToken = token;
   if (socket?.connected && token) {
