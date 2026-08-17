@@ -14,7 +14,7 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
-const http = require('http');              // ← NEW: Required for Socket.i
+const http = require('http');              // ← Required for Socket.io
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -25,35 +25,37 @@ const adminRoutes = require('./routes/adminRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const technicianRoutes = require('./routes/technicianRoutes');
 const uploads = require('./routes/upload');
-const chatRoutes = require('./routes/chatRoutes');  // ← NEW: Chat REST routes
+const chatRoutes = require('./routes/chatRoutes');  // ← Chat REST routes
 
 // Import Socket.io chat handler
-const chatSocket = require('./socket/chatSocket');  // ← NEW: Real-time chat socket
+const chatSocket = require('./socket/chatSocket');  // ← Real-time chat socket
 // Job and Application routes
 const jobRoutes = require('./routes/jobRoutes');
 const jobApplicationRoutes = require('./routes/jobApplicationRoutes');
 
 dotenv.config();
 
+// ===========================================
+// ENVIRONMENT VARIABLES VALIDATION
+// ===========================================
+// Ensure required environment variables are present
+const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'PAYSTACK_SECRET_KEY'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingVars.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingVars.join(', ')}`);
+  process.exit(1);
+}
+
 const app = express();
 
 // ===========================================
 // CREATE HTTP SERVER (Required for Socket.io)
 // ===========================================
-/**
- * We create an HTTP server manually instead of using app.listen().
- * Socket.io needs to attach to this raw HTTP server to intercept
- * WebSocket upgrade requests on the same port.
- */
 const httpServer = http.createServer(app);
 
 // ===========================================
 // INITIALIZE SOCKET.IO
 // ===========================================
-/**
- * Attach Socket.io to the HTTP server with CORS settings.
- * 'transports' prioritizes websocket for speed, falls back to polling.
- */
 const io = require('socket.io')(httpServer, {
   cors: {
     origin: process.env.FRONTEND_URL 
@@ -65,14 +67,14 @@ const io = require('socket.io')(httpServer, {
   transports: ['websocket', 'polling']
 });
 
-// Initialize chat event handlers (typing, send_message, mark_read, etc.)
+// Initialize chat event handlers
 chatSocket(io);
 
-// Make io accessible globally for controllers that need to emit outside sockets
+// Make io accessible globally
 app.set('io', io);
 
 // ===========================================
-// GLOBAL ERROR HANDLERS
+// GLOBAL ERROR HANDLERS (Must be before any other code)
 // ===========================================
 
 process.on('uncaughtException', (err) => {
@@ -88,36 +90,6 @@ process.on('uncaughtException', (err) => {
   }
 });
 
-
-// ===========================================
-// GLOBAL ERROR HANDLERS (Must be before any other code)
-// ===========================================
-
-/**
- * Handle uncaught exceptions (synchronous errors)
- * Prevents the app from crashing on connection resets during shutdown
- */
-process.on('uncaughtException', (err) => {
-  // ECONNRESET happens when a client disconnects abruptly during server shutdown
-  // This is expected behavior and shouldn't crash the app
-  if (err.code === 'ECONNRESET') {
-    console.log('🔌 Client disconnected during operation (expected, ignoring)');
-    return; // Don't crash on connection resets
-  }
-  
-  // For other uncaught exceptions, log and attempt graceful shutdown
-  console.error('💥 Uncaught Exception:', err);
-  if (typeof gracefulShutdown === 'function') {
-    gracefulShutdown();
-  } else {
-    process.exit(1);
-  }
-});
-
-/**
- * Handle unhandled promise rejections (async errors)
- * Prevents memory leaks and ensures clean shutdown
- */
 process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
   if (typeof gracefulShutdown === 'function') {
@@ -131,10 +103,10 @@ process.on('unhandledRejection', (reason, promise) => {
 // MIDDLEWARE
 // ===========================================
 
-// Security middleware - adds various HTTP headers for security
+// Security middleware
 app.use(helmet());
 
-// CORS configuration - controls which domains can access the API
+// CORS configuration
 app.use(cors({
   origin: process.env.FRONTEND_URL 
     ? [process.env.FRONTEND_URL, 'https://tech-hub-frontend-lime.vercel.app']
@@ -143,11 +115,27 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-// Body parsing middleware - converts request bodies to JavaScript objects
+
+// ===========================================
+// 🔥 CRITICAL: RAW BODY PARSER FOR WEBHOOK
+// ===========================================
+/**
+ * Paystack webhook needs the raw body to verify the X-Paystack-Signature.
+ * This must be placed BEFORE the global express.json() middleware.
+ * 
+ * The route path must match exactly: /api/subscription/webhook
+ * This ensures only that endpoint receives the raw body.
+ */
+app.use(
+  '/api/subscription/webhook',
+  express.raw({ type: 'application/json' })
+);
+
+// Body parsing middleware for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging for development environment only
+// Request logging for development
 if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
@@ -159,10 +147,6 @@ if (process.env.NODE_ENV === 'development') {
 // API ROUTES
 // ===========================================
 
-/**
- * Health check endpoint
- * Used by monitoring systems and load balancers to verify server status
- */
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -173,47 +157,41 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Authentication routes - login, register, password reset
+// Authentication routes
 app.use('/api/auth', authRoutes);
 
-// Admin routes - dashboard, user management, analytics
+// Admin routes
 app.use('/api/admin', adminRoutes);
 
-// Subscription routes - plans, payments, billing
+// Subscription routes (includes webhook - now raw parser is applied above)
 app.use('/api/subscription', subscriptionRoutes);
 
-// Technician profile routes - profiles, skills, ratings
+// Technician profile routes
 app.use('/api/technician', technicianProfileRoutes);
 
-// Service catalog routes - services, categories, pricing
+// Service catalog routes
 app.use('/api/service-catalog', serviceCatalogRoutes);
 
-// Search technicians public profiles and stats (no authentication needed)
+// Technician public routes
 app.use('/api/technician-public', technicianRoutes);
+
+// Chat routes
 app.use('/api/chat', chatRoutes);
 
-// Search routes - find technicians, jobs, services
+// Search routes
 app.use('/api/search', searchRoutes);
+
+// Upload routes
 app.use('/api/upload', uploads);
 
-// ===========================================
-// JOB & APPLICATION ROUTES
-// ===========================================
-
-// Job routes - posting, viewing, managing job listings
+// Job and application routes
 app.use('/api/jobs', jobRoutes);
-
-// Job application routes - applying, accepting, rejecting applications
 app.use('/api/job-applications', jobApplicationRoutes);
 
 // ===========================================
 // BASE ROUTE
 // ===========================================
 
-/**
- * Root endpoint - API information and documentation
- * Provides an overview of available endpoints
- */
 app.get('/', (req, res) => {
   res.json({
     message: 'Welcome to Weba-Hub API',
@@ -237,32 +215,20 @@ app.get('/', (req, res) => {
 // DATABASE CONNECTION
 // ===========================================
 
-/**
- * Establishes connection to MongoDB database
- * Includes retry logic and connection event handlers
- * 
- * @returns {Promise<boolean>} - True if connection successful, false otherwise
- */
 const connectDB = async () => {
   try {
     const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/tech-hub';
-    
-    // MongoDB driver v4+ uses default options that work well
     await mongoose.connect(mongoURI);
-    
     console.log('✅ MongoDB connected successfully');
     console.log(`📦 Database: ${mongoose.connection.name}`);
     console.log(`📍 Host: ${mongoose.connection.host}`);
     
-    // Handle connection events for monitoring and recovery
     mongoose.connection.on('error', (err) => {
       console.error('MongoDB connection error:', err);
     });
-    
     mongoose.connection.on('disconnected', () => {
       console.warn('MongoDB disconnected. Attempting to reconnect...');
     });
-    
     mongoose.connection.on('reconnected', () => {
       console.log('MongoDB reconnected successfully');
     });
@@ -270,7 +236,6 @@ const connectDB = async () => {
     return true;
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
-    // Retry connection after 5 seconds instead of crashing
     console.log('Retrying connection in 5 seconds...');
     setTimeout(connectDB, 5000);
     return false;
@@ -281,10 +246,6 @@ const connectDB = async () => {
 // ERROR HANDLING MIDDLEWARE
 // ===========================================
 
-/**
- * 404 handler for undefined routes
- * Returns helpful error message with available endpoints
- */
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -303,14 +264,9 @@ app.use((req, res) => {
   });
 });
 
-/**
- * Global error handler middleware
- * Handles different types of errors and returns appropriate responses
- */
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
   
-  // Mongoose validation error (invalid data format)
   if (err.name === 'ValidationError') {
     const errors = Object.values(err.errors).map(e => e.message);
     return res.status(400).json({
@@ -320,7 +276,6 @@ app.use((err, req, res, next) => {
     });
   }
   
-  // Mongoose duplicate key error (unique constraint violation)
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern)[0];
     return res.status(400).json({
@@ -329,7 +284,6 @@ app.use((err, req, res, next) => {
     });
   }
   
-  // JWT authentication errors
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({
       success: false,
@@ -344,7 +298,6 @@ app.use((err, req, res, next) => {
     });
   }
   
-  // Default error response for unhandled errors
   const status = err.status || 500;
   res.status(status).json({
     success: false,
@@ -357,30 +310,15 @@ app.use((err, req, res, next) => {
 // SERVER INSTANCE AND CONNECTION TRACKING
 // ===========================================
 
-// Declare server variable in the correct scope for graceful shutdown
 let server;
-
-/**
- * Track all active client connections
- * This allows us to forcefully close connections if they don't close gracefully
- * during server shutdown, preventing ECONNRESET errors
- */
 const activeConnections = new Set();
 
 // ===========================================
 // START SERVER
 // ===========================================
 
-/**
- * Initialize and start the server
- * First establishes database connection, then starts the HTTP server
- * 
- * @returns {Promise<void>}
- */
 const startServer = async () => {
-  // Connect to database first
   const dbConnected = await connectDB();
-  
   if (!dbConnected) {
     console.error('❌ Failed to connect to database. Server will not start.');
     process.exit(1);
@@ -388,7 +326,6 @@ const startServer = async () => {
   
   const PORT = process.env.PORT || 5000;
   
-  // Start HTTP server
   server = httpServer.listen(PORT, () => {
     console.log(`\n🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -400,28 +337,20 @@ const startServer = async () => {
     console.log(`   - Job Applications & Tracking`);
     console.log(`   - Technician Profiles`);
     console.log(`   - Service Catalog`);
-    console.log(`   - Subscriptions`);
+    console.log(`   - Subscriptions (Paystack enabled)`);
     console.log(`   - Admin Dashboard`);
     console.log(`   - Search & Filtering`);
     console.log(`\n✅ Server ready to accept connections`);
     console.log(`💡 Press Ctrl+C to gracefully shut down the server\n`);
   });
   
-  /**
-   * Track each new connection to enable graceful shutdown
-   * This prevents ECONNRESET errors when closing the server
-   */
   server.on('connection', (connection) => {
-    // Add new connection to our tracking Set
     activeConnections.add(connection);
-    
-    // Remove connection from tracking when it closes naturally
     connection.on('close', () => {
       activeConnections.delete(connection);
     });
   });
   
-  // Handle server-specific errors (e.g., port already in use)
   server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
       console.error(`❌ Port ${PORT} is already in use. Please use a different port or stop the other process.`);
@@ -434,30 +363,15 @@ const startServer = async () => {
 };
 
 // ===========================================
-// GRACEFUL SHUTDOWN (Fixes ECONNRESET errors)
+// GRACEFUL SHUTDOWN
 // ===========================================
 
-/**
- * Gracefully shuts down the server and all connections
- * This prevents ECONNRESET errors that occur when clients disconnect abruptly
- * 
- * The shutdown process:
- * 1. Stop accepting new connections
- * 2. Wait for existing connections to complete (5 seconds)
- * 3. Force-close any lingering connections
- * 4. Close database connection
- * 5. Exit the process
- */
 const gracefulShutdown = () => {
   console.log('\n🛑 Received shutdown signal. Closing server gracefully...');
   
   if (server) {
-    // Step 1: Stop accepting new connections
-    // server.close() prevents new connections but keeps existing ones
     server.close(() => {
       console.log('✅ HTTP server closed (no longer accepting new connections)');
-      
-      // Step 4: Close MongoDB connection after HTTP server is closed
       mongoose.connection.close(false, () => {
         console.log('✅ MongoDB connection closed');
         console.log('👋 Shutdown complete');
@@ -465,37 +379,26 @@ const gracefulShutdown = () => {
       });
     });
     
-    // Step 2 & 3: Handle existing connections with a timeout
-    // Give existing connections 5 seconds to complete naturally
     setTimeout(() => {
       const remainingConnections = activeConnections.size;
-      
       if (remainingConnections > 0) {
         console.log(`⚠️ Force closing ${remainingConnections} active connection(s) that didn't close gracefully...`);
-        
-        // Force-destroy any remaining connections
-        // This is necessary because some clients (like browsers) don't close connections properly
         activeConnections.forEach(connection => {
           try {
-            connection.destroy(); // Forcefully terminate the connection
+            connection.destroy();
           } catch (err) {
-            // Ignore errors during force destroy - connection might already be closing
             if (err.code !== 'ECONNRESET') {
               console.error('Error destroying connection:', err.message);
             }
           }
         });
-        
-        // Clear the Set after destroying all connections
         activeConnections.clear();
         console.log('✅ All remaining connections forcefully closed');
       } else {
         console.log('✅ No active connections remaining');
       }
-    }, 5000); // Wait 5 seconds for graceful completion
+    }, 5000);
     
-    // Step 5: Ultimate safety net - force exit after 10 seconds
-    // This ensures the process doesn't hang forever if something goes wrong
     setTimeout(() => {
       console.error('⚠️ Could not close all connections within timeout period (10 seconds)');
       console.error('⚠️ Forcefully shutting down process');
@@ -503,10 +406,7 @@ const gracefulShutdown = () => {
     }, 10000);
     
   } else {
-    // Handle case where server hasn't started yet or already closed
     console.log('⚠️ No active server instance found');
-    
-    // Still need to close database connection if it's open
     if (mongoose.connection && mongoose.connection.readyState === 1) {
       console.log('Closing MongoDB connection...');
       mongoose.connection.close(false, () => {
@@ -524,23 +424,17 @@ const gracefulShutdown = () => {
 // SHUTDOWN SIGNAL HANDLERS
 // ===========================================
 
-/**
- * Handle different shutdown signals
- * SIGTERM: Used by process managers (PM2, systemd) and orchestrators (Kubernetes)
- * SIGINT: Sent when pressing Ctrl+C in terminal
- */
-process.on('SIGTERM', gracefulShutdown);  // Process termination signal
-process.on('SIGINT', gracefulShutdown);   // Interrupt signal (Ctrl+C)
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
 // ===========================================
 // START THE APPLICATION
 // ===========================================
 
-// Initialize the server
 startServer().catch(error => {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
 });
 
-// Export app for testing purposes
+// Export app for testing
 module.exports = app;

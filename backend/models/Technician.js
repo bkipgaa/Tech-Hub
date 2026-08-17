@@ -341,7 +341,7 @@ const TechnicianSchema = new Schema({
   subscription: {
     plan: {
       type: String,
-      enum: ['free', 'basic', 'premium', 'business', 'enterprise', 'trial', 'unlimited'],
+      enum: ['free','test', 'basic', 'basicPlus', 'premium', 'business', 'enterprise', 'trial', 'unlimited'],
       default: 'free'
     },
     planDetails: {

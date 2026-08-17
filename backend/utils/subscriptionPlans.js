@@ -7,6 +7,7 @@
  * their visibility radii, pricing, and helper functions for plan management.
  * 
  * VISIBILITY RULES:
+ * - Test: 20km radius (KES 10/month) – for testing payment flow
  * - Trial/Free: 10km radius (FREE for 30 days)
  * - Basic: 10km radius (KES 500/month)
  * - Basic-Plus: 50km radius (KES 1000/month)
@@ -18,20 +19,6 @@
  * IMPORTANT: Technicians with expired subscriptions are NOT visible in search results
  */
 
-/**
- * Subscription Plans Master Object
- * 
- * Each plan has the following properties:
- * - name: Display name for the plan
- * - visibilityRadius: Maximum distance (in km) where technician appears in searches
- * - price: Monthly cost in Kenyan Shillings (KES)
- * - durationDays: Subscription duration in days (typically 30 days = 1 month)
- * - features: Array of features included in the plan
- * 
- * Plan naming convention:
- * - Use camelCase for plan IDs (e.g., 'basicPlus', not 'basic-plus')
- * - This matches the Technician model's subscription.plan enum values
- */
 const subscriptionPlans = {
   /**
    * TRIAL PLAN
@@ -42,9 +29,9 @@ const subscriptionPlans = {
    */
   trial: {
     name: 'Free Trial',
-    visibilityRadius: 10,      // 10 kilometers visibility radius
-    price: 0,                   // Free
-    durationDays: 30,          // 30 days trial period
+    visibilityRadius: 10,
+    price: 0,
+    durationDays: 30,
     features: [
       '30-day free trial',
       '10km visibility radius',
@@ -62,14 +49,34 @@ const subscriptionPlans = {
    */
   free: {
     name: 'Free',
-    visibilityRadius: 10,      // 10 kilometers visibility radius
-    price: 0,                   // Free
-    durationDays: 30,          // 30 days duration (renewable)
+    visibilityRadius: 10,
+    price: 0,
+    durationDays: 30,
     features: [
       '10km visibility radius',
       'Basic profile listing',
       'Service listing (up to 5 services)',
       'Basic support'
+    ]
+  },
+
+  /**
+   * TEST PLAN
+   * For testing payment integration (Paystack, M-Pesa, cards)
+   * - Very low cost (KES 10) and decent radius (20km)
+   * - Useful for QA, demos, and validating the payment flow
+   */
+  test: {
+    name: 'Test Plan',
+    visibilityRadius: 20,      // 20 kilometers visibility radius
+    price: 10,                 // KES 10 (for testing)
+    durationDays: 30,          // 30 days subscription
+    features: [
+      '20km visibility radius',
+      'Test payment gateway',
+      'Ideal for testing the system',
+      'All basic features included',
+      'Email support'
     ]
   },
 
@@ -81,9 +88,9 @@ const subscriptionPlans = {
    */
   basic: {
     name: 'Basic',
-    visibilityRadius: 10,      // 10 kilometers visibility radius
-    price: 500,                // KES 500 per month (~$5 USD)
-    durationDays: 30,          // 30 days subscription
+    visibilityRadius: 10,
+    price: 500,
+    durationDays: 30,
     features: [
       '10km visibility radius',
       'Enhanced profile listing',
@@ -102,9 +109,9 @@ const subscriptionPlans = {
    */
   basicPlus: {
     name: 'Basic-Plus',
-    visibilityRadius: 50,      // 50 kilometers visibility radius
-    price: 1000,               // KES 1000 per month (~$10 USD)
-    durationDays: 30,          // 30 days subscription
+    visibilityRadius: 50,
+    price: 1000,
+    durationDays: 30,
     features: [
       '50km visibility radius (5x increase)',
       'Enhanced profile listing with badge',
@@ -125,9 +132,9 @@ const subscriptionPlans = {
    */
   premium: {
     name: 'Premium',
-    visibilityRadius: 100,     // 100 kilometers visibility radius
-    price: 1500,               // KES 1500 per month (~$15 USD)
-    durationDays: 30,          // 30 days subscription
+    visibilityRadius: 100,
+    price: 1500,
+    durationDays: 30,
     features: [
       '100km visibility radius (regional coverage)',
       'Premium profile listing with priority placement',
@@ -150,9 +157,9 @@ const subscriptionPlans = {
    */
   business: {
     name: 'Business',
-    visibilityRadius: 300,     // 300 kilometers visibility radius
-    price: 2000,               // KES 2000 per month (~$20 USD)
-    durationDays: 30,          // 30 days subscription
+    visibilityRadius: 300,
+    price: 2000,
+    durationDays: 30,
     features: [
       '300km visibility radius (provincial coverage)',
       'Business profile listing with premium placement',
@@ -178,9 +185,9 @@ const subscriptionPlans = {
    */
   enterprise: {
     name: 'Enterprise',
-    visibilityRadius: 600,     // 600 kilometers visibility radius
-    price: 3000,               // KES 3000 per month (~$30 USD)
-    durationDays: 30,          // 30 days subscription
+    visibilityRadius: 600,
+    price: 3000,
+    durationDays: 30,
     features: [
       '600km visibility radius (national coverage)',
       'Enterprise profile listing with maximum placement',
@@ -206,9 +213,9 @@ const subscriptionPlans = {
    */
   unlimited: {
     name: 'Unlimited',
-    visibilityRadius: 1000,    // 1000 kilometers visibility radius (nationwide)
-    price: 5000,               // KES 5000 per month (~$50 USD)
-    durationDays: 30,          // 30 days subscription
+    visibilityRadius: 1000,
+    price: 5000,
+    durationDays: 30,
     features: [
       '1000km visibility radius (nationwide coverage)',
       'Unlimited profile listing with top placement',
@@ -231,310 +238,159 @@ const subscriptionPlans = {
 
 /**
  * Plans List Array
- * 
  * Used for dropdown menus, UI components, and API responses.
- * Provides a simplified view of available plans.
- * 
- * Each item includes:
- * - id: Unique identifier matching subscriptionPlans key
- * - name: Display name
- * - visibilityRadius: Coverage in kilometers
- * - price: Monthly cost in KES
- * - duration: Human-readable duration
  */
 const plansList = [
-  { 
-    id: 'trial', 
-    name: 'Free Trial', 
-    visibilityRadius: 10, 
-    price: 0, 
+  {
+    id: 'trial',
+    name: 'Free Trial',
+    visibilityRadius: 10,
+    price: 0,
     duration: '30 days',
     description: 'Perfect for getting started'
   },
-  { 
-    id: 'free', 
-    name: 'Free', 
-    visibilityRadius: 10, 
-    price: 0, 
+  {
+    id: 'free',
+    name: 'Free',
+    visibilityRadius: 10,
+    price: 0,
     duration: '30 days',
     description: 'Basic visibility'
   },
-  { 
-    id: 'basic', 
-    name: 'Basic', 
-    visibilityRadius: 10, 
-    price: 500, 
+  {
+    id: 'test',
+    name: 'Test Plan',
+    visibilityRadius: 20,
+    price: 10,
+    duration: '30 days',
+    description: 'Test payment flow (KES 10)'
+  },
+  {
+    id: 'basic',
+    name: 'Basic',
+    visibilityRadius: 10,
+    price: 500,
     duration: '30 days',
     description: 'Entry-level paid plan'
   },
-  { 
-    id: 'basicPlus', 
-    name: 'Basic-Plus', 
-    visibilityRadius: 50, 
-    price: 1000, 
+  {
+    id: 'basicPlus',
+    name: 'Basic-Plus',
+    visibilityRadius: 50,
+    price: 1000,
     duration: '30 days',
     description: 'Extended local coverage'
   },
-  { 
-    id: 'premium', 
-    name: 'Premium', 
-    visibilityRadius: 100, 
-    price: 1500, 
+  {
+    id: 'premium',
+    name: 'Premium',
+    visibilityRadius: 100,
+    price: 1500,
     duration: '30 days',
     description: 'Regional coverage'
   },
-  { 
-    id: 'business', 
-    name: 'Business', 
-    visibilityRadius: 300, 
-    price: 2000, 
+  {
+    id: 'business',
+    name: 'Business',
+    visibilityRadius: 300,
+    price: 2000,
     duration: '30 days',
     description: 'Professional service provider'
   },
-  { 
-    id: 'enterprise', 
-    name: 'Enterprise', 
-    visibilityRadius: 600, 
-    price: 3000, 
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    visibilityRadius: 600,
+    price: 3000,
     duration: '30 days',
     description: 'Large service company'
   },
-  { 
-    id: 'unlimited', 
-    name: 'Unlimited', 
-    visibilityRadius: 1000, 
-    price: 5000, 
+  {
+    id: 'unlimited',
+    name: 'Unlimited',
+    visibilityRadius: 1000,
+    price: 5000,
     duration: '30 days',
     description: 'Maximum nationwide coverage'
   }
 ];
 
-/**
- * Get Plan by Visibility Radius
- * 
- * Determines the minimum plan required to achieve a given visibility radius.
- * Useful for upgrade recommendations and plan comparisons.
- * 
- * @param {number} radius - Desired visibility radius in kilometers
- * @returns {string} Plan ID that provides at least the requested radius
- * 
- * @example
- * getPlanByRadius(75) // Returns 'premium' (100km radius)
- * getPlanByRadius(25) // Returns 'basicPlus' (50km radius)
- * getPlanByRadius(5)  // Returns 'trial' (10km radius)
- */
+// ============================================================
+// HELPER FUNCTIONS (unchanged, but they now include the test plan)
+// ============================================================
+
 function getPlanByRadius(radius) {
-  // Define radius thresholds and their corresponding plans
-  // Plans are ordered from smallest to largest radius
   const radiusThresholds = [
     { maxRadius: 10, plan: 'trial' },      // 0-10km: Trial/Free/Basic
-    { maxRadius: 50, plan: 'basicPlus' },   // 11-50km: Basic-Plus
-    { maxRadius: 100, plan: 'premium' },    // 51-100km: Premium
-    { maxRadius: 300, plan: 'business' },   // 101-300km: Business
-    { maxRadius: 600, plan: 'enterprise' }, // 301-600km: Enterprise
-    { maxRadius: 1000, plan: 'unlimited' }  // 601-1000km: Unlimited
+    { maxRadius: 50, plan: 'basicPlus' },
+    { maxRadius: 100, plan: 'premium' },
+    { maxRadius: 300, plan: 'business' },
+    { maxRadius: 600, plan: 'enterprise' },
+    { maxRadius: 1000, plan: 'unlimited' }
   ];
-  
-  // Find the first plan that meets or exceeds the requested radius
   for (const threshold of radiusThresholds) {
     if (radius <= threshold.maxRadius) {
       return threshold.plan;
     }
   }
-  
-  // Default to unlimited for radii > 1000km
   return 'unlimited';
 }
 
-/**
- * Get Visibility Description
- * 
- * Returns a human-readable description of a plan's visibility coverage.
- * 
- * @param {string} planId - ID of the subscription plan
- * @returns {string} Human-readable visibility description
- * 
- * @example
- * getVisibilityDescription('premium') // Returns '100km visibility radius'
- * getVisibilityDescription('unlimited') // Returns '1000km visibility radius (Nationwide)'
- */
 function getVisibilityDescription(planId) {
   const plan = subscriptionPlans[planId];
-  
-  if (!plan) {
-    return '10km visibility radius (Default)';
-  }
-  
-  // Add special description for unlimited plan
-  if (planId === 'unlimited') {
-    return `${plan.visibilityRadius}km visibility radius (Nationwide)`;
-  }
-  
-  // Add context based on radius
+  if (!plan) return '10km visibility radius (Default)';
+  if (planId === 'unlimited') return `${plan.visibilityRadius}km visibility radius (Nationwide)`;
   let context = '';
-  if (plan.visibilityRadius <= 10) {
-    context = ' (Local)';
-  } else if (plan.visibilityRadius <= 50) {
-    context = ' (Extended Local)';
-  } else if (plan.visibilityRadius <= 100) {
-    context = ' (Regional)';
-  } else if (plan.visibilityRadius <= 300) {
-    context = ' (Provincial)';
-  } else if (plan.visibilityRadius <= 600) {
-    context = ' (National)';
-  } else {
-    context = ' (Nationwide)';
-  }
-  
+  if (plan.visibilityRadius <= 10) context = ' (Local)';
+  else if (plan.visibilityRadius <= 50) context = ' (Extended Local)';
+  else if (plan.visibilityRadius <= 100) context = ' (Regional)';
+  else if (plan.visibilityRadius <= 300) context = ' (Provincial)';
+  else if (plan.visibilityRadius <= 600) context = ' (National)';
+  else context = ' (Nationwide)';
   return `${plan.visibilityRadius}km visibility radius${context}`;
 }
 
-/**
- * Check if Subscription Plan is Active
- * 
- * Determines whether a technician's subscription is currently active
- * based on the plan type and relevant expiration dates.
- * 
- * IMPORTANT: This function is critical for search visibility.
- * Technicians with inactive subscriptions are hidden from search results.
- * 
- * @param {string} plan - Plan ID (e.g., 'premium', 'basic')
- * @param {Date} endDate - End date for paid subscriptions
- * @param {Date} trialEndDate - End date for trial/free subscriptions
- * @returns {boolean} True if subscription is active, false otherwise
- * 
- * @example
- * // Check if premium subscription is active
- * isPlanActive('premium', '2024-12-31', null) // Returns true if current date < Dec 31, 2024
- * 
- * // Check if trial is active
- * isPlanActive('trial', null, '2024-01-15') // Returns true if current date < Jan 15, 2024
- */
 function isPlanActive(plan, endDate, trialEndDate) {
   const now = new Date();
-  
-  // Handle trial or free plans
   if (plan === 'trial' || plan === 'free') {
-    // If trial has an end date, check it
     if (trialEndDate) {
       const trialEnd = new Date(trialEndDate);
-      const isActive = now < trialEnd;
-      
-      if (!isActive) {
-        console.log(`Trial expired on ${trialEnd.toISOString().split('T')[0]}`);
-      }
-      
-      return isActive;
+      return now < trialEnd;
     }
-    
-    // If no trial end date specified, assume active
-    // This provides backward compatibility with existing data
-    console.log('No trial end date specified, assuming trial is active');
     return true;
   }
-  
-  // Handle paid subscriptions (basic, premium, business, etc.)
   if (endDate) {
     const subscriptionEnd = new Date(endDate);
-    const isActive = now < subscriptionEnd;
-    
-    if (!isActive) {
-      console.log(`Subscription expired on ${subscriptionEnd.toISOString().split('T')[0]}`);
-    }
-    
-    return isActive;
+    return now < subscriptionEnd;
   }
-  
-  // If no relevant dates provided, subscription is inactive
-  console.warn(`No end date found for plan: ${plan}`);
   return false;
 }
 
-/**
- * Get Plan Upgrade Path
- * 
- * Returns the recommended upgrade sequence from a current plan
- * to help technicians understand their options.
- * 
- * @param {string} currentPlanId - Current subscription plan ID
- * @returns {Array} Array of plan IDs in recommended upgrade order
- * 
- * @example
- * getUpgradePath('basic') // Returns ['basicPlus', 'premium', 'business', 'enterprise', 'unlimited']
- */
 function getUpgradePath(currentPlanId) {
-  const upgradeOrder = ['trial', 'free', 'basic', 'basicPlus', 'premium', 'business', 'enterprise', 'unlimited'];
+  const upgradeOrder = ['trial', 'free', 'test', 'basic', 'basicPlus', 'premium', 'business', 'enterprise', 'unlimited'];
   const currentIndex = upgradeOrder.indexOf(currentPlanId);
-  
-  if (currentIndex === -1) {
-    return upgradeOrder;
-  }
-  
+  if (currentIndex === -1) return upgradeOrder;
   return upgradeOrder.slice(currentIndex + 1);
 }
 
-/**
- * Calculate Plan Savings
- * 
- * Calculates savings when purchasing longer subscription periods.
- * Useful for offering annual plans and discounts.
- * 
- * @param {string} planId - Plan ID
- * @param {number} months - Number of months (1, 3, 6, 12)
- * @returns {Object} Savings calculation
- */
 function calculatePlanSavings(planId, months = 1) {
   const plan = subscriptionPlans[planId];
-  
-  if (!plan) {
-    return { monthlyPrice: 0, totalPrice: 0, savings: 0, savingsPercentage: 0 };
-  }
-  
+  if (!plan) return { monthlyPrice: 0, totalPrice: 0, savings: 0, savingsPercentage: 0 };
   const monthlyPrice = plan.price;
   const regularTotal = monthlyPrice * months;
-  
-  // Define discount tiers (can be customized)
   let discount = 0;
-  if (months >= 12) discount = 0.20; // 20% off for annual
-  else if (months >= 6) discount = 0.10; // 10% off for 6 months
-  else if (months >= 3) discount = 0.05; // 5% off for quarterly
-  
+  if (months >= 12) discount = 0.20;
+  else if (months >= 6) discount = 0.10;
+  else if (months >= 3) discount = 0.05;
   const discountedTotal = regularTotal * (1 - discount);
   const savings = regularTotal - discountedTotal;
-  
-  return {
-    monthlyPrice,
-    months,
-    regularTotal,
-    discountedTotal,
-    savings,
-    savingsPercentage: discount * 100
-  };
+  return { monthlyPrice, months, regularTotal, discountedTotal, savings, savingsPercentage: discount * 100 };
 }
 
-/**
- * Validate Plan Compatibility
- * 
- * Checks if a technician's service radius is compatible with their subscription plan.
- * Technicians cannot offer service beyond their paid visibility radius.
- * 
- * @param {string} planId - Subscription plan ID
- * @param {number} serviceRadius - Technician's desired service radius in km
- * @returns {Object} Validation result with status and message
- */
 function validatePlanCompatibility(planId, serviceRadius) {
   const plan = subscriptionPlans[planId];
-  
-  if (!plan) {
-    return {
-      valid: false,
-      message: 'Invalid subscription plan',
-      maxAllowedRadius: 10
-    };
-  }
-  
+  if (!plan) return { valid: false, message: 'Invalid subscription plan', maxAllowedRadius: 10 };
   const maxAllowedRadius = plan.visibilityRadius;
-  
   if (serviceRadius > maxAllowedRadius) {
     return {
       valid: false,
@@ -543,32 +399,15 @@ function validatePlanCompatibility(planId, serviceRadius) {
       suggestedPlan: getPlanByRadius(serviceRadius)
     };
   }
-  
-  return {
-    valid: true,
-    message: 'Service radius is compatible with subscription plan',
-    maxAllowedRadius
-  };
+  return { valid: true, message: 'Service radius is compatible with subscription plan', maxAllowedRadius };
 }
 
-/**
- * Get Plan Features Comparison
- * 
- * Returns a comparison matrix of features across all plans.
- * Useful for displaying feature comparison tables.
- * 
- * @returns {Object} Feature comparison object
- */
 function getFeaturesComparison() {
   const allFeatures = new Set();
   const comparison = {};
-  
-  // Collect all unique features
   Object.entries(subscriptionPlans).forEach(([planId, plan]) => {
     plan.features.forEach(feature => allFeatures.add(feature));
   });
-  
-  // Build comparison matrix
   Object.entries(subscriptionPlans).forEach(([planId, plan]) => {
     comparison[planId] = {
       name: plan.name,
@@ -576,22 +415,16 @@ function getFeaturesComparison() {
       visibilityRadius: plan.visibilityRadius,
       features: {}
     };
-    
     allFeatures.forEach(feature => {
       comparison[planId].features[feature] = plan.features.includes(feature);
     });
   });
-  
   return comparison;
 }
 
-// Export all functions and constants for use in other modules
 module.exports = {
-  // Main plans configuration
   subscriptionPlans,
   plansList,
-  
-  // Helper functions
   getPlanByRadius,
   getVisibilityDescription,
   isPlanActive,
