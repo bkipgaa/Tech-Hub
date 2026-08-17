@@ -132,12 +132,13 @@ exports.activateTrial = async (req, res) => {
  * Initiate Paystack payment for subscription upgrade
  * @route POST /api/subscription/upgrade
  * 
- * This replaces the mock payment with a real Paystack transaction.
- * It returns an authorization_url for the frontend to redirect the user.
+ * Now accepts 'paymentMethod' from request body to let users choose
+ * between Card, M-Pesa, or both (default).
  */
 exports.upgradeSubscription = async (req, res) => {
   try {
-    const { planId, autoRenew = false } = req.body; // paymentMethodId is no longer needed
+    // Destructure paymentMethod (default: 'both') along with planId and autoRenew
+    const { planId, autoRenew = false, paymentMethod = 'both' } = req.body;
     
     const technician = await Technician.findOne({ userId: req.user.userId });
     if (!technician) {
@@ -155,6 +156,14 @@ exports.upgradeSubscription = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // Map frontend 'paymentMethod' to Paystack 'channels' array
+    let channels = ['card', 'mpesa']; // default: both
+    if (paymentMethod === 'card') {
+      channels = ['card'];
+    } else if (paymentMethod === 'mpesa') {
+      channels = ['mpesa'];
+    } // else 'both' stays as ['card', 'mpesa']
+
     // Metadata to help the webhook identify the technician and plan
     const metadata = {
       technicianId: technician._id.toString(),
@@ -169,13 +178,12 @@ exports.upgradeSubscription = async (req, res) => {
       amount: plan.price * 100,
       email: user.email,
       currency: 'KES',
-      channels: ['card', 'mpesa'], // Support both payment methods
+      channels: channels,               // 👈 Now using dynamic channels
       metadata: metadata,
       callback_url: `${process.env.FRONTEND_URL}/payment-callback` // Optional: where to redirect after payment
     });
 
     // Save pending payment info to track the transaction
-    // This helps prevent race conditions and allows verification later
     technician.paymentPending = {
       reference: response.data.reference,
       planId: planId,
@@ -199,7 +207,6 @@ exports.upgradeSubscription = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 /**
  * Paystack Webhook Handler
  * @route POST /api/subscription/webhook
