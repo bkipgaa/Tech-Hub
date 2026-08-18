@@ -160,9 +160,9 @@ exports.upgradeSubscription = async (req, res) => {
     }
 
     // Map paymentMethod to channels
-    let channels = ['card', 'mpesa'];
+    let channels = ['card', 'mobile money'];
     if (paymentMethod === 'card') channels = ['card'];
-    else if (paymentMethod === 'mpesa') channels = ['mpesa'];
+    else if (paymentMethod === 'mobile money') channels = ['mobile money'];
 
     const metadata = {
       technicianId: technician._id.toString(),
