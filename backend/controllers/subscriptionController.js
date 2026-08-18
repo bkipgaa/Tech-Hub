@@ -11,7 +11,7 @@
 const Technician = require('../models/Technician');
 const User = require('../models/User'); // Needed to fetch email for Paystack
 const { subscriptionPlans, plansList } = require('../utils/subscriptionPlans');
-const { convertToSmallestUnit } = require('../utils/helpers'); // or wherever your helpers are
+
 
 // Initialize Paystack with secret key from environment
 const Paystack = require('paystack-api')(process.env.PAYSTACK_SECRET_KEY);
@@ -154,11 +154,6 @@ exports.upgradeSubscription = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid plan' });
     }
 
-    // Ensure the plan price is in KES (all plans are in KES)
-    const currency = 'KES';
-    // Convert to smallest unit (kobo for KES)
-    const amountInKobo = convertToSmallestUnit(plan.price, currency); // plan.price * 100
-
     const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -168,7 +163,6 @@ exports.upgradeSubscription = async (req, res) => {
     let channels = ['card', 'mpesa'];
     if (paymentMethod === 'card') channels = ['card'];
     else if (paymentMethod === 'mpesa') channels = ['mpesa'];
-    // 'both' remains ['card', 'mpesa']
 
     const metadata = {
       technicianId: technician._id.toString(),
@@ -177,20 +171,22 @@ exports.upgradeSubscription = async (req, res) => {
       autoRenew: autoRenew
     };
 
+    // ✅ Direct multiplication – no helper needed
+    const amountInKobo = plan.price * 100; // KES → kobo
+
     const response = await Paystack.transaction.initialize({
       amount: amountInKobo,
       email: user.email,
-      currency: currency,                // explicitly KES
+      currency: 'KES',                // required for M-Pesa
       channels: channels,
       metadata: metadata,
       callback_url: `${process.env.FRONTEND_URL}/payment-callback`
     });
 
-    // Save pending transaction
     technician.paymentPending = {
       reference: response.data.reference,
       planId: planId,
-      amount: plan.price,                // store in main unit
+      amount: plan.price,
       autoRenew: autoRenew,
       initiatedAt: new Date()
     };
