@@ -11,6 +11,7 @@
 const Technician = require('../models/Technician');
 const User = require('../models/User'); // Needed to fetch email for Paystack
 const { subscriptionPlans, plansList } = require('../utils/subscriptionPlans');
+const { convertToSmallestUnit } = require('../utils/helpers'); // or wherever your helpers are
 
 // Initialize Paystack with secret key from environment
 const Paystack = require('paystack-api')(process.env.PAYSTACK_SECRET_KEY);

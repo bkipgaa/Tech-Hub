@@ -1,0 +1,1 @@
+const amountInKobo = convertToSmallestUnit(plan.price, 'KES');
