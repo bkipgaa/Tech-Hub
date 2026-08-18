@@ -132,12 +132,15 @@ exports.activateTrial = async (req, res) => {
  * Initiate Paystack payment for subscription upgrade
  * @route POST /api/subscription/upgrade
  * 
- * Now accepts 'paymentMethod' from request body to let users choose
- * between Card, M-Pesa, or both (default).
+/**
+ * Initiate Paystack payment for subscription upgrade
+ * @route POST /api/subscription/upgrade
+ * 
+ * Accepts 'paymentMethod' from frontend: 'card', 'mpesa', or 'both' (default).
+ * Currency is always KES – M-Pesa only works with KES.
  */
 exports.upgradeSubscription = async (req, res) => {
   try {
-    // Destructure paymentMethod (default: 'both') along with planId and autoRenew
     const { planId, autoRenew = false, paymentMethod = 'both' } = req.body;
     
     const technician = await Technician.findOne({ userId: req.user.userId });
@@ -150,21 +153,22 @@ exports.upgradeSubscription = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid plan' });
     }
 
-    // Get the user's email for Paystack
+    // Ensure the plan price is in KES (all plans are in KES)
+    const currency = 'KES';
+    // Convert to smallest unit (kobo for KES)
+    const amountInKobo = convertToSmallestUnit(plan.price, currency); // plan.price * 100
+
     const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Map frontend 'paymentMethod' to Paystack 'channels' array
-    let channels = ['card', 'mpesa']; // default: both
-    if (paymentMethod === 'card') {
-      channels = ['card'];
-    } else if (paymentMethod === 'mpesa') {
-      channels = ['mpesa'];
-    } // else 'both' stays as ['card', 'mpesa']
+    // Map paymentMethod to channels
+    let channels = ['card', 'mpesa'];
+    if (paymentMethod === 'card') channels = ['card'];
+    else if (paymentMethod === 'mpesa') channels = ['mpesa'];
+    // 'both' remains ['card', 'mpesa']
 
-    // Metadata to help the webhook identify the technician and plan
     const metadata = {
       technicianId: technician._id.toString(),
       planId: planId,
@@ -172,28 +176,25 @@ exports.upgradeSubscription = async (req, res) => {
       autoRenew: autoRenew
     };
 
-    // Initialize Paystack transaction
-    // Amount is in kobo (smallest currency unit). For KES, 1 KES = 100 kobo.
     const response = await Paystack.transaction.initialize({
-      amount: plan.price * 100,
+      amount: amountInKobo,
       email: user.email,
-      currency: 'KES',
-      channels: channels,               // 👈 Now using dynamic channels
+      currency: currency,                // explicitly KES
+      channels: channels,
       metadata: metadata,
-      callback_url: `${process.env.FRONTEND_URL}/payment-callback` // Optional: where to redirect after payment
+      callback_url: `${process.env.FRONTEND_URL}/payment-callback`
     });
 
-    // Save pending payment info to track the transaction
+    // Save pending transaction
     technician.paymentPending = {
       reference: response.data.reference,
       planId: planId,
-      amount: plan.price,
+      amount: plan.price,                // store in main unit
       autoRenew: autoRenew,
       initiatedAt: new Date()
     };
     await technician.save();
 
-    // Return the Paystack checkout URL to the frontend
     res.json({
       success: true,
       message: 'Payment initiated successfully',
