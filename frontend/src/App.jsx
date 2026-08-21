@@ -33,6 +33,7 @@ import MyJobs from './components/jobs/MyJobs';
 import JobDetails from './components/jobs/JobDetails';
 import MyApplications from './components/applications/MyApplications';
 import AdminVerifyJobs from './components/admin/AdminVerifyJobs';
+import PaymentCallback from './pages/PaymentCallback';
 import './App.css';
 
 function App() {
@@ -54,6 +55,7 @@ function App() {
             <Route path="become-technician" element={<BecomeTechnician />} />
             <Route path="create-technician-profile" element={<CreateTechnicianProfile />} />
             <Route path="/technicians/search" element={<TechnicianSearchResults />} />
+
             
             {/* Protected Routes - Any authenticated user */}
             {/* ==================== ADMIN ROUTES (Separate Layout) ==================== */}
@@ -64,6 +66,7 @@ function App() {
           // In your Routes / Switch:
 <Route path="/chat" element={<ChatPage />} />           {/* No chat selected */}
 <Route path="/chat/:conversationId" element={<ChatPage />} />  {/* Active chat */}
+<Route path="/payment-callback" element={<PaymentCallback />} />
 
             <Route path="profile" element={
               <PrivateRoute>
