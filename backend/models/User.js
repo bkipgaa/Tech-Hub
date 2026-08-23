@@ -26,6 +26,9 @@ const userSchema = new mongoose.Schema({
     required: [true, 'First name is required'],
     trim: true
   },
+
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
   lastName: {
     type: String,
     required: [true, 'Last name is required'],

@@ -27,7 +27,9 @@ const {
   becomeTechnician, 
   updateProfile,
   getAllUsers,
-  updateUserRole
+  updateUserRole,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/authcontroller');
 const { validateRegistration, validateLogin } = require('../middleware/validation');
 const {auth} = require('../middleware/auth');
@@ -37,6 +39,8 @@ const adminAuth = require('../middleware/AdminAuth');
 router.post('/register', validateRegistration, register);
 router.post('/register-admin', registerAdmin); // Secure admin registration
 router.post('/login', validateLogin, login);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password/:token',resetPassword);
 
 // ==================== PROTECTED ROUTES (Any authenticated user) ====================
 router.get('/profile', auth, getProfile);

@@ -13,6 +13,8 @@
 
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const sendEmail = require('../utils/sendEmail');
 
 // Generate JWT Token
 const generateToken = (user) => {
@@ -535,6 +537,99 @@ exports.updateUserRole = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error'
+    });
+  }
+};
+
+
+
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No user found with that email address.',
+      });
+    }
+
+    // Generate a reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+
+    await user.save({ validateBeforeSave: false });
+
+    // Build reset URL (adjust to your frontend URL)
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    const message = `
+      <h1>Password Reset Request</h1>
+      <p>You requested a password reset. Click the link below to set a new password:</p>
+      <a href="${resetUrl}" target="_blank">${resetUrl}</a>
+      <p>This link expires in 1 hour.</p>
+      <p>If you did not request this, please ignore this email.</p>
+    `;
+
+    await sendEmail({
+      email: user.email,
+      subject: 'WeBA-Hub Password Reset',
+      html: message,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset link sent to your email.',
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error. Could not send reset email.',
+    });
+  }
+};
+
+/**
+ * @desc    Reset password using token
+ * @route   POST /api/auth/reset-password/:token
+ * @access  Public
+ */
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { newPassword } = req.body;
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token.',
+      });
+    }
+
+    // Set new password
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. You can now log in.',
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error. Could not reset password.',
     });
   }
 };

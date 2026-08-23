@@ -26,7 +26,8 @@ import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import TechnicianRoute from './components/TechnicianRoute';
 import ChatPage from './components/chat/ChatPage';
-
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import JobsPage from './pages/jobsPage';
 import PostJob from './components/jobs/postJob';
 import MyJobs from './components/jobs/MyJobs';
@@ -67,6 +68,8 @@ function App() {
 <Route path="/chat" element={<ChatPage />} />           {/* No chat selected */}
 <Route path="/chat/:conversationId" element={<ChatPage />} />  {/* Active chat */}
 <Route path="/payment-callback" element={<PaymentCallback />} />
+<Route path="/forgot-password" element={<ForgotPassword />} />
+<Route path="/reset-password/:token" element={<ResetPassword />} />
 
             <Route path="profile" element={
               <PrivateRoute>
