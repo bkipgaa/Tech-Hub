@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 
 const sendEmail = async (options) => {
   console.log('📧 Sending email via Brevo:');
@@ -8,16 +9,24 @@ const sendEmail = async (options) => {
   console.log('  To:', options.email);
 
   try {
-    // Use port 465 with secure: true for SSL
-    const isSecure = process.env.SMTP_PORT == 465;
-    
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
-      secure: isSecure, // true for 465, false for other ports
+      secure: process.env.SMTP_PORT == 465,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
+      },
+      // ✅ Force IPv4 lookup
+      lookup: (hostname, callback) => {
+        dns.lookup(hostname, { family: 4 }, (err, address) => {
+          if (err) {
+            console.error('❌ DNS lookup failed:', err);
+            return callback(err);
+          }
+          console.log(`✅ Resolved ${hostname} -> IPv4: ${address}`);
+          callback(null, address, 4);
+        });
       },
       tls: {
         rejectUnauthorized: false,
@@ -26,7 +35,6 @@ const sendEmail = async (options) => {
       socketTimeout: 30000,
     });
 
-    // ✅ Verify connection before sending (helps catch auth/network issues early)
     await transporter.verify();
     console.log('✅ SMTP connection verified successfully.');
 
