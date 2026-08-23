@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 
 const sendEmail = async (options) => {
-  // Log configuration (without exposing full password)
   console.log('📧 Sending email with config:');
   console.log('  Host:', process.env.SMTP_HOST);
   console.log('  Port:', process.env.SMTP_PORT);
@@ -19,12 +19,21 @@ const sendEmail = async (options) => {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      // ✅ FORCE IPv4 – this is the critical fix
-      family: 4,
-      // ✅ Increase timeouts to avoid premature failures
-      connectionTimeout: 30000, // 30 seconds
+      // ✅ FORCE IPv4 – custom lookup function
+      lookup: (hostname, callback) => {
+        dns.lookup(hostname, { family: 4 }, (err, address) => {
+          if (err) {
+            console.error('❌ DNS lookup failed:', err);
+            return callback(err);
+          }
+          console.log(`✅ Resolved ${hostname} -> IPv4: ${address}`);
+          callback(null, address, 4);
+        });
+      },
+      // Increase timeouts for Render's network
+      connectionTimeout: 30000,
       socketTimeout: 30000,
-      // Helps bypass some Gmail blocks on cloud servers
+      // Bypass SSL certificate issues (if any)
       tls: {
         rejectUnauthorized: false,
       },
