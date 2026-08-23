@@ -542,29 +542,41 @@ exports.updateUserRole = async (req, res) => {
 };
 
 
-
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email });
+    console.log(`🔍 Forgot password requested for: ${email}`);
 
+    // 1. Check if user exists
+    const user = await User.findOne({ email });
     if (!user) {
+      console.log(`❌ No user found for email: ${email}`);
       return res.status(404).json({
         success: false,
         message: 'No user found with that email address.',
       });
     }
 
-    // Generate a reset token
+    // 2. Generate reset token (expires in 1 hour)
     const resetToken = crypto.randomBytes(32).toString('hex');
     user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    user.resetPasswordExpires = Date.now() + 3600000;
 
     await user.save({ validateBeforeSave: false });
+    console.log(`✅ Reset token generated for user: ${email}`);
 
-    // Build reset URL (adjust to your frontend URL)
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    // 3. Build reset URL (check that FRONTEND_URL is set)
+    const frontendUrl = process.env.FRONTEND_URL;
+    if (!frontendUrl) {
+      console.error('❌ FRONTEND_URL is not defined in environment variables');
+      return res.status(500).json({
+        success: false,
+        message: 'Server configuration error: missing frontend URL.',
+      });
+    }
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
 
+    // 4. Prepare email HTML
     const message = `
       <h1>Password Reset Request</h1>
       <p>You requested a password reset. Click the link below to set a new password:</p>
@@ -573,21 +585,46 @@ exports.forgotPassword = async (req, res) => {
       <p>If you did not request this, please ignore this email.</p>
     `;
 
-    await sendEmail({
-      email: user.email,
-      subject: 'WeBA-Hub Password Reset',
-      html: message,
-    });
+    // 5. Send email – catch specific errors from Nodemailer
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'WeBA-Hub Password Reset',
+        html: message,
+      });
+      console.log(`✅ Password reset email sent to: ${email}`);
+    } catch (emailError) {
+      // Log the full SMTP error
+      console.error('❌ Nodemailer error (full):', emailError);
+      console.error('  - Code:', emailError.code);
+      console.error('  - Command:', emailError.command);
+      console.error('  - Response:', emailError.response);
+      console.error('  - Stack:', emailError.stack);
 
+      // Return a detailed error response (remove in production)
+      return res.status(500).json({
+        success: false,
+        message: 'Email sending failed. Please contact support.',
+        details: emailError.message,  // Shows real cause (e.g., "Invalid login")
+      });
+    }
+
+    // 6. Success
     res.status(200).json({
       success: true,
       message: 'Password reset link sent to your email.',
     });
+
   } catch (error) {
-    console.error('Forgot password error:', error);
+    // Catch any other unexpected errors (e.g., database issues)
+    console.error('🚨 Unhandled forgot password error:', error);
+    console.error('Stack:', error.stack);
+
     res.status(500).json({
       success: false,
-      message: 'Server error. Could not send reset email.',
+      message: 'Server error. Could not process your request.',
+      // Remove `details` after debugging
+      details: error.message,
     });
   }
 };
