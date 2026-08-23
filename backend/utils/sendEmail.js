@@ -1,31 +1,35 @@
 const nodemailer = require('nodemailer');
 
 const sendEmail = async (options) => {
-  // Log the exact configuration being used (hide password partially)
+  // Log configuration (without exposing full password)
   console.log('📧 Sending email with config:');
-  console.log('  - Host:', process.env.SMTP_HOST);
-  console.log('  - Port:', process.env.SMTP_PORT);
-  console.log('  - User:', process.env.SMTP_USER);
-  console.log('  - Pass:', process.env.SMTP_PASS ? '✅ Set' : '❌ MISSING');
-  console.log('  - From:', process.env.SMTP_FROM || '❌ MISSING');
-  console.log('  - To:', options.email);
+  console.log('  Host:', process.env.SMTP_HOST);
+  console.log('  Port:', process.env.SMTP_PORT);
+  console.log('  User:', process.env.SMTP_USER);
+  console.log('  Pass:', process.env.SMTP_PASS ? '✅ Set' : '❌ MISSING');
+  console.log('  From:', process.env.SMTP_FROM || '❌ MISSING (using user)');
+  console.log('  To:', options.email);
 
   try {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
-      secure: false, // false for 587, true for 465
+      secure: process.env.SMTP_PORT == 465, // true for 465, false for 587
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      // ⚠️ This often fixes Gmail blocks on cloud servers
+      // ✅ FORCE IPv4 – this is the critical fix
+      family: 4,
+      // ✅ Increase timeouts to avoid premature failures
+      connectionTimeout: 30000, // 30 seconds
+      socketTimeout: 30000,
+      // Helps bypass some Gmail blocks on cloud servers
       tls: {
         rejectUnauthorized: false,
       },
     });
 
-    // Ensure 'from' falls back to the user if SMTP_FROM is missing
     const from = process.env.SMTP_FROM || process.env.SMTP_USER;
 
     const mailOptions = {
@@ -39,12 +43,9 @@ const sendEmail = async (options) => {
     console.log('✅ Email sent successfully:', info.messageId);
     return info;
   } catch (error) {
-    // Log the FULL error stack so Render shows it
-    console.error('❌ NODEMAILER ERROR DETAILS:', error);
-    console.error('❌ Error code:', error.code);
-    console.error('❌ Error command:', error.command);
-    console.error('❌ Error response:', error.response);
-    throw error; // Re-throw so the authController catches it
+    console.error('❌ NODEMAILER ERROR:', error);
+    // Re-throw so the calling function can handle it
+    throw error;
   }
 };
 
