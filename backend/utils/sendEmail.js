@@ -8,19 +8,27 @@ const sendEmail = async (options) => {
   console.log('  To:', options.email);
 
   try {
+    // Use port 465 with secure: true for SSL
+    const isSecure = process.env.SMTP_PORT == 465;
+    
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
-      secure: false, // 587 is TLS
+      secure: isSecure, // true for 465, false for other ports
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      // No need for family: 4 or custom lookup
       tls: {
         rejectUnauthorized: false,
       },
+      connectionTimeout: 30000,
+      socketTimeout: 30000,
     });
+
+    // ✅ Verify connection before sending (helps catch auth/network issues early)
+    await transporter.verify();
+    console.log('✅ SMTP connection verified successfully.');
 
     const mailOptions = {
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
