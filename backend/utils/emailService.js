@@ -1,30 +1,40 @@
-const SibApiV3Sdk = require('@getbrevo/brevo');
-
-// Initialize the API client
-const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-
-// Set your API key (from environment variables)
-apiInstance.setApiKey(
-  SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey,
-  process.env.BREVO_API_KEY
-);
+// backend/utils/emailService.js
+const axios = require('axios');
 
 const sendEmail = async (options) => {
   try {
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-    sendSmtpEmail.subject = options.subject;
-    sendSmtpEmail.htmlContent = options.html;
-    sendSmtpEmail.sender = { 
-      name: 'WeBA-Hub', 
-      email: process.env.SMTP_FROM || 'webathub@gmail.com' 
-    };
-    sendSmtpEmail.to = [{ email: options.email }];
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      throw new Error('BREVO_API_KEY is missing in environment variables');
+    }
 
-    const response = await apiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log('✅ Email sent successfully via Brevo API:', response);
-    return response;
+    const senderEmail = process.env.SMTP_FROM || 'webathub@gmail.com';
+    const senderName = 'WeBA-Hub';
+
+    const response = await axios.post(
+      'https://api.brevo.com/v3/smtp/email',
+      {
+        sender: {
+          name: senderName,
+          email: senderEmail,
+        },
+        to: [{ email: options.email }],
+        subject: options.subject,
+        htmlContent: options.html,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': apiKey,
+        },
+        timeout: 30000,
+      }
+    );
+
+    console.log('✅ Email sent successfully via Brevo API:', response.data.messageId);
+    return response.data;
   } catch (error) {
-    console.error('❌ Brevo API Error:', error);
+    console.error('❌ Brevo API Error:', error.response?.data || error.message);
     throw error;
   }
 };
