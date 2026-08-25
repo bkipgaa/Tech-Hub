@@ -1,3 +1,4 @@
+const cloudinary = require('cloudinary').v2;
 const multerCloudinary = require('multer-storage-cloudinary');
 const CloudinaryStorage = multerCloudinary.CloudinaryStorage || multerCloudinary.default || multerCloudinary;
 
