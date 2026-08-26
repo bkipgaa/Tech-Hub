@@ -1,9 +1,9 @@
 /**
  * searchController.js
  * ===================
- * Enhanced search for technicians with subscription-based visibility radius
+ * Enhanced search for technicians with subscription‑based visibility radius
  * 
- * @version 2.1.0 - Optimized for production
+ * @version 2.2.0 – Fixed subscription expiration for free/trial (30 days)
  */
 
 const mongoose = require('mongoose');
@@ -14,6 +14,11 @@ const ServiceCatalog = require('../models/ServiceCatalog');
 // HELPERS
 // ===========================================
 
+/**
+ * Safely parse a date from various input formats.
+ * @param {any} dateValue - Date string, object, or undefined
+ * @returns {Date|null} - Parsed Date or null if invalid
+ */
 const safeParseDate = (dateValue) => {
   if (!dateValue) return null;
   if (dateValue instanceof Date) return isNaN(dateValue.getTime()) ? null : dateValue;
@@ -25,34 +30,82 @@ const safeParseDate = (dateValue) => {
   return isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const isSubscriptionActive = (technician) => {
-  if (!technician?.subscription) return false;
-  const { plan, endDate, trialEndDate, isTrial } = technician.subscription;
+/**
+ * Determine if a technician's subscription is active.
+ * - Free & Trial: active for 30 days from startDate (or createdAt if missing).
+ * - Paid plans: active if endDate is in the future.
+ * @param {Object} tech - The technician document (must include createdAt)
+ * @returns {boolean} - True if subscription is active
+ */
+const isSubscriptionActive = (tech) => {
+  // If no subscription object, treat as inactive (adjust if needed)
+  if (!tech?.subscription) return false;
+
+  const { plan, startDate, endDate, trialEndDate, isTrial } = tech.subscription;
   const now = new Date();
-  const parsedEndDate = safeParseDate(endDate);
-  const parsedTrialEndDate = safeParseDate(trialEndDate);
 
+  // --- FREE PLAN: active for 30 days from startDate or createdAt ---
+  if (plan === 'free') {
+    // Use startDate if provided, otherwise fallback to technician's createdAt timestamp
+    let start = startDate ? safeParseDate(startDate) : tech.createdAt;
+    if (!start) return false; // Cannot determine start – treat as inactive
+    const expiry = new Date(start);
+    expiry.setDate(expiry.getDate() + 30);
+    return now < expiry;
+  }
+
+  // --- TRIAL PLAN: honour trialEndDate, or fallback to startDate+30 days ---
   if (plan === 'trial' || isTrial === true) {
-    return parsedTrialEndDate ? now < parsedTrialEndDate : false;
+    if (trialEndDate) {
+      const parsed = safeParseDate(trialEndDate);
+      return parsed ? now < parsed : false;
+    } else {
+      // If no trialEndDate, use startDate (or createdAt) + 30 days
+      let start = startDate ? safeParseDate(startDate) : tech.createdAt;
+      if (!start) return false;
+      const expiry = new Date(start);
+      expiry.setDate(expiry.getDate() + 30);
+      return now < expiry;
+    }
   }
-  return parsedEndDate ? now < parsedEndDate : false;
+
+  // --- PAID PLANS: endDate must exist and be in the future ---
+  const parsedEnd = safeParseDate(endDate);
+  return parsedEnd ? now < parsedEnd : false;
 };
 
-const getVisibilityRadius = (technician) => {
+/**
+ * Get visibility radius (km) based on subscription plan.
+ * @param {Object} tech - Technician document
+ * @returns {number} - Radius in km
+ */
+const getVisibilityRadius = (tech) => {
   const DEFAULT_RADIUS = 10;
-  if (!technician?.subscription) return DEFAULT_RADIUS;
-  if (technician.subscription.planDetails?.visibilityRadius) {
-    return technician.subscription.planDetails.visibilityRadius;
+  if (!tech?.subscription) return DEFAULT_RADIUS;
+
+  // If planDetails has explicit radius, use it
+  if (tech.subscription.planDetails?.visibilityRadius) {
+    return tech.subscription.planDetails.visibilityRadius;
   }
+
+  // Fallback mapping
   const map = {
-    trial: 10, free: 10, basic: 10,
-    basicPlus: 50, 'basic-plus': 50,
-    premium: 100, business: 300,
-    enterprise: 600, unlimited: 1000
+    trial: 10,
+    free: 10,
+    basic: 10,
+    basicPlus: 50,
+    'basic-plus': 50,
+    premium: 100,
+    business: 300,
+    enterprise: 600,
+    unlimited: 1000,
   };
-  return map[technician.subscription.plan] || DEFAULT_RADIUS;
+  return map[tech.subscription.plan] || DEFAULT_RADIUS;
 };
 
+/**
+ * Haversine distance between two coordinates (km).
+ */
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -65,11 +118,12 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 // ===========================================
-// MAIN SEARCH
+// MAIN SEARCH FUNCTION
 // ===========================================
 
 exports.searchTechnicians = async (req, res) => {
   try {
+    // 1. Extract query parameters with defaults
     const {
       mainCategory,
       serviceCategory,
@@ -82,7 +136,7 @@ exports.searchTechnicians = async (req, res) => {
       maxHourlyRate,
       minHourlyRate,
       minExperience,
-      verificationStatus = 'verified',
+      verificationStatus,      // now optional – we'll default to include pending+verified
       isAvailable = true,
       page = 1,
       limit = 20,
@@ -90,6 +144,7 @@ exports.searchTechnicians = async (req, res) => {
       sortOrder = 'asc'
     } = req.query;
 
+    // 2. Validate at least one criterion
     if (!mainCategory && !serviceCategory && !subService && !searchTerm) {
       return res.status(400).json({
         success: false,
@@ -97,10 +152,12 @@ exports.searchTechnicians = async (req, res) => {
       });
     }
 
+    // 3. Validate coordinates if provided
     if (lat && lng && (isNaN(parseFloat(lat)) || isNaN(parseFloat(lng)))) {
       return res.status(400).json({ success: false, message: 'Invalid coordinates' });
     }
 
+    // 4. Sanitise numeric inputs
     let searchRadius = parseFloat(radius);
     if (isNaN(searchRadius)) searchRadius = 1000;
     searchRadius = Math.min(Math.max(searchRadius, 1), 1000);
@@ -109,33 +166,48 @@ exports.searchTechnicians = async (req, res) => {
     const limitNum = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
     const skip = (pageNum - 1) * limitNum;
 
+    // 5. Build MongoDB query
     const query = {
       isActive: true,
       isAvailable: isAvailable === 'true' || isAvailable === true
     };
 
+    // --- VERIFICATION STATUS: include 'verified' and 'pending' by default ---
     if (verificationStatus) {
-      const statusArray = Array.isArray(verificationStatus) ? verificationStatus : [verificationStatus];
+      // If a comma‑separated list is provided, split it
+      const statusArray = Array.isArray(verificationStatus)
+        ? verificationStatus
+        : verificationStatus.split(',');
       query.verificationStatus = { $in: statusArray };
+    } else {
+      // Default: show both verified and pending technicians
+      query.verificationStatus = { $in: ['verified', 'pending'] };
     }
 
+    // --- MAIN CATEGORY (exact, case‑insensitive) ---
     if (mainCategory) {
       query.mainCategory = { $regex: new RegExp(`^${mainCategory}$`, 'i') };
     }
 
+    // --- SERVICE CATEGORY & SUB‑SERVICE (nested) ---
     if (serviceCategory && subService) {
+      // Use case‑insensitive regex for subService to avoid case mismatches
       query.serviceCategories = {
         $elemMatch: {
           categoryName: { $regex: new RegExp(`^${serviceCategory}$`, 'i') },
+          // For subServices, we use $in with exact match (case‑sensitive).
+          // If case issues persist, switch to $regex: new RegExp(`^${subService}$`, 'i')
           subServices: { $in: [subService] }
         }
       };
     } else if (serviceCategory) {
       query['serviceCategories.categoryName'] = { $regex: new RegExp(serviceCategory, 'i') };
     } else if (subService) {
+      // Search across all categories for this sub‑service
       query['serviceCategories.subServices'] = { $in: [subService] };
     }
 
+    // --- TEXT SEARCH (multiple fields) ---
     if (searchTerm) {
       const regex = new RegExp(searchTerm, 'i');
       query.$or = [
@@ -149,40 +221,48 @@ exports.searchTechnicians = async (req, res) => {
       ];
     }
 
+    // --- RATING ---
     if (minRating) {
       const r = parseFloat(minRating);
-      if (!isNaN(r) && r >= 0 && r <= 5) query['rating.average'] = { $gte: r };
+      if (!isNaN(r) && r >= 0 && r <= 5) {
+        query['rating.average'] = { $gte: r };
+      }
     }
 
+    // --- HOURLY RATE ---
     if (maxHourlyRate || minHourlyRate) {
       query['pricing.hourlyRate'] = {};
       if (maxHourlyRate) query['pricing.hourlyRate'].$lte = parseFloat(maxHourlyRate);
       if (minHourlyRate) query['pricing.hourlyRate'].$gte = parseFloat(minHourlyRate);
     }
 
+    // --- EXPERIENCE ---
     if (minExperience) {
       const exp = parseFloat(minExperience);
       if (!isNaN(exp)) query.yearsOfExperience = { $gte: exp };
     }
 
-    // Use lean() for performance, limit fields with select
+    // 6. Execute database query (lean, limit to 200 for safety)
     let technicians = await Technician.find(query)
       .populate('userId', 'firstName lastName profileImage phone email')
-      .select('-portfolio.mediaUrl') // exclude heavy fields if not needed
-      .limit(200) // safety cap to prevent memory explosion
+      .select('-portfolio.mediaUrl')  // exclude heavy field to improve performance
+      .limit(200)
       .lean();
 
+    // 7. Post‑processing: subscription check, distance calculation, visibility radius
     const latitude = lat ? parseFloat(lat) : null;
     const longitude = lng ? parseFloat(lng) : null;
     const visibleTechnicians = [];
 
     for (const tech of technicians) {
       try {
+        // 7a. Subscription active? (now includes free/trial 30‑day logic)
         if (!isSubscriptionActive(tech)) continue;
 
+        // 7b. If coordinates given, compute distance and enforce radii
         if (latitude && longitude && tech.location?.coordinates) {
           const [techLng, techLat] = tech.location.coordinates;
-          if (techLat === 0 && techLng === 0) continue;
+          if (techLat === 0 && techLng === 0) continue; // invalid location
 
           const distance = calculateDistance(latitude, longitude, techLat, techLng);
           const visibilityRadius = getVisibilityRadius(tech);
@@ -194,19 +274,23 @@ exports.searchTechnicians = async (req, res) => {
             tech.isTrial = tech.subscription?.isTrial || tech.subscription?.plan === 'trial';
             visibleTechnicians.push(tech);
           }
-        } else if (!latitude || !longitude) {
+        }
+        // 7c. No coordinates – include without distance filter
+        else if (!latitude || !longitude) {
           tech.visibilityRadius = getVisibilityRadius(tech);
           tech.subscriptionPlan = tech.subscription?.plan || 'trial';
           tech.isTrial = tech.subscription?.isTrial || tech.subscription?.plan === 'trial';
           tech.distance = null;
           visibleTechnicians.push(tech);
         }
+        // (If coordinates but no location, skip)
       } catch (err) {
+        console.warn(`Error processing technician ${tech._id}:`, err.message);
         continue;
       }
     }
 
-    // Sort
+    // 8. Sorting
     if (sortBy === 'distance' && latitude && longitude) {
       visibleTechnicians.sort((a, b) => {
         if (a.distance === null) return 1;
@@ -233,9 +317,11 @@ exports.searchTechnicians = async (req, res) => {
       });
     }
 
+    // 9. Pagination
     const total = visibleTechnicians.length;
     const paginated = visibleTechnicians.slice(skip, skip + limitNum);
 
+    // 10. Format response
     const formatted = paginated.map(tech => ({
       _id: tech._id,
       businessName: tech.businessName,
@@ -267,6 +353,7 @@ exports.searchTechnicians = async (req, res) => {
       createdAt: tech.createdAt
     }));
 
+    // 11. Send response
     res.json({
       success: true,
       count: total,
@@ -289,9 +376,12 @@ exports.searchTechnicians = async (req, res) => {
 };
 
 // ===========================================
-// BY SUB-SERVICE
+// OTHER EXPORTED FUNCTIONS (similarly updated)
 // ===========================================
 
+/**
+ * Get technicians by a specific sub‑service (simplified)
+ */
 exports.getTechniciansBySubService = async (req, res) => {
   try {
     const { subService, lat, lng, radius = 100, page = 1, limit = 20 } = req.query;
@@ -307,7 +397,7 @@ exports.getTechniciansBySubService = async (req, res) => {
     const query = {
       isActive: true,
       isAvailable: true,
-      verificationStatus: 'verified',
+      verificationStatus: { $in: ['verified', 'pending'] },
       'serviceCategories.subServices': subService
     };
 
@@ -394,10 +484,9 @@ exports.getTechniciansBySubService = async (req, res) => {
   }
 };
 
-// ===========================================
-// NEARBY
-// ===========================================
-
+/**
+ * Get nearby technicians (distance‑only search)
+ */
 exports.getNearbyTechnicians = async (req, res) => {
   try {
     const { lat, lng, radius = 10, page = 1, limit = 20 } = req.query;
@@ -419,7 +508,7 @@ exports.getNearbyTechnicians = async (req, res) => {
     const technicians = await Technician.find({
       isActive: true,
       isAvailable: true,
-      verificationStatus: 'verified'
+      verificationStatus: { $in: ['verified', 'pending'] }
     })
     .populate('userId', 'firstName lastName profileImage phone email')
     .lean();
@@ -495,10 +584,9 @@ exports.getNearbyTechnicians = async (req, res) => {
   }
 };
 
-// ===========================================
-// SUGGESTIONS
-// ===========================================
-
+/**
+ * Search suggestions (autocomplete)
+ */
 exports.getSearchSuggestions = async (req, res) => {
   try {
     const { q, limit = 10 } = req.query;
@@ -509,7 +597,6 @@ exports.getSearchSuggestions = async (req, res) => {
     const searchRegex = new RegExp(q, 'i');
     const limitNum = Math.min(parseInt(limit), 20);
 
-    // Parallel queries with limits
     const [businesses, categories, serviceTechs, subServiceTechs] = await Promise.all([
       Technician.find({ businessName: searchRegex, isActive: true })
         .limit(limitNum)
@@ -560,10 +647,9 @@ exports.getSearchSuggestions = async (req, res) => {
   }
 };
 
-// ===========================================
-// CATEGORIES
-// ===========================================
-
+/**
+ * Get all distinct main categories (with fallback)
+ */
 const DEFAULT_CATEGORIES = [
   'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
   'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
@@ -594,25 +680,22 @@ exports.getCategories = async (req, res) => {
   }
 };
 
-// ===========================================
-// FULL CATEGORIES (Service Catalog from Technicians)
-// ===========================================
-
+/**
+ * Get full category tree (from ServiceCatalog or fallback to Technician data)
+ */
 exports.getFullCategories = async (req, res) => {
   try {
-    // Use ServiceCatalog if available (static catalog), fallback to Technician data
     let catalogs = await ServiceCatalog.find({ isActive: true })
       .select('mainCategory serviceCategories.name serviceCategories.subServices')
       .lean();
 
-    // If ServiceCatalog is empty, build from technicians
     if (!catalogs || catalogs.length === 0) {
       const technicians = await Technician.find({
         isActive: true,
         verificationStatus: { $in: ['verified', 'pending'] }
       })
       .select('mainCategory serviceCategories.categoryName serviceCategories.subServices')
-      .limit(500) // safety cap
+      .limit(500)
       .lean();
 
       const categoryMap = {};
@@ -639,7 +722,6 @@ exports.getFullCategories = async (req, res) => {
       catalogs = Object.values(categoryMap);
     }
 
-    // Sort everything
     catalogs.forEach(cat => {
       cat.serviceCategories?.sort((a, b) => a.name.localeCompare(b.name));
       cat.serviceCategories?.forEach(sc => sc.subServices?.sort());
@@ -652,9 +734,5 @@ exports.getFullCategories = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
-// ===========================================
-// EXPORT
-// ===========================================
 
 module.exports = exports;
