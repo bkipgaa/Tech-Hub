@@ -3,7 +3,8 @@
  * ===================
  * Enhanced search for technicians with subscription‑based visibility radius
  * 
- * @version 2.2.0 – Fixed subscription expiration for free/trial (30 days)
+ * @version 2.3.0 – Fixed 'test' plan, improved error handling for Render logging
+ * @author Weba-Hub Team
  */
 
 const mongoose = require('mongoose');
@@ -32,46 +33,53 @@ const safeParseDate = (dateValue) => {
 
 /**
  * Determine if a technician's subscription is active.
- * - Free & Trial: active for 30 days from startDate (or createdAt if missing).
- * - Paid plans: active if endDate is in the future.
+ * 
+ * - FREE, TEST, TRIAL: active for 30 days from startDate (or createdAt).
+ * - PAID plans: active if endDate is in the future.
+ * 
  * @param {Object} tech - The technician document (must include createdAt)
  * @returns {boolean} - True if subscription is active
  */
 const isSubscriptionActive = (tech) => {
-  // If no subscription object, treat as inactive (adjust if needed)
-  if (!tech?.subscription) return false;
+  // If no subscription object, treat as inactive
+  if (!tech?.subscription) {
+    console.warn(`Technician ${tech?._id} has no subscription object`);
+    return false;
+  }
 
   const { plan, startDate, endDate, trialEndDate, isTrial } = tech.subscription;
   const now = new Date();
 
-  // --- FREE PLAN: active for 30 days from startDate or createdAt ---
-  if (plan === 'free') {
-    // Use startDate if provided, otherwise fallback to technician's createdAt timestamp
+  // --- FREE, TEST, TRIAL: 30 days from startDate or createdAt ---
+  if (plan === 'free' || plan === 'test' || plan === 'trial' || isTrial === true) {
+    // Explicit trialEndDate takes precedence for trial plans
+    if ((plan === 'trial' || isTrial === true) && trialEndDate) {
+      const parsed = safeParseDate(trialEndDate);
+      if (!parsed) {
+        console.warn(`Technician ${tech._id} has invalid trialEndDate`);
+        return false;
+      }
+      return now < parsed;
+    }
+
+    // Otherwise use startDate or fallback to createdAt
     let start = startDate ? safeParseDate(startDate) : tech.createdAt;
-    if (!start) return false; // Cannot determine start – treat as inactive
+    if (!start) {
+      console.warn(`Technician ${tech._id} has no startDate or createdAt`);
+      return false;
+    }
     const expiry = new Date(start);
     expiry.setDate(expiry.getDate() + 30);
     return now < expiry;
   }
 
-  // --- TRIAL PLAN: honour trialEndDate, or fallback to startDate+30 days ---
-  if (plan === 'trial' || isTrial === true) {
-    if (trialEndDate) {
-      const parsed = safeParseDate(trialEndDate);
-      return parsed ? now < parsed : false;
-    } else {
-      // If no trialEndDate, use startDate (or createdAt) + 30 days
-      let start = startDate ? safeParseDate(startDate) : tech.createdAt;
-      if (!start) return false;
-      const expiry = new Date(start);
-      expiry.setDate(expiry.getDate() + 30);
-      return now < expiry;
-    }
-  }
-
   // --- PAID PLANS: endDate must exist and be in the future ---
   const parsedEnd = safeParseDate(endDate);
-  return parsedEnd ? now < parsedEnd : false;
+  if (!parsedEnd) {
+    console.warn(`Technician ${tech._id} has paid plan but no valid endDate`);
+    return false;
+  }
+  return now < parsedEnd;
 };
 
 /**
@@ -81,17 +89,21 @@ const isSubscriptionActive = (tech) => {
  */
 const getVisibilityRadius = (tech) => {
   const DEFAULT_RADIUS = 10;
-  if (!tech?.subscription) return DEFAULT_RADIUS;
+  if (!tech?.subscription) {
+    console.warn(`Technician ${tech?._id} has no subscription, using default radius ${DEFAULT_RADIUS}km`);
+    return DEFAULT_RADIUS;
+  }
 
   // If planDetails has explicit radius, use it
   if (tech.subscription.planDetails?.visibilityRadius) {
     return tech.subscription.planDetails.visibilityRadius;
   }
 
-  // Fallback mapping
+  // Fallback mapping (includes 'test' at 20km)
   const map = {
     trial: 10,
     free: 10,
+    test: 20,           // <-- test plan: 20km visibility
     basic: 10,
     basicPlus: 50,
     'basic-plus': 50,
@@ -100,11 +112,17 @@ const getVisibilityRadius = (tech) => {
     enterprise: 600,
     unlimited: 1000,
   };
-  return map[tech.subscription.plan] || DEFAULT_RADIUS;
+  const radius = map[tech.subscription.plan] || DEFAULT_RADIUS;
+  return radius;
 };
 
 /**
  * Haversine distance between two coordinates (km).
+ * @param {number} lat1 - Latitude of point 1
+ * @param {number} lon1 - Longitude of point 1
+ * @param {number} lat2 - Latitude of point 2
+ * @param {number} lon2 - Longitude of point 2
+ * @returns {number} - Distance in km (rounded to 1 decimal)
  */
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -117,10 +135,59 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return Math.round((R * c) * 10) / 10;
 }
 
+/**
+ * Build a consistent error response for the frontend and Render logs.
+ * @param {Error} error - The caught error
+ * @param {string} fallbackMessage - User‑friendly message
+ * @param {number} status - HTTP status code
+ * @param {string} endpoint - API endpoint name for logging
+ * @returns {Object} - Express response object
+ */
+const handleControllerError = (res, error, fallbackMessage, status = 500, endpoint = 'unknown') => {
+  // Log the full error to Render console (visible in logs)
+  console.error(`[${endpoint}] Error:`, {
+    message: error.message,
+    stack: error.stack,
+    name: error.name,
+    code: error.code,
+    status: status,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Send a clean response to the client
+  const response = {
+    success: false,
+    message: fallbackMessage,
+    ...(process.env.NODE_ENV === 'development' && {
+      error: error.message,
+      stack: error.stack,
+    }),
+  };
+
+  // Specific database error handling
+  if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+    response.databaseError = true;
+    response.message = 'Database error. Please try again later.';
+  } else if (error.name === 'ValidationError') {
+    response.message = 'Invalid data provided.';
+    response.details = error.message;
+    status = 400;
+  } else if (error.name === 'CastError') {
+    response.message = 'Invalid ID format.';
+    status = 400;
+  }
+
+  res.status(status).json(response);
+};
+
 // ===========================================
 // MAIN SEARCH FUNCTION
 // ===========================================
 
+/**
+ * Search technicians with filters, subscription validation, and distance filtering.
+ * Route: GET /api/search/technicians
+ */
 exports.searchTechnicians = async (req, res) => {
   try {
     // 1. Extract query parameters with defaults
@@ -136,7 +203,7 @@ exports.searchTechnicians = async (req, res) => {
       maxHourlyRate,
       minHourlyRate,
       minExperience,
-      verificationStatus,      // now optional – we'll default to include pending+verified
+      verificationStatus,
       isAvailable = true,
       page = 1,
       limit = 20,
@@ -146,15 +213,24 @@ exports.searchTechnicians = async (req, res) => {
 
     // 2. Validate at least one criterion
     if (!mainCategory && !serviceCategory && !subService && !searchTerm) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one search criteria is required'
-      });
+      return handleControllerError(
+        res,
+        new Error('At least one search criteria is required'),
+        'At least one search criteria is required (mainCategory, serviceCategory, subService, or searchTerm)',
+        400,
+        'searchTechnicians'
+      );
     }
 
     // 3. Validate coordinates if provided
     if (lat && lng && (isNaN(parseFloat(lat)) || isNaN(parseFloat(lng)))) {
-      return res.status(400).json({ success: false, message: 'Invalid coordinates' });
+      return handleControllerError(
+        res,
+        new Error('Invalid coordinates'),
+        'Invalid latitude or longitude values provided.',
+        400,
+        'searchTechnicians'
+      );
     }
 
     // 4. Sanitise numeric inputs
@@ -174,7 +250,6 @@ exports.searchTechnicians = async (req, res) => {
 
     // --- VERIFICATION STATUS: include 'verified' and 'pending' by default ---
     if (verificationStatus) {
-      // If a comma‑separated list is provided, split it
       const statusArray = Array.isArray(verificationStatus)
         ? verificationStatus
         : verificationStatus.split(',');
@@ -191,23 +266,20 @@ exports.searchTechnicians = async (req, res) => {
 
     // --- SERVICE CATEGORY & SUB‑SERVICE (nested) ---
     if (serviceCategory && subService) {
-      // Use case‑insensitive regex for subService to avoid case mismatches
+      // Case‑sensitive exact match for subService – consider using $regex if needed
       query.serviceCategories = {
         $elemMatch: {
           categoryName: { $regex: new RegExp(`^${serviceCategory}$`, 'i') },
-          // For subServices, we use $in with exact match (case‑sensitive).
-          // If case issues persist, switch to $regex: new RegExp(`^${subService}$`, 'i')
           subServices: { $in: [subService] }
         }
       };
     } else if (serviceCategory) {
       query['serviceCategories.categoryName'] = { $regex: new RegExp(serviceCategory, 'i') };
     } else if (subService) {
-      // Search across all categories for this sub‑service
       query['serviceCategories.subServices'] = { $in: [subService] };
     }
 
-    // --- TEXT SEARCH (multiple fields) ---
+    // --- TEXT SEARCH ---
     if (searchTerm) {
       const regex = new RegExp(searchTerm, 'i');
       query.$or = [
@@ -245,9 +317,12 @@ exports.searchTechnicians = async (req, res) => {
     // 6. Execute database query (lean, limit to 200 for safety)
     let technicians = await Technician.find(query)
       .populate('userId', 'firstName lastName profileImage phone email')
-      .select('-portfolio.mediaUrl')  // exclude heavy field to improve performance
+      .select('-portfolio.mediaUrl')
       .limit(200)
       .lean();
+
+    // Log how many technicians were found before filtering (for debugging on Render)
+    console.log(`[searchTechnicians] Found ${technicians.length} technician(s) in database for query:`, JSON.stringify(query));
 
     // 7. Post‑processing: subscription check, distance calculation, visibility radius
     const latitude = lat ? parseFloat(lat) : null;
@@ -256,13 +331,19 @@ exports.searchTechnicians = async (req, res) => {
 
     for (const tech of technicians) {
       try {
-        // 7a. Subscription active? (now includes free/trial 30‑day logic)
-        if (!isSubscriptionActive(tech)) continue;
+        // 7a. Subscription active? (includes 'test' plan now)
+        if (!isSubscriptionActive(tech)) {
+          console.log(`[searchTechnicians] Technician ${tech._id} skipped: subscription inactive`);
+          continue;
+        }
 
         // 7b. If coordinates given, compute distance and enforce radii
         if (latitude && longitude && tech.location?.coordinates) {
           const [techLng, techLat] = tech.location.coordinates;
-          if (techLat === 0 && techLng === 0) continue; // invalid location
+          if (techLat === 0 && techLng === 0) {
+            console.log(`[searchTechnicians] Technician ${tech._id} skipped: coordinates (0,0)`);
+            continue;
+          }
 
           const distance = calculateDistance(latitude, longitude, techLat, techLng);
           const visibilityRadius = getVisibilityRadius(tech);
@@ -273,6 +354,8 @@ exports.searchTechnicians = async (req, res) => {
             tech.subscriptionPlan = tech.subscription?.plan || 'trial';
             tech.isTrial = tech.subscription?.isTrial || tech.subscription?.plan === 'trial';
             visibleTechnicians.push(tech);
+          } else {
+            console.log(`[searchTechnicians] Technician ${tech._id} skipped: distance ${distance}km exceeds radius (visibility ${visibilityRadius}km, search ${searchRadius}km)`);
           }
         }
         // 7c. No coordinates – include without distance filter
@@ -283,12 +366,13 @@ exports.searchTechnicians = async (req, res) => {
           tech.distance = null;
           visibleTechnicians.push(tech);
         }
-        // (If coordinates but no location, skip)
       } catch (err) {
-        console.warn(`Error processing technician ${tech._id}:`, err.message);
+        console.warn(`[searchTechnicians] Error processing technician ${tech._id}:`, err.message);
         continue;
       }
     }
+
+    console.log(`[searchTechnicians] ${visibleTechnicians.length} technician(s) passed filtering`);
 
     // 8. Sorting
     if (sortBy === 'distance' && latitude && longitude) {
@@ -366,32 +450,34 @@ exports.searchTechnicians = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Search error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Search failed',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    handleControllerError(res, error, 'An error occurred while searching for technicians.', 500, 'searchTechnicians');
   }
 };
 
 // ===========================================
-// OTHER EXPORTED FUNCTIONS (similarly updated)
+// GET TECHNICIANS BY SUB‑SERVICE
 // ===========================================
 
 /**
- * Get technicians by a specific sub‑service (simplified)
+ * Get technicians by a specific sub‑service (simplified).
+ * Route: GET /api/search/by-sub-service
  */
 exports.getTechniciansBySubService = async (req, res) => {
   try {
     const { subService, lat, lng, radius = 100, page = 1, limit = 20 } = req.query;
 
     if (!subService) {
-      return res.status(400).json({ success: false, message: 'subService is required' });
+      return handleControllerError(
+        res,
+        new Error('subService is required'),
+        'subService parameter is required.',
+        400,
+        'getTechniciansBySubService'
+      );
     }
 
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const pageNum = parseInt(page) || 1;
+    const limitNum = Math.min(parseInt(limit) || 20, 50);
     const skip = (pageNum - 1) * limitNum;
 
     const query = {
@@ -402,6 +488,7 @@ exports.getTechniciansBySubService = async (req, res) => {
     };
 
     const total = await Technician.countDocuments(query);
+    console.log(`[getTechniciansBySubService] Found ${total} total technicians for subService: "${subService}"`);
 
     let technicians = await Technician.find(query)
       .populate('userId', 'firstName lastName profileImage phone email')
@@ -420,7 +507,7 @@ exports.getTechniciansBySubService = async (req, res) => {
         const [techLng, techLat] = tech.location.coordinates;
         if (techLat !== 0 || techLng !== 0) {
           const distance = calculateDistance(latitude, longitude, techLat, techLng);
-          const searchRadius = parseFloat(radius);
+          const searchRadius = parseFloat(radius) || 100;
           const visibilityRadius = getVisibilityRadius(tech);
           if (distance <= Math.min(visibilityRadius, searchRadius)) {
             tech.distance = distance;
@@ -479,20 +566,30 @@ exports.getTechniciansBySubService = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('BySubService error:', error.message);
-    res.status(500).json({ success: false, message: error.message });
+    handleControllerError(res, error, 'An error occurred while fetching technicians by sub‑service.', 500, 'getTechniciansBySubService');
   }
 };
 
+// ===========================================
+// GET NEARBY TECHNICIANS
+// ===========================================
+
 /**
- * Get nearby technicians (distance‑only search)
+ * Get nearby technicians (distance‑only search).
+ * Route: GET /api/search/nearby
  */
 exports.getNearbyTechnicians = async (req, res) => {
   try {
     const { lat, lng, radius = 10, page = 1, limit = 20 } = req.query;
 
     if (!lat || !lng) {
-      return res.status(400).json({ success: false, message: 'Latitude and longitude required' });
+      return handleControllerError(
+        res,
+        new Error('Latitude and longitude required'),
+        'Both latitude (lat) and longitude (lng) are required.',
+        400,
+        'getNearbyTechnicians'
+      );
     }
 
     let searchRadius = parseFloat(radius);
@@ -501,9 +598,19 @@ exports.getNearbyTechnicians = async (req, res) => {
 
     const latitude = parseFloat(lat);
     const longitude = parseFloat(lng);
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const pageNum = parseInt(page) || 1;
+    const limitNum = Math.min(parseInt(limit) || 20, 50);
     const skip = (pageNum - 1) * limitNum;
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      return handleControllerError(
+        res,
+        new Error('Invalid coordinates'),
+        'Invalid latitude or longitude values.',
+        400,
+        'getNearbyTechnicians'
+      );
+    }
 
     const technicians = await Technician.find({
       isActive: true,
@@ -512,6 +619,8 @@ exports.getNearbyTechnicians = async (req, res) => {
     })
     .populate('userId', 'firstName lastName profileImage phone email')
     .lean();
+
+    console.log(`[getNearbyTechnicians] Found ${technicians.length} active technicians`);
 
     const visible = [];
 
@@ -579,23 +688,33 @@ exports.getNearbyTechnicians = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Nearby search error:', error.message);
-    res.status(500).json({ success: false, message: error.message });
+    handleControllerError(res, error, 'An error occurred while finding nearby technicians.', 500, 'getNearbyTechnicians');
   }
 };
 
+// ===========================================
+// SEARCH SUGGESTIONS (AUTOCOMPLETE)
+// ===========================================
+
 /**
- * Search suggestions (autocomplete)
+ * Get autocomplete suggestions for search.
+ * Route: GET /api/search/suggestions
  */
 exports.getSearchSuggestions = async (req, res) => {
   try {
     const { q, limit = 10 } = req.query;
     if (!q || q.length < 2) {
-      return res.status(400).json({ success: false, message: 'Min 2 characters' });
+      return handleControllerError(
+        res,
+        new Error('Query too short'),
+        'Please enter at least 2 characters for suggestions.',
+        400,
+        'getSearchSuggestions'
+      );
     }
 
     const searchRegex = new RegExp(q, 'i');
-    const limitNum = Math.min(parseInt(limit), 20);
+    const limitNum = Math.min(parseInt(limit) || 10, 20);
 
     const [businesses, categories, serviceTechs, subServiceTechs] = await Promise.all([
       Technician.find({ businessName: searchRegex, isActive: true })
@@ -639,17 +758,23 @@ exports.getSearchSuggestions = async (req, res) => {
       ...Array.from(subServicesSet).map(s => ({ type: 'subservice', value: s }))
     ];
 
-    res.json({ success: true, query: q, suggestions: suggestions.slice(0, limitNum * 2) });
+    console.log(`[getSearchSuggestions] Query "${q}" returned ${suggestions.length} suggestions`);
+
+    res.json({
+      success: true,
+      query: q,
+      suggestions: suggestions.slice(0, limitNum * 2)
+    });
 
   } catch (error) {
-    console.error('Suggestion error:', error.message);
-    res.status(500).json({ success: false, message: error.message });
+    handleControllerError(res, error, 'An error occurred while fetching suggestions.', 500, 'getSearchSuggestions');
   }
 };
 
-/**
- * Get all distinct main categories (with fallback)
- */
+// ===========================================
+// GET CATEGORIES
+// ===========================================
+
 const DEFAULT_CATEGORIES = [
   'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
   'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
@@ -659,6 +784,10 @@ const DEFAULT_CATEGORIES = [
   'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping'
 ];
 
+/**
+ * Get all distinct main categories.
+ * Route: GET /api/search/categories
+ */
 exports.getCategories = async (req, res) => {
   try {
     const categories = await Technician.distinct('mainCategory', {
@@ -666,30 +795,35 @@ exports.getCategories = async (req, res) => {
       verificationStatus: { $in: ['verified', 'pending'] }
     });
 
+    console.log(`[getCategories] Found ${categories.length} distinct categories`);
+
     res.json({
       success: true,
       categories: categories.length > 0 ? categories : DEFAULT_CATEGORIES
     });
   } catch (error) {
-    console.error('Categories error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-      categories: DEFAULT_CATEGORIES
-    });
+    handleControllerError(res, error, 'An error occurred while fetching categories.', 500, 'getCategories');
   }
 };
 
+// ===========================================
+// GET FULL CATEGORY TREE
+// ===========================================
+
 /**
- * Get full category tree (from ServiceCatalog or fallback to Technician data)
+ * Get full category tree (from ServiceCatalog or fallback to Technician data).
+ * Route: GET /api/search/categories/full
  */
 exports.getFullCategories = async (req, res) => {
   try {
+    // First, try to get from ServiceCatalog
     let catalogs = await ServiceCatalog.find({ isActive: true })
       .select('mainCategory serviceCategories.name serviceCategories.subServices')
       .lean();
 
+    // If ServiceCatalog is empty, build from technicians
     if (!catalogs || catalogs.length === 0) {
+      console.log('[getFullCategories] ServiceCatalog empty, building from Technician data');
       const technicians = await Technician.find({
         isActive: true,
         verificationStatus: { $in: ['verified', 'pending'] }
@@ -722,17 +856,26 @@ exports.getFullCategories = async (req, res) => {
       catalogs = Object.values(categoryMap);
     }
 
+    // Sort everything alphabetically
     catalogs.forEach(cat => {
       cat.serviceCategories?.sort((a, b) => a.name.localeCompare(b.name));
       cat.serviceCategories?.forEach(sc => sc.subServices?.sort());
     });
 
-    res.json({ success: true, categories: catalogs });
+    console.log(`[getFullCategories] Returning ${catalogs.length} main categories`);
+
+    res.json({
+      success: true,
+      categories: catalogs
+    });
 
   } catch (error) {
-    console.error('Full categories error:', error.message);
-    res.status(500).json({ success: false, message: error.message });
+    handleControllerError(res, error, 'An error occurred while fetching the full category tree.', 500, 'getFullCategories');
   }
 };
+
+// ===========================================
+// EXPORT
+// ===========================================
 
 module.exports = exports;

@@ -1,36 +1,80 @@
+/**
+ * SearchPage.js
+ * =============
+ * A comprehensive search page for finding technicians.
+ * Allows searching by three‑level service hierarchy:
+ * mainCategory → serviceCategory → subService.
+ * 
+ * Features:
+ * - Dropdown cascading from backend catalog data
+ * - Location detection and radius control
+ * - Advanced filters (rating, hourly rate)
+ * - Results display with plan badges, visibility radius, and booking actions
+ * 
+ * @version 2.1.0 – Added 'test' plan, improved error handling, comments
+ * @author Weba-Hub Team
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Star, Filter, Wrench, Navigation, DollarSign, X, Globe, Crown, Zap, Briefcase, Award, Clock, CheckCircle } from 'lucide-react';
+import {
+  Search,
+  MapPin,
+  Star,
+  Filter,
+  Wrench,
+  Navigation,
+  DollarSign,
+  X,
+  Globe,
+  Crown,
+  Zap,
+  Briefcase,
+  Award,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
 import api from '../services/api';
 
-// Plan configuration for consistent styling
+// ============================================================
+// PLAN CONFIGURATION (matching backend subscription plans)
+// ============================================================
 const planConfig = {
   free: { label: 'Free', color: 'text-gray-600', bg: 'bg-gray-100', border: 'border-gray-200', icon: null },
+  test: { label: 'Test', color: 'text-pink-600', bg: 'bg-pink-100', border: 'border-pink-200', icon: null }, // Added
   basic: { label: 'Basic', color: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-200', icon: null },
   premium: { label: 'Premium', color: 'text-yellow-600', bg: 'bg-yellow-100', border: 'border-yellow-200', icon: Crown },
   business: { label: 'Business', color: 'text-purple-600', bg: 'bg-purple-100', border: 'border-purple-200', icon: Briefcase },
   enterprise: { label: 'Enterprise', color: 'text-indigo-600', bg: 'bg-indigo-100', border: 'border-indigo-200', icon: Zap },
   unlimited: { label: 'Unlimited', color: 'text-red-600', bg: 'bg-red-100', border: 'border-red-200', icon: Globe },
-  trial: { label: 'Trial', color: 'text-green-600', bg: 'bg-green-100', border: 'border-green-200', icon: Clock }
+  trial: { label: 'Trial', color: 'text-green-600', bg: 'bg-green-100', border: 'border-green-200', icon: Clock },
 };
 
 const SearchPage = () => {
   const navigate = useNavigate();
+
+  // --- Search & results state ---
   const [loading, setLoading] = useState(false);
   const [technicians, setTechnicians] = useState([]);
+  const [searchError, setSearchError] = useState(''); // search‑specific error
+
+  // --- Location state ---
   const [userLocation, setUserLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+
+  // --- Catalog state ---
   const [catalogLoading, setCatalogLoading] = useState(true);
-  
-  // ===== CATALOG DATA FROM BACKEND =====
+  const [catalogError, setCatalogError] = useState(''); // catalog load error
   const [catalogData, setCatalogData] = useState({
     mainCategories: [],
-    serviceCategoriesMap: {}, // mainCategory -> array of service categories
-    subServicesMap: {} // serviceCategory -> array of sub-services
+    serviceCategoriesMap: {}, // mainCategory → array of service category names
+    subServicesMap: {}, // serviceCategory → array of sub‑service names
   });
+  const [usingDefaultCatalog, setUsingDefaultCatalog] = useState(false); // true if we fell back
 
-  // Search filters
+  // --- Filter state ---
   const [filters, setFilters] = useState({
     mainCategory: '',
     serviceCategory: '',
@@ -38,51 +82,59 @@ const SearchPage = () => {
     radius: 50,
     minRating: '',
     maxHourlyRate: '',
-    minHourlyRate: ''
+    minHourlyRate: '',
   });
-  
-  // Dynamic dropdown options
+  const [showFilters, setShowFilters] = useState(false);
+
+  // --- Dynamic dropdown options (derived from catalog) ---
   const [serviceCategories, setServiceCategories] = useState([]);
   const [subServices, setSubServices] = useState([]);
-  
-  // ===== LOAD CATALOG FROM BACKEND =====
-  useEffect(() => {
-    fetchCatalogData();
-  }, []);
+
+  // ============================================================
+  // CATALOG LOADING
+  // ============================================================
 
   /**
-   * Fetch complete catalog data from service-catalog API
-   * This includes all three levels: mainCategory -> serviceCategories -> subServices
+   * Load the service catalog from the backend.
+   * Uses `/search/categories/full` which returns a complete
+   * hierarchy: mainCategory → serviceCategories → subServices.
+   * 
+   * On failure, falls back to a static default catalog.
+   * Caches result in sessionStorage for instant loads on revisit.
    */
-    // ===== LOAD CATALOG FROM BACKEND =====
-  useEffect(() => {
-    // Check sessionStorage first (instant load on revisit)
-    const cached = sessionStorage.getItem('catalogData');
-    if (cached) {
-      setCatalogData(JSON.parse(cached));
-      setCatalogLoading(false);
-      return;
-    }
-    fetchCatalogData();
-  }, []);
-
   const fetchCatalogData = async () => {
     setCatalogLoading(true);
+    setCatalogError('');
+    setUsingDefaultCatalog(false);
+
+    // Check cache first
+    const cached = sessionStorage.getItem('catalogData');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setCatalogData(parsed);
+        setCatalogLoading(false);
+        return;
+      } catch {
+        // If cache is corrupted, ignore and fetch fresh
+        sessionStorage.removeItem('catalogData');
+      }
+    }
+
     try {
-      // ONE request gets everything: mainCategory → serviceCategories → subServices
       const response = await api.get('/search/categories/full');
-      
+
       if (response.data.success) {
         const categories = response.data.categories || [];
         const mainCategories = [];
         const serviceCategoriesMap = {};
         const subServicesMap = {};
 
-        categories.forEach(cat => {
+        categories.forEach((cat) => {
           mainCategories.push(cat.mainCategory);
-          serviceCategoriesMap[cat.mainCategory] = (cat.serviceCategories || []).map(s => s.name);
-          
-          (cat.serviceCategories || []).forEach(sc => {
+          serviceCategoriesMap[cat.mainCategory] = (cat.serviceCategories || []).map((s) => s.name);
+
+          (cat.serviceCategories || []).forEach((sc) => {
             subServicesMap[sc.name] = sc.subServices || [];
           });
         });
@@ -91,17 +143,23 @@ const SearchPage = () => {
         setCatalogData(payload);
         sessionStorage.setItem('catalogData', JSON.stringify(payload));
       } else {
-        useDefaultCatalog();
+        // API returned success: false
+        throw new Error(response.data.message || 'Catalog data unavailable');
       }
     } catch (error) {
       console.error('Failed to load catalog:', error);
+      setCatalogError(error.message || 'Could not load service catalog.');
+      // Fall back to default catalog so the page remains usable
       useDefaultCatalog();
+      setUsingDefaultCatalog(true);
     } finally {
       setCatalogLoading(false);
     }
   };
+
   /**
-   * Use default catalog data when backend is unavailable
+   * Provides a static fallback catalog when the backend is unreachable.
+   * This ensures the search page remains functional even without API.
    */
   const useDefaultCatalog = () => {
     const defaultMainCategories = [
@@ -124,15 +182,15 @@ const SearchPage = () => {
       'HVAC Services',
       'Appliance Repair',
       'Moving & Logistics',
-      'Gardening & Landscaping'
+      'Gardening & Landscaping',
     ];
 
     const defaultServiceCategories = {
       'IT & Networking': ['Internet Services', 'CCTV & Security Systems', 'Computer Repair & Maintenance'],
       'Electrical Services': ['Residential Electrical', 'Commercial Electrical'],
       'Mechanical Services': ['HVAC Services', 'General Mechanical'],
-      'Plumbing': ['General Plumbing', 'Drainage & Sewer'],
-      'Cleaning Services': ['Residential Cleaning', 'Commercial Cleaning']
+      Plumbing: ['General Plumbing', 'Drainage & Sewer'],
+      'Cleaning Services': ['Residential Cleaning', 'Commercial Cleaning'],
     };
 
     const defaultSubServices = {
@@ -140,24 +198,33 @@ const SearchPage = () => {
       'Residential Electrical': ['House Wiring & Rewiring', 'Lighting Installation', 'Ceiling Fan Installation'],
       'General Plumbing': ['Leak Detection & Repair', 'Faucet Installation & Repair', 'Toilet Repair & Installation'],
       'CCTV & Security Systems': ['CCTV Camera Installation', 'Security System Maintenance'],
-      'Computer Repair & Maintenance': ['Hardware Repair', 'Virus & Malware Removal', 'Data Recovery']
+      'Computer Repair & Maintenance': ['Hardware Repair', 'Virus & Malware Removal', 'Data Recovery'],
     };
 
     setCatalogData({
       mainCategories: defaultMainCategories,
       serviceCategoriesMap: defaultServiceCategories,
-      subServicesMap: defaultSubServices
+      subServicesMap: defaultSubServices,
     });
   };
 
-  // ===== UPDATE DROPDOWN OPTIONS BASED ON SELECTIONS =====
-  
-  // Update service categories when main category changes
+  // Load catalog on mount (with cache check inside fetch function)
+  useEffect(() => {
+    fetchCatalogData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ============================================================
+  // DYNAMIC DROPDOWN UPDATES
+  // ============================================================
+
+  // When main category changes, update service categories
   useEffect(() => {
     if (filters.mainCategory) {
       const services = catalogData.serviceCategoriesMap[filters.mainCategory] || [];
       setServiceCategories(services);
-      setFilters(prev => ({ ...prev, serviceCategory: '', subService: '' }));
+      // Reset dependent selections
+      setFilters((prev) => ({ ...prev, serviceCategory: '', subService: '' }));
       setSubServices([]);
     } else {
       setServiceCategories([]);
@@ -165,31 +232,40 @@ const SearchPage = () => {
     }
   }, [filters.mainCategory, catalogData.serviceCategoriesMap]);
 
-  // Update sub-services when service category changes
+  // When service category changes, update sub-services
   useEffect(() => {
     if (filters.serviceCategory) {
       const subs = catalogData.subServicesMap[filters.serviceCategory] || [];
       setSubServices(subs);
-      setFilters(prev => ({ ...prev, subService: '' }));
+      setFilters((prev) => ({ ...prev, subService: '' }));
     } else {
       setSubServices([]);
     }
   }, [filters.serviceCategory, catalogData.subServicesMap]);
 
-  // ===== LOCATION FUNCTIONS =====
+  // ============================================================
+  // LOCATION FUNCTIONS
+  // ============================================================
+
+  /**
+   * Request the user's geolocation and trigger a search if successful.
+   * Shows an in‑UI error message on failure (instead of alert).
+   */
   const getCurrentLocation = () => {
     setGettingLocation(true);
+    setSearchError(''); // Clear previous search errors
+
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser');
+      setSearchError('Geolocation is not supported by your browser.');
       setGettingLocation(false);
       return;
     }
-    
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const location = {
           lat: position.coords.latitude,
-          lng: position.coords.longitude
+          lng: position.coords.longitude,
         };
         setUserLocation(location);
         setGettingLocation(false);
@@ -197,7 +273,7 @@ const SearchPage = () => {
       },
       (error) => {
         let errorMessage = 'Unable to get your location. ';
-        switch(error.code) {
+        switch (error.code) {
           case error.PERMISSION_DENIED:
             errorMessage += 'Please enable location permissions.';
             break;
@@ -210,28 +286,37 @@ const SearchPage = () => {
           default:
             errorMessage += 'Please check your location settings.';
         }
-        alert(errorMessage);
+        setSearchError(errorMessage);
         setGettingLocation(false);
+        // Still attempt search without location
         performSearch();
       }
     );
   };
 
-  // ===== SEARCH FUNCTION =====
+  // ============================================================
+  // SEARCH FUNCTION
+  // ============================================================
+
+  /**
+   * Perform the actual technician search.
+   * Builds query parameters from filters and location, then calls
+   * the backend `/search/technicians` endpoint.
+   * On success, updates the technicians list; on failure, sets searchError.
+   */
   const performSearch = async (lat, lng) => {
     setLoading(true);
+    setSearchError(''); // Clear previous error
+
     try {
       const params = new URLSearchParams();
-      
-      // Use mainCategory instead of category
+
+      // Three‑level service selection
       if (filters.mainCategory) params.append('mainCategory', filters.mainCategory);
       if (filters.serviceCategory) params.append('serviceCategory', filters.serviceCategory);
       if (filters.subService) params.append('subService', filters.subService);
-      if (filters.radius) params.append('radius', filters.radius);
-      if (filters.minRating) params.append('minRating', filters.minRating);
-      if (filters.maxHourlyRate) params.append('maxHourlyRate', filters.maxHourlyRate);
-      if (filters.minHourlyRate) params.append('minHourlyRate', filters.minHourlyRate);
-      
+
+      // Location & radius
       if (lat && lng) {
         params.append('lat', lat);
         params.append('lng', lng);
@@ -239,31 +324,51 @@ const SearchPage = () => {
         params.append('lat', userLocation.lat);
         params.append('lng', userLocation.lng);
       }
-      
-      console.log('Searching with params:', params.toString());
-      
+      if (filters.radius) params.append('radius', filters.radius);
+
+      // Advanced filters
+      if (filters.minRating) params.append('minRating', filters.minRating);
+      if (filters.maxHourlyRate) params.append('maxHourlyRate', filters.maxHourlyRate);
+      if (filters.minHourlyRate) params.append('minHourlyRate', filters.minHourlyRate);
+
       const response = await api.get(`/search/technicians?${params.toString()}`);
+
       if (response.data.success) {
         setTechnicians(response.data.data || []);
+        // If the backend returns a message (e.g., "No technicians found"), we could show it
+        if (response.data.data?.length === 0) {
+          setSearchError('No technicians match your criteria. Try broadening your search.');
+        }
       } else {
+        // Backend returned success: false
         setTechnicians([]);
+        setSearchError(response.data.message || 'Search failed. Please try again.');
       }
     } catch (error) {
-      console.error('Search failed:', error);
+      console.error('Search error:', error);
+      let errorMsg = 'Search failed. ';
       if (error.response) {
-        console.error('Error response:', error.response.data);
-        alert(`Search failed: ${error.response.data.message || 'Please try again.'}`);
+        errorMsg += `Server error (${error.response.status}). `;
+        if (error.response.data?.message) errorMsg += error.response.data.message;
+      } else if (error.request) {
+        errorMsg += 'No response from server. Check your connection.';
       } else {
-        alert('Search failed. Please try again.');
+        errorMsg += error.message || 'An unexpected error occurred.';
       }
+      setSearchError(errorMsg);
       setTechnicians([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // ============================================================
+  // EVENT HANDLERS
+  // ============================================================
+
   const handleSearch = (e) => {
     e.preventDefault();
+    // If we have a location, use it; otherwise attempt search without location
     if (userLocation) {
       performSearch(userLocation.lat, userLocation.lng);
     } else {
@@ -275,6 +380,7 @@ const SearchPage = () => {
     navigate(`/technician/${technicianId}`);
   };
 
+  /** Clear all filters and reset to defaults, then re‑search */
   const clearFilters = () => {
     setFilters({
       mainCategory: '',
@@ -283,10 +389,11 @@ const SearchPage = () => {
       radius: 50,
       minRating: '',
       maxHourlyRate: '',
-      minHourlyRate: ''
+      minHourlyRate: '',
     });
     setServiceCategories([]);
     setSubServices([]);
+    // Re‑search with new filters
     if (userLocation) {
       performSearch(userLocation.lat, userLocation.lng);
     } else {
@@ -294,7 +401,19 @@ const SearchPage = () => {
     }
   };
 
-  // ===== UI HELPER FUNCTIONS =====
+  /** Dismiss the current search error */
+  const dismissSearchError = () => setSearchError('');
+
+  /** Retry catalog loading */
+  const retryCatalogLoad = () => {
+    sessionStorage.removeItem('catalogData');
+    fetchCatalogData();
+  };
+
+  // ============================================================
+  // UI HELPERS
+  // ============================================================
+
   const getRadiusText = () => {
     const radius = parseInt(filters.radius);
     if (radius <= 10) return `${radius} km (Local)`;
@@ -315,7 +434,11 @@ const SearchPage = () => {
     return 'bg-red-100 text-red-700';
   };
 
-  // ===== LOADING STATE =====
+  // ============================================================
+  // RENDER
+  // ============================================================
+
+  // Show full‑page loader while catalog is loading
   if (catalogLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -327,16 +450,55 @@ const SearchPage = () => {
     );
   }
 
-  // ===== RENDER =====
+  // If catalog failed to load and we don't have a fallback (shouldn't happen, but just in case)
+  if (catalogError && !usingDefaultCatalog) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-lg">
+            <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-500" />
+            <p className="font-medium">{catalogError}</p>
+            <button
+              onClick={retryCatalogLoad}
+              className="mt-3 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main render
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-800 mb-6">Find a Technician</h1>
-        
-        {/* Search Form */}
+
+        {/* ===== CATALOG FALLBACK WARNING ===== */}
+        {usingDefaultCatalog && (
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-lg flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Using default service catalog</p>
+              <p className="text-xs text-yellow-700">
+                Could not load the latest catalog from the server. Some services may be missing.
+              </p>
+            </div>
+            <button
+              onClick={retryCatalogLoad}
+              className="text-xs text-yellow-800 underline hover:no-underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* ===== SEARCH FORM ===== */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <form onSubmit={handleSearch} className="space-y-4">
-            {/* Service Selection Row - THREE LEVELS */}
+            {/* Three‑level service dropdowns */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Level 1: Main Category */}
               <select
@@ -345,11 +507,13 @@ const SearchPage = () => {
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none bg-white"
               >
                 <option value="">Select Main Category</option>
-                {catalogData.mainCategories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {catalogData.mainCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
                 ))}
               </select>
-              
+
               {/* Level 2: Service Category */}
               <select
                 value={filters.serviceCategory}
@@ -358,26 +522,30 @@ const SearchPage = () => {
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none disabled:bg-gray-100 bg-white"
               >
                 <option value="">Select Service Category</option>
-                {serviceCategories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {serviceCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
                 ))}
               </select>
-              
-              {/* Level 3: Sub-Service */}
+
+              {/* Level 3: Sub‑Service */}
               <select
                 value={filters.subService}
                 onChange={(e) => setFilters({ ...filters, subService: e.target.value })}
                 disabled={!filters.serviceCategory || subServices.length === 0}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none disabled:bg-gray-100 bg-white"
               >
-                <option value="">Select Sub-Service</option>
-                {subServices.map(sub => (
-                  <option key={sub} value={sub}>{sub}</option>
+                <option value="">Select Sub‑Service</option>
+                {subServices.map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub}
+                  </option>
                 ))}
               </select>
             </div>
-            
-            {/* Location and Radius Row */}
+
+            {/* Location & Radius Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -407,7 +575,7 @@ const SearchPage = () => {
                   <span>1000 km</span>
                 </div>
               </div>
-              
+
               <div className="flex items-end">
                 <button
                   type="button"
@@ -419,7 +587,7 @@ const SearchPage = () => {
                   {gettingLocation ? 'Getting Location...' : 'Use My Location'}
                 </button>
               </div>
-              
+
               <div className="flex items-end gap-2">
                 <button
                   type="submit"
@@ -427,7 +595,14 @@ const SearchPage = () => {
                   className="flex-1 bg-red-600 text-white p-3 rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <Search className="w-5 h-5" />
-                  {loading ? 'Searching...' : 'Search'}
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    'Search'
+                  )}
                 </button>
                 <button
                   type="button"
@@ -439,8 +614,8 @@ const SearchPage = () => {
                 </button>
               </div>
             </div>
-            
-            {/* Advanced Filters */}
+
+            {/* Advanced Filters (collapsible) */}
             {showFilters && (
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -458,7 +633,7 @@ const SearchPage = () => {
                       <option value="3.0">3.0+ Stars</option>
                     </select>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Min Hourly Rate (KES)</label>
                     <input
@@ -469,7 +644,7 @@ const SearchPage = () => {
                       className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Max Hourly Rate (KES)</label>
                     <input
@@ -481,7 +656,7 @@ const SearchPage = () => {
                     />
                   </div>
                 </div>
-                
+
                 <div className="flex justify-end mt-4">
                   <button
                     type="button"
@@ -496,12 +671,25 @@ const SearchPage = () => {
             )}
           </form>
         </div>
-        
-        {/* Location Indicator */}
+
+        {/* ===== SEARCH ERROR BANNER ===== */}
+        {searchError && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <span className="flex-1 text-sm">{searchError}</span>
+            <button onClick={dismissSearchError} className="text-red-500 hover:text-red-700">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* ===== LOCATION INDICATOR ===== */}
         {userLocation && (
           <div className="mb-4 text-sm text-gray-500 flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200">
             <MapPin className="w-4 h-4 text-green-600" />
-            <span>Showing technicians within <strong>{filters.radius} km</strong> of your location</span>
+            <span>
+              Showing technicians within <strong>{filters.radius} km</strong> of your location
+            </span>
             {filters.radius > 100 && (
               <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
                 Extended search
@@ -509,9 +697,9 @@ const SearchPage = () => {
             )}
           </div>
         )}
-        
-        {/* No Results */}
-        {technicians.length === 0 && !loading && (
+
+        {/* ===== NO RESULTS ===== */}
+        {technicians.length === 0 && !loading && !searchError && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">No technicians found matching your criteria</p>
@@ -531,8 +719,8 @@ const SearchPage = () => {
             )}
           </div>
         )}
-        
-        {/* Results List */}
+
+        {/* ===== RESULTS LIST ===== */}
         {technicians.length > 0 && (
           <>
             <div className="mb-4 text-sm text-gray-500">
@@ -543,24 +731,32 @@ const SearchPage = () => {
                 const plan = tech.subscriptionPlan || 'free';
                 const planInfo = planConfig[plan] || planConfig.free;
                 const PlanIcon = planInfo.icon;
-                
+
                 return (
-                  <div key={tech._id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  <div
+                    key={tech._id}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                  >
                     <div className="flex flex-col md:flex-row gap-6">
                       {/* Profile Image */}
                       <div className="flex-shrink-0">
                         {tech.user?.profileImage ? (
-                          <img src={tech.user.profileImage} alt={tech.user.firstName} className="w-24 h-24 rounded-full object-cover" />
+                          <img
+                            src={tech.user.profileImage}
+                            alt={tech.user.firstName}
+                            className="w-24 h-24 rounded-full object-cover"
+                          />
                         ) : (
                           <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
                             <span className="text-3xl text-gray-500">
-                              {tech.user?.firstName?.[0]}{tech.user?.lastName?.[0]}
+                              {tech.user?.firstName?.[0]}
+                              {tech.user?.lastName?.[0]}
                             </span>
                           </div>
                         )}
                       </div>
-                      
-                      {/* Tech Info */}
+
+                      {/* Technician Details */}
                       <div className="flex-1">
                         <div className="flex flex-wrap justify-between items-start gap-2">
                           <div>
@@ -568,25 +764,24 @@ const SearchPage = () => {
                               <h3 className="text-xl font-semibold text-gray-800">
                                 {tech.user?.firstName} {tech.user?.lastName}
                               </h3>
-                              {/* Main Category Badge - NEW */}
                               {tech.mainCategory && (
                                 <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
                                   {tech.mainCategory}
                                 </span>
                               )}
                               {/* Plan Badge */}
-                              <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${planInfo.bg} ${planInfo.color}`}>
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${planInfo.bg} ${planInfo.color}`}
+                              >
                                 {PlanIcon && <PlanIcon className="w-3 h-3" />}
                                 {planInfo.label}
                               </span>
-                              {/* Verified Badge */}
                               {tech.verificationStatus === 'verified' && (
                                 <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
                                   <CheckCircle className="w-3 h-3" />
                                   Verified
                                 </span>
                               )}
-                              {/* Trial Badge */}
                               {tech.isTrial && (
                                 <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
@@ -594,7 +789,9 @@ const SearchPage = () => {
                                 </span>
                               )}
                             </div>
-                            <p className="text-gray-600 mt-1">{tech.profileHeadline || tech.businessName || 'Professional Technician'}</p>
+                            <p className="text-gray-600 mt-1">
+                              {tech.profileHeadline || tech.businessName || 'Professional Technician'}
+                            </p>
                           </div>
                           <div className="flex items-center gap-1 bg-yellow-50 px-3 py-1 rounded-full">
                             <Star className="w-4 h-4 text-yellow-500 fill-current" />
@@ -602,9 +799,11 @@ const SearchPage = () => {
                             <span className="text-gray-400 text-sm">({tech.rating?.count || 0} reviews)</span>
                           </div>
                         </div>
-                        
-                        <p className="text-gray-600 mt-2 line-clamp-2">{tech.aboutMe || 'Experienced professional ready to help with your service needs.'}</p>
-                        
+
+                        <p className="text-gray-600 mt-2 line-clamp-2">
+                          {tech.aboutMe || 'Experienced professional ready to help with your service needs.'}
+                        </p>
+
                         <div className="flex flex-wrap gap-4 mt-4">
                           {tech.distance !== undefined && tech.distance !== null && (
                             <div className="flex items-center gap-1 text-sm">
@@ -612,20 +811,16 @@ const SearchPage = () => {
                               <span className="text-gray-500">{tech.distance} km away</span>
                             </div>
                           )}
-                          
-                          {/* Visibility Radius */}
                           {tech.visibilityRadius && (
                             <div className="flex items-center gap-1 text-sm text-gray-500">
                               <Globe className="w-4 h-4" />
                               <span>Visible up to {tech.visibilityRadius} km</span>
                             </div>
                           )}
-                          
                           <div className="flex items-center gap-1 text-sm text-gray-500">
                             <DollarSign className="w-4 h-4" />
                             <span>KES {tech.pricing?.hourlyRate || 0}/hour</span>
                           </div>
-                          
                           {tech.yearsOfExperience > 0 && (
                             <div className="flex items-center gap-1 text-sm text-gray-500">
                               <Briefcase className="w-4 h-4" />
@@ -633,8 +828,8 @@ const SearchPage = () => {
                             </div>
                           )}
                         </div>
-                        
-                        {/* Skills Tags */}
+
+                        {/* Skills */}
                         {tech.skills && tech.skills.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-3">
                             {tech.skills.slice(0, 3).map((skill, idx) => (
@@ -649,8 +844,8 @@ const SearchPage = () => {
                             )}
                           </div>
                         )}
-                        
-                        {/* Service Categories with Sub-Services - UPDATED */}
+
+                        {/* Service Categories & Sub‑Services */}
                         {tech.serviceCategories && tech.serviceCategories.length > 0 && (
                           <div className="mt-3">
                             <div className="flex flex-wrap gap-2">
@@ -676,7 +871,7 @@ const SearchPage = () => {
                           </div>
                         )}
                       </div>
-                      
+
                       {/* Action Buttons */}
                       <div className="flex-shrink-0 flex flex-col gap-2">
                         <button

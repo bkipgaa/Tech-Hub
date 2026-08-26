@@ -1,62 +1,97 @@
 /**
  * Technicians.js
  * ==============
- * Search results page - Updated for three-level hierarchy
+ * Search results page - Updated for three-level hierarchy (mainCategory → serviceCategory → subService)
  * 
- * @version 2.0.0
+ * @version 2.1.0 – Fixed field mismatches, added 'test' plan, improved error handling
+ * 
+ * This component is reached via /technicians/search?mainCategory=...&serviceCategory=...&subService=...
+ * It calls the backend /search/technicians endpoint and displays a list of matching technicians.
+ * 
+ * @author Weba-Hub Team
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Navigation, Filter, Wrench, MapPin, Star, DollarSign, Clock, AlertCircle, Info } from 'lucide-react';
+import {
+  Navigation,
+  Filter,
+  Wrench,
+  MapPin,
+  Star,
+  DollarSign,
+  Clock,
+  AlertCircle,
+  Info,
+} from 'lucide-react';
 import api from '../services/api';
 
+/**
+ * Main component for displaying technician search results.
+ * Uses URL query parameters to perform the search.
+ */
 const Technicians = () => {
+  // --- React Router hooks ---
   const location = useLocation();
   const navigate = useNavigate();
-  
+
+  // --- State for technicians list and loading/error ---
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
+  // --- Location state ---
   const [userLocation, setUserLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
-  
-  const [radius, setRadius] = useState(50);
+
+  // --- Filter states ---
+  const [radius, setRadius] = useState(50); // user's search radius in km
   const [showFilters, setShowFilters] = useState(false);
   const [minRating, setMinRating] = useState('');
   const [maxHourlyRate, setMaxHourlyRate] = useState('');
-  
+
+  // --- Metadata from search response ---
   const [searchMetadata, setSearchMetadata] = useState({
     totalCount: 0,
     searchRadiusUsed: null,
     freeTechsVisible: 0,
-    paidTechsVisible: 0
+    paidTechsVisible: 0,
   });
-  
-  // Get query parameters from URL - UPDATED
+
+  // --- Extract search criteria from URL query params ---
   const queryParams = new URLSearchParams(location.search);
   const mainCategory = queryParams.get('mainCategory');
   const serviceCategory = queryParams.get('serviceCategory');
   const subService = queryParams.get('subService');
 
+  // ============================================================
+  // LOCATION FUNCTIONS
+  // ============================================================
+
+  /**
+   * Request the user's geolocation.
+   * On success, stores latitude/longitude in state.
+   * On failure, sets an error message.
+   */
   const getCurrentLocation = useCallback(() => {
     setGettingLocation(true);
     setLocationPermissionDenied(false);
-    
+
+    // Check if browser supports geolocation
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser');
       setGettingLocation(false);
       setLocationPermissionDenied(true);
       return;
     }
-    
+
+    // Request position with high accuracy
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setUserLocation({
           lat: position.coords.latitude,
-          lng: position.coords.longitude
+          lng: position.coords.longitude,
         });
         setGettingLocation(false);
       },
@@ -74,78 +109,135 @@ const Technicians = () => {
     );
   }, []);
 
+  // ============================================================
+  // DISTANCE CALCULATION (Haversine formula)
+  // ============================================================
+
+  /**
+   * Calculate the distance between two geographic points in kilometres.
+   * @param {number} lat1 - Latitude of first point
+   * @param {number} lon1 - Longitude of first point
+   * @param {number} lat2 - Latitude of second point
+   * @param {number} lon2 - Longitude of second point
+   * @returns {number} Distance in km
+   */
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371;
+    const R = 6371; // Earth's radius in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
+  // ============================================================
+  // SEARCH FUNCTION
+  // ============================================================
+
+  /**
+   * Perform the technician search using the current filters and location.
+   * Calls the backend /search/technicians endpoint.
+   * On success, updates the technicians list and metadata.
+   * On failure, displays an error message.
+   */
   const searchTechnicians = useCallback(async () => {
-    if (!userLocation) return;
-    
+    // Guard: if no user location, skip (we still allow search if location denied?)
+    if (!userLocation) {
+      // If location is not available, we still try without location (backend will handle)
+      // We'll still set loading to false, but we shouldn't call the API without coordinates?
+      // Actually the backend can search without coordinates, but we'll still show an error.
+      // For better UX, we'll allow it but with a warning.
+      setError('Location not available. Please enable location for best results.');
+      return;
+    }
+
     setLoading(true);
-    setError('');
-    
+    setError(''); // clear previous errors
+
     try {
+      // Build query parameters for the API
       const params = new URLSearchParams();
-      
-      // UPDATED: Use mainCategory
+
+      // Include search criteria from URL (three-level hierarchy)
       if (mainCategory) params.append('mainCategory', mainCategory);
       if (serviceCategory) params.append('serviceCategory', serviceCategory);
       if (subService) params.append('subService', subService);
-      
+
+      // Include user location and radius
       params.append('lat', userLocation.lat);
       params.append('lng', userLocation.lng);
       if (radius) params.append('radius', radius);
+
+      // Include optional filters
       if (minRating) params.append('minRating', minRating);
       if (maxHourlyRate) params.append('maxHourlyRate', maxHourlyRate);
-      
+
+      // Make the API call
       const response = await api.get(`/search/technicians?${params.toString()}`);
-      
-      const techniciansWithDistance = response.data.data.map(tech => {
+
+      // Check if response is successful (based on backend success flag)
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Search failed');
+      }
+
+      // Compute distance for each technician relative to user location
+      const techniciansWithDistance = response.data.data.map((tech) => {
         if (userLocation && tech.location?.coordinates) {
           const distance = calculateDistance(
             userLocation.lat,
             userLocation.lng,
-            tech.location.coordinates[1],
+            tech.location.coordinates[1], // backend stores [lng, lat]
             tech.location.coordinates[0]
           );
           return { ...tech, distance: parseFloat(distance).toFixed(1) };
         }
         return tech;
       });
-      
+
+      // Sort by distance (closest first)
       techniciansWithDistance.sort((a, b) => {
         const distA = a.distance ? parseFloat(a.distance) : Infinity;
         const distB = b.distance ? parseFloat(b.distance) : Infinity;
         return distA - distB;
       });
-      
+
       setTechnicians(techniciansWithDistance);
-      
-      const freeCount = techniciansWithDistance.filter(t => t.subscriptionPlan === 'free').length;
-      const paidCount = techniciansWithDistance.filter(t => t.subscriptionPlan !== 'free').length;
-      
+
+      // Count free vs paid technicians for metadata
+      const freeCount = techniciansWithDistance.filter(
+        (t) => t.subscriptionPlan === 'free' || t.subscriptionPlan === 'test' || t.subscriptionPlan === 'basic'
+      ).length;
+      const paidCount = techniciansWithDistance.filter(
+        (t) => t.subscriptionPlan !== 'free' && t.subscriptionPlan !== 'test' && t.subscriptionPlan !== 'basic'
+      ).length;
+
       setSearchMetadata({
-        totalCount: response.data.count,
+        totalCount: response.data.count || techniciansWithDistance.length,
         searchRadiusUsed: response.data.searchRadius,
         freeTechsVisible: freeCount,
-        paidTechsVisible: paidCount
+        paidTechsVisible: paidCount,
       });
-      
+
       setLoading(false);
     } catch (err) {
       console.error('Search failed:', err);
-      setError(err.response?.data?.message || 'Failed to find technicians. Please try again.');
+      // Display user-friendly error message
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to find technicians. Please try again.';
+      setError(errorMsg);
       setLoading(false);
     }
   }, [userLocation, mainCategory, serviceCategory, subService, radius, minRating, maxHourlyRate]);
 
+  // ============================================================
+  // UI HELPER FUNCTIONS
+  // ============================================================
+
+  /**
+   * Format distance for display (e.g., "2.5km away" or "500m away")
+   */
   const formatDistance = (distance) => {
     if (!distance) return 'Distance unknown';
     const dist = parseFloat(distance);
@@ -155,62 +247,97 @@ const Technicians = () => {
     return `${dist.toFixed(1)}km away`;
   };
 
+  /**
+   * Get Tailwind CSS classes for the plan badge based on the plan name.
+   * Includes 'test' plan.
+   */
   const getPlanBadgeColor = (plan, isTrial) => {
     if (isTrial) return 'bg-purple-100 text-purple-700 border-purple-200';
-    switch(plan) {
-      case 'free': return 'bg-gray-100 text-gray-600 border-gray-200';
-      case 'basic': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'basicPlus': return 'bg-cyan-100 text-cyan-700 border-cyan-200';
-      case 'premium': return 'bg-green-100 text-green-700 border-green-200';
-      case 'business': return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'enterprise': return 'bg-red-100 text-red-700 border-red-200';
-      case 'unlimited': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      default: return 'bg-gray-100 text-gray-600 border-gray-200';
+    switch (plan) {
+      case 'test':
+        return 'bg-pink-100 text-pink-700 border-pink-200';
+      case 'free':
+        return 'bg-gray-100 text-gray-600 border-gray-200';
+      case 'basic':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'basicPlus':
+        return 'bg-cyan-100 text-cyan-700 border-cyan-200';
+      case 'premium':
+        return 'bg-green-100 text-green-700 border-green-200';
+      case 'business':
+        return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'enterprise':
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'unlimited':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      default:
+        return 'bg-gray-100 text-gray-600 border-gray-200';
     }
   };
 
+  /**
+   * Generate a human-readable visibility description based on plan.
+   * Includes 'test' plan with 20km.
+   */
   const getVisibilityDescription = (plan, visibilityRadius, isTrial) => {
     if (isTrial) return `🔬 Trial: Visible within ${visibilityRadius}km radius`;
     if (plan === 'free') return `📍 Free Plan: Visible within ${visibilityRadius}km radius`;
+    if (plan === 'test') return `🧪 Test Plan: Visible within ${visibilityRadius}km radius`; // test plan
     const planNames = {
       basic: 'Basic',
       basicPlus: 'Basic-Plus',
       premium: 'Premium',
       business: 'Business',
       enterprise: 'Enterprise',
-      unlimited: 'Unlimited'
+      unlimited: 'Unlimited',
     };
     const planName = planNames[plan] || plan.charAt(0).toUpperCase() + plan.slice(1);
     return `🌟 ${planName}: Visible within ${visibilityRadius}km radius`;
   };
 
+  /**
+   * Navigate to technician's public profile.
+   */
   const handleViewProfile = (technicianId) => {
     navigate(`/technician/${technicianId}`);
   };
 
+  /**
+   * Navigate to booking creation page, passing technician and service details.
+   */
   const handleRequestBooking = (technician) => {
     navigate(`/booking/new`, {
       state: {
         technicianId: technician._id,
-        technicianName: `${technician.userId?.firstName || ''} ${technician.userId?.lastName || ''}`,
+        // Use the correct 'user' field (not 'userId')
+        technicianName: `${technician.user?.firstName || ''} ${technician.user?.lastName || ''}`,
         service: subService,
         category: mainCategory,
-        hourlyRate: technician.pricing?.hourlyRate
-      }
+        hourlyRate: technician.pricing?.hourlyRate,
+      },
     });
   };
 
+  /**
+   * Reset all filters to default values.
+   */
   const resetFilters = () => {
     setRadius(50);
     setMinRating('');
     setMaxHourlyRate('');
   };
 
+  /**
+   * Apply filters and trigger a new search.
+   */
   const applyFilters = () => {
     searchTechnicians();
     setShowFilters(false);
   };
 
+  /**
+   * Get a human-readable description of the current radius.
+   */
   const getRadiusText = () => {
     const r = parseInt(radius);
     if (r <= 10) return `${r} km (Local search)`;
@@ -221,16 +348,29 @@ const Technicians = () => {
     return `${r} km (National search)`;
   };
 
+  // ============================================================
+  // SIDE EFFECTS
+  // ============================================================
+
+  // On mount, request user location
   useEffect(() => {
     getCurrentLocation();
   }, [getCurrentLocation]);
 
+  // When location changes, perform the search
   useEffect(() => {
     if (userLocation) {
       searchTechnicians();
     }
+    // If location is not yet available, we could still search without location
+    // but we wait for it to improve accuracy.
   }, [userLocation, searchTechnicians]);
 
+  // ============================================================
+  // RENDER
+  // ============================================================
+
+  // Show loading spinner while first data is being fetched
   if (loading && !technicians.length) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -245,12 +385,12 @@ const Technicians = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        
-        {/* Page Header - UPDATED */}
+        {/* ===== PAGE HEADER ===== */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
             {subService || serviceCategory || mainCategory || 'Technicians'} Near You
           </h1>
+          {/* Display selected categories as badges */}
           {mainCategory && (
             <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm mr-2">
               {mainCategory}
@@ -274,7 +414,7 @@ const Technicians = () => {
           )}
         </div>
 
-        {/* Location Permission Section - keep same */}
+        {/* ===== LOCATION PERMISSION BANNERS ===== */}
         {!userLocation && !gettingLocation && !locationPermissionDenied && (
           <div className="mb-5 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -318,7 +458,7 @@ const Technicians = () => {
           </div>
         )}
 
-        {/* Visibility Info Banner - keep same */}
+        {/* ===== VISIBILITY INFO BANNER (includes 'test' plan) ===== */}
         {userLocation && (
           <div className="mb-5 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg p-3">
             <div className="flex items-start gap-2">
@@ -327,6 +467,7 @@ const Technicians = () => {
                 <p className="font-medium mb-1">How technician visibility works:</p>
                 <ul className="space-y-0.5">
                   <li>• <span className="font-medium">Free plan</span> technicians: Visible within <span className="font-bold">10km</span></li>
+                  <li>• <span className="font-medium">Test plan</span> technicians: Visible within <span className="font-bold">20km</span></li>  {/* <-- ADDED */}
                   <li>• <span className="font-medium">Basic plan</span> technicians: Visible within <span className="font-bold">10km</span></li>
                   <li>• <span className="font-medium">Basic-Plus plan</span> technicians: Visible within <span className="font-bold">50km</span></li>
                   <li>• <span className="font-medium">Premium plan</span> technicians: Visible within <span className="font-bold">100km</span></li>
@@ -339,7 +480,7 @@ const Technicians = () => {
           </div>
         )}
 
-        {/* Filters Section - keep same */}
+        {/* ===== FILTERS TOGGLE AND PANEL ===== */}
         {userLocation && (
           <>
             <button
@@ -358,7 +499,7 @@ const Technicians = () => {
             {showFilters && (
               <div className="mb-5 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
                 <div className="space-y-4">
-                  {/* Radius Filter */}
+                  {/* Radius slider */}
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-sm font-medium text-gray-700">Your Search Radius</label>
@@ -386,6 +527,7 @@ const Technicians = () => {
                     </div>
                   </div>
 
+                  {/* Minimum rating */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Rating</label>
                     <select
@@ -401,6 +543,7 @@ const Technicians = () => {
                     </select>
                   </div>
 
+                  {/* Max hourly rate */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Max Hourly Rate (KES)</label>
                     <input
@@ -432,15 +575,23 @@ const Technicians = () => {
           </>
         )}
 
-        {/* Error Message */}
+        {/* ===== ERROR DISPLAY ===== */}
         {error && (
-          <div className="mb-5 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-sm">
-            {error}
-            <button onClick={searchTechnicians} className="ml-3 underline hover:no-underline">Try Again</button>
+          <div className="mb-5 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={() => {
+                setError('');
+                searchTechnicians();
+              }}
+              className="underline hover:no-underline text-red-700"
+            >
+              Retry
+            </button>
           </div>
         )}
 
-        {/* No Results */}
+        {/* ===== NO RESULTS ===== */}
         {technicians.length === 0 && !loading && userLocation && !error && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -462,7 +613,7 @@ const Technicians = () => {
           </div>
         )}
 
-        {/* Technicians List */}
+        {/* ===== TECHNICIANS LIST ===== */}
         {technicians.length > 0 && (
           <>
             <div className="mb-4 bg-white px-4 py-3 rounded-lg border border-gray-200">
@@ -472,12 +623,14 @@ const Technicians = () => {
                   {searchMetadata.searchRadiusUsed && ` within ${searchMetadata.searchRadiusUsed}km`}
                 </div>
                 <div className="flex gap-3 text-xs">
-                  <span className="text-gray-500">📍 Free/Basic: {searchMetadata.freeTechsVisible}</span>
+                  <span className="text-gray-500">
+                    📍 Free/Test/Basic: {searchMetadata.freeTechsVisible}
+                  </span>
                   <span className="text-gray-500">🌟 Premium+: {searchMetadata.paidTechsVisible}</span>
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-4">
               {technicians.map((tech) => (
                 <div
@@ -485,25 +638,30 @@ const Technicians = () => {
                   className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow"
                 >
                   <div className="flex flex-col md:flex-row md:items-start gap-5">
-                    {/* Profile Image */}
+                    {/* Profile image */}
                     <div className="flex-shrink-0">
                       <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center overflow-hidden">
-                        {tech.userId?.profileImage ? (
-                          <img src={tech.userId.profileImage} alt="Profile" className="w-full h-full object-cover" />
+                        {/* ✅ FIX: use tech.user (not userId) */}
+                        {tech.user?.profileImage ? (
+                          <img
+                            src={tech.user.profileImage}
+                            alt="Profile"
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           <span className="text-xl md:text-2xl font-bold text-gray-500">
-                            {tech.userId?.firstName?.[0]}{tech.userId?.lastName?.[0]}
+                            {tech.user?.firstName?.[0]}{tech.user?.lastName?.[0]}
                           </span>
                         )}
                       </div>
                     </div>
-                    
-                    {/* Technician Info - UPDATED */}
+
+                    {/* Technician details */}
                     <div className="flex-1">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <h3 className="text-lg font-bold text-gray-800">
-                            {tech.userId?.firstName} {tech.userId?.lastName}
+                            {tech.user?.firstName} {tech.user?.lastName}
                           </h3>
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             <div className="flex items-center">
@@ -515,18 +673,27 @@ const Technicians = () => {
                                 ({tech.rating?.count || 0} reviews)
                               </span>
                             </div>
-                            {/* UPDATED: Show mainCategory */}
                             {tech.mainCategory && (
                               <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
                                 {tech.mainCategory}
                               </span>
                             )}
-                            <span className={`text-xs px-2 py-0.5 rounded-full border ${getPlanBadgeColor(tech.subscriptionPlan, tech.isTrial)}`}>
-                              {tech.isTrial ? '🔬 Trial' : (tech.subscriptionPlan === 'basicPlus' ? 'Basic-Plus' : (tech.subscriptionPlan?.charAt(0).toUpperCase() + tech.subscriptionPlan?.slice(1)))}
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full border ${getPlanBadgeColor(
+                                tech.subscriptionPlan,
+                                tech.isTrial
+                              )}`}
+                            >
+                              {tech.isTrial
+                                ? '🔬 Trial'
+                                : tech.subscriptionPlan === 'basicPlus'
+                                ? 'Basic-Plus'
+                                : tech.subscriptionPlan?.charAt(0).toUpperCase() +
+                                  tech.subscriptionPlan?.slice(1)}
                             </span>
                           </div>
                         </div>
-                        
+
                         <div className="text-right">
                           <div className="text-xl font-bold text-green-600">
                             KES {tech.pricing?.hourlyRate?.toLocaleString()}
@@ -538,30 +705,40 @@ const Technicians = () => {
                           </div>
                         </div>
                       </div>
-                      
+
+                      {/* ✅ FIX: use tech.aboutMe (not bio) */}
                       <p className="text-gray-600 text-sm mt-2 line-clamp-2">
-                        {tech.bio || 'Professional technician ready to help with your service needs.'}
+                        {tech.aboutMe || 'Professional technician ready to help with your service needs.'}
                       </p>
-                      
-                      {/* UPDATED: Show service categories and sub-services */}
+
+                      {/* Service categories and sub-services */}
                       {tech.serviceCategories && tech.serviceCategories.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {tech.serviceCategories.slice(0, 2).map((cat, idx) => (
-                            <span key={idx} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                            <span
+                              key={idx}
+                              className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full"
+                            >
                               {cat.categoryName}
                               {cat.subServices && cat.subServices.length > 0 && ` (${cat.subServices.length})`}
                             </span>
                           ))}
                           {tech.serviceCategories.length > 2 && (
-                            <span className="text-xs text-gray-400">+{tech.serviceCategories.length - 2} more</span>
+                            <span className="text-xs text-gray-400">
+                              +{tech.serviceCategories.length - 2} more
+                            </span>
                           )}
                         </div>
                       )}
-                      
+
                       <div className="mt-2 text-xs text-gray-400">
-                        {getVisibilityDescription(tech.subscriptionPlan, tech.visibilityRadius, tech.isTrial)}
+                        {getVisibilityDescription(
+                          tech.subscriptionPlan,
+                          tech.visibilityRadius,
+                          tech.isTrial
+                        )}
                       </div>
-                      
+
                       <div className="flex gap-3 mt-4">
                         <button
                           onClick={() => handleViewProfile(tech._id)}
@@ -583,7 +760,6 @@ const Technicians = () => {
             </div>
           </>
         )}
-        
       </div>
     </div>
   );
