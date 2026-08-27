@@ -11,7 +11,7 @@ const {
   completeBooking,
   rateTechnician,
   cancelBooking,
-} = require('../controllers/bookingController');
+} = require('../controllers/bookingratingController');
 
 // All booking routes require authentication
 router.use(protect);
