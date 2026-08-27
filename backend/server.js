@@ -26,6 +26,7 @@ const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const technicianRoutes = require('./routes/technicianRoutes');
 const uploads = require('./routes/upload');
 const chatRoutes = require('./routes/chatRoutes');  // ← Chat REST routes
+const bookingRoutes = require('./routes/bookingRoutes');
 
 // Import Socket.io chat handler
 const chatSocket = require('./socket/chatSocket');  // ← Real-time chat socket
@@ -178,6 +179,7 @@ app.use('/api/technician-public', technicianRoutes);
 // Chat routes
 app.use('/api/chat', chatRoutes);
 
+app.use('/api/bookings', bookingRoutes);
 // Search routes
 app.use('/api/search', searchRoutes);
 
