@@ -58,6 +58,10 @@ const handleControllerError = (res, error, fallbackMessage, status = 500, endpoi
 /**
  * Create a new booking (client only).
  * POST /api/bookings
+ * 
+ * Note: hourlyRate is optional (in Kenya, technicians often quote fixed prices).
+ * If hourlyRate is not provided or is 0, totalAmount will be 0 and the client
+ * and technician will agree on price directly.
  */
 exports.createBooking = async (req, res) => {
   try {
@@ -67,7 +71,7 @@ exports.createBooking = async (req, res) => {
       serviceCategory,
       subService,
       serviceDescription,
-      hourlyRate,
+      hourlyRate,        // optional – may be undefined, null, or 0
       estimatedHours,
       preferredDate,
       preferredTime,
@@ -77,19 +81,34 @@ exports.createBooking = async (req, res) => {
       paymentMethod,
     } = req.body;
 
-    // Validate required fields
+    // ── Validate required fields (hourlyRate is NOT required) ──
+    // Required: technicianId, serviceCategory, subService, serviceDescription,
+    // estimatedHours (> 0), preferredDate, preferredTime, location.address
     if (!technicianId || !serviceCategory || !subService || !serviceDescription ||
-        !hourlyRate || !estimatedHours || !preferredDate || !preferredTime || !location?.address) {
+        !estimatedHours || estimatedHours <= 0 ||
+        !preferredDate || !preferredTime || !location?.address) {
       return handleControllerError(
         res,
         new Error('Missing required fields'),
-        'Please provide all required booking details.',
+        'Please provide all required booking details (hourly rate is optional).',
         400,
         'createBooking'
       );
     }
 
-    // Verify technician exists and is active
+    // ── Validate hourlyRate if provided ──
+    // If hourlyRate is present, it must be a number >= 0
+    if (hourlyRate !== undefined && hourlyRate !== null && (isNaN(hourlyRate) || hourlyRate < 0)) {
+      return handleControllerError(
+        res,
+        new Error('Invalid hourly rate'),
+        'Hourly rate must be a non-negative number.',
+        400,
+        'createBooking'
+      );
+    }
+
+    // ── Verify technician exists and is active ──
     const technician = await Technician.findById(technicianId);
     if (!technician || !technician.isActive) {
       return handleControllerError(
@@ -101,17 +120,18 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // Calculate total amount
-    const totalAmount = hourlyRate * estimatedHours;
+    // ── Calculate total amount (0 if no hourly rate) ──
+    const rate = (hourlyRate && hourlyRate > 0) ? hourlyRate : 0;
+    const totalAmount = rate * estimatedHours;
 
-    // Create booking
+    // ── Create booking ──
     const booking = new Booking({
       clientId,
       technicianId,
       serviceCategory,
       subService,
       serviceDescription,
-      hourlyRate,
+      hourlyRate: rate,           // store 0 if not provided
       estimatedHours,
       totalAmount,
       preferredDate: new Date(preferredDate),
