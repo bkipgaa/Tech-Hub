@@ -39,13 +39,11 @@ const bookingSchema = new mongoose.Schema({
     required: [true, 'Service description is required']
   },
   
-  // Pricing information
-  hourlyRate: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  
+hourlyRate: {
+  type: Number,
+  min: 0,
+  default: 0
+},    
   estimatedHours: {
     type: Number,
     default: 1,
