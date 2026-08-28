@@ -65,7 +65,18 @@ const handleControllerError = (res, error, fallbackMessage, status = 500, endpoi
  */
 exports.createBooking = async (req, res) => {
   try {
-    const clientId = req.user.id;
+    // ✅ FIX: use req.user.userId (auth middleware sets userId)
+    const clientId = req.user.userId || req.user.id || req.user._id;
+    if (!clientId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to create a booking.',
+        401,
+        'createBooking'
+      );
+    }
+
     const {
       technicianId,
       serviceCategory,
@@ -82,8 +93,6 @@ exports.createBooking = async (req, res) => {
     } = req.body;
 
     // ── Validate required fields (hourlyRate is NOT required) ──
-    // Required: technicianId, serviceCategory, subService, serviceDescription,
-    // estimatedHours (> 0), preferredDate, preferredTime, location.address
     if (!technicianId || !serviceCategory || !subService || !serviceDescription ||
         !estimatedHours || estimatedHours <= 0 ||
         !preferredDate || !preferredTime || !location?.address) {
@@ -97,7 +106,6 @@ exports.createBooking = async (req, res) => {
     }
 
     // ── Validate hourlyRate if provided ──
-    // If hourlyRate is present, it must be a number >= 0
     if (hourlyRate !== undefined && hourlyRate !== null && (isNaN(hourlyRate) || hourlyRate < 0)) {
       return handleControllerError(
         res,
@@ -131,7 +139,7 @@ exports.createBooking = async (req, res) => {
       serviceCategory,
       subService,
       serviceDescription,
-      hourlyRate: rate,           // store 0 if not provided
+      hourlyRate: rate,
       estimatedHours,
       totalAmount,
       preferredDate: new Date(preferredDate),
@@ -146,7 +154,6 @@ exports.createBooking = async (req, res) => {
 
     await booking.save();
 
-    // Populate for response
     await booking.populate('clientId', 'firstName lastName email phone');
     await booking.populate('technicianId', 'businessName mainCategory');
 
@@ -164,15 +171,21 @@ exports.createBooking = async (req, res) => {
 // GET MY BOOKINGS (client or technician)
 // ============================================================
 
-/**
- * Get all bookings for the logged‑in user (client or technician).
- * Query parameters: status, limit, page, sort
- * GET /api/bookings/my-bookings
- */
 exports.getMyBookings = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const isTechnician = req.user.role === 'technician'; // adjust role field if needed
+    // ✅ FIX: use req.user.userId
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to view bookings.',
+        401,
+        'getMyBookings'
+      );
+    }
+
+    const isTechnician = req.user.role === 'technician';
     const { status, page = 1, limit = 20, sort = '-createdAt' } = req.query;
 
     const filter = isTechnician ? { technicianId: userId } : { clientId: userId };
@@ -210,14 +223,20 @@ exports.getMyBookings = async (req, res) => {
 // GET SINGLE BOOKING
 // ============================================================
 
-/**
- * Get booking by ID (only if user is client or technician).
- * GET /api/bookings/:bookingId
- */
 exports.getBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const userId = req.user.id;
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to view this booking.',
+        401,
+        'getBooking'
+      );
+    }
+
     const isTechnician = req.user.role === 'technician';
 
     const booking = await Booking.findById(bookingId)
@@ -256,25 +275,21 @@ exports.getBooking = async (req, res) => {
 // UPDATE BOOKING STATUS (generic)
 // ============================================================
 
-/**
- * Update booking status with transition validation.
- * PATCH /api/bookings/:bookingId/status
- * Body: { status, note }
- * 
- * Allowed transitions:
- * pending → accepted, cancelled
- * accepted → in-progress, cancelled
- * in-progress → completed, cancelled
- * completed → (no further changes)
- * cancelled → (no further changes)
- * 
- * Clients can only cancel; technicians can accept, start, complete, cancel.
- */
 exports.updateBookingStatus = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const { status, note } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to update booking status.',
+        401,
+        'updateBookingStatus'
+      );
+    }
+
     const isTechnician = req.user.role === 'technician';
 
     if (!status) {
@@ -353,7 +368,6 @@ exports.updateBookingStatus = async (req, res) => {
     // Update status
     booking.status = status;
 
-    // Set timestamps based on new status
     if (status === 'confirmed') booking.confirmedAt = new Date();
     if (status === 'in-progress') booking.startedAt = new Date();
     if (status === 'completed') booking.completedAt = new Date();
@@ -363,12 +377,7 @@ exports.updateBookingStatus = async (req, res) => {
       booking.cancellationReason = note || 'Cancelled by user';
     }
 
-    // Add to status history (optional – you can add a statusHistory array)
-    // if you have that field; if not, you can skip or add.
-    // We'll just save.
-
     await booking.save();
-
     await booking.populate('clientId', 'firstName lastName email phone');
     await booking.populate('technicianId', 'businessName mainCategory');
 
@@ -386,14 +395,19 @@ exports.updateBookingStatus = async (req, res) => {
 // CONFIRM BOOKING (technician only)
 // ============================================================
 
-/**
- * Confirm a pending booking (technician only).
- * POST /api/bookings/:bookingId/confirm
- */
 exports.confirmBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const technicianId = req.user.id;
+    const technicianId = req.user.userId || req.user.id || req.user._id;
+    if (!technicianId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to confirm a booking.',
+        401,
+        'confirmBooking'
+      );
+    }
 
     const booking = await Booking.findById(bookingId);
     if (!booking) {
@@ -426,7 +440,7 @@ exports.confirmBooking = async (req, res) => {
       );
     }
 
-    await booking.confirm(); // uses model method
+    await booking.confirm();
 
     await booking.populate('clientId', 'firstName lastName email phone');
     await booking.populate('technicianId', 'businessName mainCategory');
@@ -445,14 +459,19 @@ exports.confirmBooking = async (req, res) => {
 // START BOOKING (technician only)
 // ============================================================
 
-/**
- * Start a confirmed booking (technician only).
- * POST /api/bookings/:bookingId/start
- */
 exports.startBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const technicianId = req.user.id;
+    const technicianId = req.user.userId || req.user.id || req.user._id;
+    if (!technicianId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to start a booking.',
+        401,
+        'startBooking'
+      );
+    }
 
     const booking = await Booking.findById(bookingId);
     if (!booking) {
@@ -485,7 +504,7 @@ exports.startBooking = async (req, res) => {
       );
     }
 
-    await booking.start(); // model method
+    await booking.start();
 
     await booking.populate('clientId', 'firstName lastName email phone');
     await booking.populate('technicianId', 'businessName mainCategory');
@@ -501,35 +520,23 @@ exports.startBooking = async (req, res) => {
 };
 
 // ============================================================
-// COMPLETE BOOKING + RATING (optional)
+// COMPLETE BOOKING
 // ============================================================
 
-/**
- * Complete a booking and optionally provide rating/review for the technician.
- * POST /api/bookings/:bookingId/complete
- * Body: { rating, review } – rating is for the technician (1-5)
- * 
- * This will update the technician's overall rating.
- * Only the client can complete and rate? Actually technician can complete too.
- * We'll allow the technician to mark as completed, but rating only by client.
- * So we separate completion and rating.
- * 
- * We'll implement two endpoints: one for completion (technician) and one for rating (client).
- * But for simplicity, we'll allow either to complete, and rating endpoint separate.
- * We'll create a dedicated rating endpoint.
- */
-
-// We'll use the generic updateStatus for completion, or a dedicated endpoint.
-// Let's add a dedicated complete endpoint for better control.
-
-/**
- * Mark booking as completed (technician or client can trigger).
- * POST /api/bookings/:bookingId/complete
- */
 exports.completeBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const userId = req.user.id;
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to complete a booking.',
+        401,
+        'completeBooking'
+      );
+    }
+
     const isTechnician = req.user.role === 'technician';
 
     const booking = await Booking.findById(bookingId);
@@ -543,7 +550,6 @@ exports.completeBooking = async (req, res) => {
       );
     }
 
-    // Permission: either client or technician can mark complete
     if (booking.clientId.toString() !== userId && booking.technicianId.toString() !== userId) {
       return handleControllerError(
         res,
@@ -564,7 +570,7 @@ exports.completeBooking = async (req, res) => {
       );
     }
 
-    await booking.complete(); // model method (no rating yet)
+    await booking.complete();
 
     await booking.populate('clientId', 'firstName lastName email phone');
     await booking.populate('technicianId', 'businessName mainCategory');
@@ -583,23 +589,22 @@ exports.completeBooking = async (req, res) => {
 // RATE TECHNICIAN (client only, after completion)
 // ============================================================
 
-/**
- * Rate the technician for a completed booking.
- * POST /api/bookings/:bookingId/rate
- * Body: { rating, review } (rating 1-5, review optional)
- * 
- * This updates the technician's overall rating and stores the review
- * in the booking's clientRating/clientReview fields.
- * 
- * Only the client who made the booking can rate, and only if status is 'completed'.
- */
 exports.rateTechnician = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const clientId = req.user.id;
+    const clientId = req.user.userId || req.user.id || req.user._id;
+    if (!clientId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to rate a technician.',
+        401,
+        'rateTechnician'
+      );
+    }
+
     const { rating, review } = req.body;
 
-    // Validate input
     if (!rating || rating < 1 || rating > 5) {
       return handleControllerError(
         res,
@@ -610,7 +615,6 @@ exports.rateTechnician = async (req, res) => {
       );
     }
 
-    // Find booking and ensure it belongs to client and is completed
     const booking = await Booking.findOne({ _id: bookingId, clientId, status: 'completed' });
     if (!booking) {
       return handleControllerError(
@@ -622,7 +626,6 @@ exports.rateTechnician = async (req, res) => {
       );
     }
 
-    // Check if already rated
     if (booking.clientRating) {
       return handleControllerError(
         res,
@@ -633,7 +636,6 @@ exports.rateTechnician = async (req, res) => {
       );
     }
 
-    // Get technician
     const technician = await Technician.findById(booking.technicianId);
     if (!technician) {
       return handleControllerError(
@@ -645,16 +647,12 @@ exports.rateTechnician = async (req, res) => {
       );
     }
 
-    // Update technician's overall rating using the model's method
     await technician.updateRating(rating);
 
-    // Store rating and review in the booking
     booking.clientRating = rating;
     if (review) booking.clientReview = review.trim();
     await booking.save();
 
-    // Also, you might want to add the review to the technician's reviews array if you have one.
-    // We'll add it to the technician's reviews array as well (the model supports it).
     technician.reviews.push({
       clientId: clientId,
       bookingId: booking._id,
@@ -684,19 +682,24 @@ exports.rateTechnician = async (req, res) => {
 };
 
 // ============================================================
-// CANCEL BOOKING (convenience – uses updateStatus)
+// CANCEL BOOKING
 // ============================================================
 
-/**
- * Cancel booking – client or technician can cancel.
- * POST /api/bookings/:bookingId/cancel
- * Body: { reason }
- */
 exports.cancelBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const { reason } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to cancel a booking.',
+        401,
+        'cancelBooking'
+      );
+    }
+
     const isTechnician = req.user.role === 'technician';
 
     const booking = await Booking.findById(bookingId);
@@ -710,7 +713,6 @@ exports.cancelBooking = async (req, res) => {
       );
     }
 
-    // Permission
     if (booking.clientId.toString() !== userId && booking.technicianId.toString() !== userId) {
       return handleControllerError(
         res,
@@ -721,7 +723,6 @@ exports.cancelBooking = async (req, res) => {
       );
     }
 
-    // Only pending/confirmed can be cancelled
     if (!['pending', 'confirmed'].includes(booking.status)) {
       return handleControllerError(
         res,
