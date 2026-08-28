@@ -116,6 +116,40 @@ exports.createBooking = async (req, res) => {
       );
     }
 
+    // ── Validate preferredDate ──
+    const selectedDate = new Date(preferredDate);
+    if (isNaN(selectedDate.getTime())) {
+      return handleControllerError(
+        res,
+        new Error('Invalid date format'),
+        'Please provide a valid preferred date.',
+        400,
+        'createBooking'
+      );
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedDate < today) {
+      return handleControllerError(
+        res,
+        new Error('Date in the past'),
+        'Preferred date must be today or a future date.',
+        400,
+        'createBooking'
+      );
+    }
+
+    // ── Validate preferredTime ──
+    if (!preferredTime || preferredTime.trim() === '') {
+      return handleControllerError(
+        res,
+        new Error('Invalid time'),
+        'Please provide a valid preferred time.',
+        400,
+        'createBooking'
+      );
+    }
+
     // ── Verify technician exists and is active ──
     const technician = await Technician.findById(technicianId);
     if (!technician || !technician.isActive) {
@@ -142,8 +176,8 @@ exports.createBooking = async (req, res) => {
       hourlyRate: rate,
       estimatedHours,
       totalAmount,
-      preferredDate: new Date(preferredDate),
-      preferredTime,
+      preferredDate: selectedDate,
+      preferredTime: preferredTime.trim(),
       duration: duration || estimatedHours,
       location,
       clientNotes,
@@ -163,6 +197,17 @@ exports.createBooking = async (req, res) => {
       data: booking,
     });
   } catch (error) {
+    // Enhanced error logging for specific cases
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(e => e.message);
+      return handleControllerError(
+        res,
+        error,
+        `Validation error: ${messages.join(', ')}`,
+        400,
+        'createBooking'
+      );
+    }
     handleControllerError(res, error, 'Failed to create booking.', 500, 'createBooking');
   }
 };
@@ -173,7 +218,6 @@ exports.createBooking = async (req, res) => {
 
 exports.getMyBookings = async (req, res) => {
   try {
-    // ✅ FIX: use req.user.userId
     const userId = req.user.userId || req.user.id || req.user._id;
     if (!userId) {
       return handleControllerError(
@@ -254,7 +298,6 @@ exports.getBooking = async (req, res) => {
       );
     }
 
-    // Permission check
     if (booking.clientId._id.toString() !== userId && booking.technicianId._id.toString() !== userId) {
       return handleControllerError(
         res,
@@ -313,7 +356,6 @@ exports.updateBookingStatus = async (req, res) => {
       );
     }
 
-    // Permission checks
     if (isTechnician) {
       if (booking.technicianId.toString() !== userId) {
         return handleControllerError(
@@ -325,7 +367,6 @@ exports.updateBookingStatus = async (req, res) => {
         );
       }
     } else {
-      // Client: only allow cancellation
       if (booking.clientId.toString() !== userId) {
         return handleControllerError(
           res,
@@ -346,7 +387,6 @@ exports.updateBookingStatus = async (req, res) => {
       }
     }
 
-    // Validate status transition
     const validTransitions = {
       pending: ['confirmed', 'cancelled'],
       confirmed: ['in-progress', 'cancelled'],
@@ -365,7 +405,6 @@ exports.updateBookingStatus = async (req, res) => {
       );
     }
 
-    // Update status
     booking.status = status;
 
     if (status === 'confirmed') booking.confirmedAt = new Date();

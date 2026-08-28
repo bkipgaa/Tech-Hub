@@ -151,56 +151,38 @@ const TechnicianProfile = () => {
    */
   const checkCompletedBookings = async () => {
     try {
-      // Only check if user is logged in (check for token)
       const token = localStorage.getItem('token');
       if (!token) return;
 
       const response = await api.get('/bookings/my-bookings?status=completed&limit=50');
       if (response.data.success) {
         const bookings = response.data.data || [];
-        // Find a completed booking with this technician
         const completed = bookings.find(
           (b) => b.technicianId?._id === technician._id || b.technicianId === technician._id
         );
         if (completed) {
           setHasCompletedBooking(true);
           setCompletedBookingId(completed._id);
-          // Check if already rated
           if (completed.clientRating) {
             setHasRated(true);
           }
         }
       }
     } catch (err) {
-      // Silently fail – user may not be authenticated or no bookings
       console.warn('Could not check completed bookings:', err.message);
     }
   };
 
-  /**
-   * handleContact()
-   * ---------------
-   * Toggles the contact information panel (phone/email).
-   */
+  // ─── CONTACT / BACK / MESSAGE ──────────────────────────────
+
   const handleContact = () => {
     setShowContact((prev) => !prev);
   };
 
-  /**
-   * handleGoBack()
-   * --------------
-   * Navigates to the previous page in browser history.
-   */
   const handleGoBack = () => {
     navigate(-1);
   };
 
-  /**
-   * handleMessage()
-   * ---------------
-   * Starts a new conversation with the technician.
-   * Creates a chat thread and navigates to it.
-   */
   const handleMessage = async () => {
     try {
       const technicianUserId = technician?.userId?._id || technician?.userId;
@@ -232,11 +214,11 @@ const TechnicianProfile = () => {
   /**
    * openBookingModal()
    * ------------------
-   * Opens the booking modal and pre-fills the form with the
-   * technician's first service category and sub-service if available.
+   * Opens the booking modal, pre-fills service details,
+   * and sets default date (today) and time (09:00) so they are never empty.
    */
   const openBookingModal = () => {
-    // Pre-fill from first service category
+    // Pre-fill service details from first category
     if (technician.serviceCategories && technician.serviceCategories.length > 0) {
       const firstCat = technician.serviceCategories[0];
       setBookingForm((prev) => ({
@@ -246,27 +228,29 @@ const TechnicianProfile = () => {
         serviceDescription: firstCat.description || '',
       }));
     }
+
+    // Set default date to today (YYYY-MM-DD)
+    const today = new Date().toISOString().split('T')[0];
+    // Set default time to 09:00 (you can change to current time if preferred)
+    const defaultTime = '09:00';
+
+    setBookingForm((prev) => ({
+      ...prev,
+      preferredDate: today,
+      preferredTime: defaultTime,
+    }));
+
     setShowBookingModal(true);
     setBookingError('');
     setBookingSuccess(false);
   };
 
-  /**
-   * closeBookingModal()
-   * -------------------
-   * Closes the booking modal and resets form state.
-   */
   const closeBookingModal = () => {
     setShowBookingModal(false);
     setBookingError('');
     setBookingLoading(false);
   };
 
-  /**
-   * handleBookingInputChange()
-   * --------------------------
-   * Updates booking form state for text inputs.
-   */
   const handleBookingInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'address') {
@@ -277,7 +261,6 @@ const TechnicianProfile = () => {
     } else {
       setBookingForm((prev) => ({ ...prev, [name]: value }));
     }
-    // Clear error when user types
     if (bookingError) setBookingError('');
   };
 
@@ -285,8 +268,7 @@ const TechnicianProfile = () => {
    * handleBookingSubmit()
    * ---------------------
    * Submits the booking to the backend.
-   * Validates required fields, handles loading state,
-   * and shows success/error feedback.
+   * Displays the exact error message returned from the backend.
    */
   const handleBookingSubmit = async (e) => {
     e.preventDefault();
@@ -302,7 +284,7 @@ const TechnicianProfile = () => {
       paymentMethod,
     } = bookingForm;
 
-    // Validate required fields
+    // ── Frontend validation ──
     if (!serviceCategory || !subService || !serviceDescription) {
       setBookingError('Please select a service and provide a description.');
       return;
@@ -320,7 +302,6 @@ const TechnicianProfile = () => {
       return;
     }
 
-    // Validate future date
     const selectedDate = new Date(preferredDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -352,24 +333,24 @@ const TechnicianProfile = () => {
 
       if (response.data.success) {
         setBookingSuccess(true);
-        // Close modal after a delay to show success
         setTimeout(() => {
           closeBookingModal();
-          // Navigate to bookings page or stay on profile
           navigate('/bookings');
         }, 2000);
       } else {
+        // Backend returned success:false – display its message
         setBookingError(response.data.message || 'Failed to create booking.');
       }
     } catch (err) {
       console.error('Booking error:', err);
-      let errorMsg = 'Failed to create booking. ';
-      if (err.response) {
-        errorMsg += err.response.data?.message || `Server error (${err.response.status})`;
+      let errorMsg = 'Failed to create booking.';
+      if (err.response && err.response.data) {
+        // Use the message from the backend response
+        errorMsg = err.response.data.message || `Server error (${err.response.status})`;
       } else if (err.request) {
-        errorMsg += 'No response from server. Check your connection.';
+        errorMsg = 'No response from server. Check your connection.';
       } else {
-        errorMsg += err.message || 'An unexpected error occurred.';
+        errorMsg = err.message || 'An unexpected error occurred.';
       }
       setBookingError(errorMsg);
     } finally {
@@ -379,11 +360,6 @@ const TechnicianProfile = () => {
 
   // ─── RATING FUNCTIONS ───────────────────────────────────────
 
-  /**
-   * openRatingModal()
-   * -----------------
-   * Opens the rating modal and resets previous state.
-   */
   const openRatingModal = () => {
     setShowRatingModal(true);
     setRatingForm({ rating: 0, review: '' });
@@ -391,24 +367,12 @@ const TechnicianProfile = () => {
     setRatingSuccess(false);
   };
 
-  /**
-   * closeRatingModal()
-   * ------------------
-   * Closes the rating modal.
-   */
   const closeRatingModal = () => {
     setShowRatingModal(false);
     setRatingLoading(false);
     setRatingError('');
   };
 
-  /**
-   * handleRatingSubmit()
-   * --------------------
-   * Submits the rating to the backend.
-   * Validates star selection and review content.
-   * On success, updates the technician's rating and the booking.
-   */
   const handleRatingSubmit = async (e) => {
     e.preventDefault();
 
@@ -433,7 +397,6 @@ const TechnicianProfile = () => {
       if (response.data.success) {
         setRatingSuccess(true);
         setHasRated(true);
-        // Update the technician's rating display optimistically
         const updatedRating = response.data.data?.technicianRating;
         if (updatedRating) {
           setTechnician((prev) => ({
@@ -445,7 +408,6 @@ const TechnicianProfile = () => {
             },
           }));
         }
-        // Close modal after success
         setTimeout(() => {
           closeRatingModal();
         }, 1500);
@@ -468,21 +430,11 @@ const TechnicianProfile = () => {
     }
   };
 
-  /**
-   * handleStarClick()
-   * -----------------
-   * Sets the rating when a user clicks on a star.
-   */
   const handleStarClick = (starValue) => {
     setRatingForm((prev) => ({ ...prev, rating: starValue }));
     if (ratingError) setRatingError('');
   };
 
-  /**
-   * formatYear()
-   * ------------
-   * Safely extracts a 4-digit year from an ISO date string.
-   */
   const formatYear = (dateString) => {
     if (!dateString) return null;
     const year = new Date(dateString).getFullYear();
@@ -720,7 +672,6 @@ const TechnicianProfile = () => {
                       </span>
                     ))}
                   </div>
-                  {/* Hourly rate if available */}
                   {technician.pricing?.hourlyRate > 0 && (
                     <p className="text-sm text-green-600 mt-2">
                       <DollarSign className="w-3 h-3 inline" /> KES {technician.pricing.hourlyRate}/hour
@@ -895,7 +846,6 @@ const TechnicianProfile = () => {
       {showBookingModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
             <div className="flex justify-between items-center p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
               <h2 className="text-xl font-bold text-gray-800">Book Service</h2>
               <button
@@ -907,9 +857,7 @@ const TechnicianProfile = () => {
               </button>
             </div>
 
-            {/* Modal Body */}
             <form onSubmit={handleBookingSubmit} className="p-5 space-y-4">
-              {/* Success Message */}
               {bookingSuccess && (
                 <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -917,7 +865,6 @@ const TechnicianProfile = () => {
                 </div>
               )}
 
-              {/* Error Message */}
               {bookingError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -1051,7 +998,7 @@ const TechnicianProfile = () => {
                 />
               </div>
 
-              {/* Notes */}
+              {/* Additional Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
                 <textarea
@@ -1108,7 +1055,6 @@ const TechnicianProfile = () => {
       {showRatingModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            {/* Modal Header */}
             <div className="flex justify-between items-center p-5 border-b border-gray-200">
               <h2 className="text-xl font-bold text-gray-800">Rate This Technician</h2>
               <button
@@ -1120,9 +1066,7 @@ const TechnicianProfile = () => {
               </button>
             </div>
 
-            {/* Modal Body */}
             <form onSubmit={handleRatingSubmit} className="p-5 space-y-4">
-              {/* Success Message */}
               {ratingSuccess && (
                 <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-600" />
@@ -1130,7 +1074,6 @@ const TechnicianProfile = () => {
                 </div>
               )}
 
-              {/* Error Message */}
               {ratingError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
