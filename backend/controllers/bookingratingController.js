@@ -1,14 +1,20 @@
 /**
  * bookingController.js
  * ====================
- * Handles booking lifecycle: create, read, update status, complete, rate.
+ * Handles the full booking lifecycle:
+ * - Create, read, update status, complete, rate, cancel.
  * 
  * @author Weba-Hub Team
+ * @version 2.0.0 – Fixed technician ID mismatches & enhanced logging
  */
 
 const Booking = require('../models/Booking');
 const Technician = require('../models/Technician');
 const mongoose = require('mongoose');
+
+// ============================================================
+// HELPERS
+// ============================================================
 
 /**
  * Centralised error handler – logs to console (Render) and returns JSON.
@@ -49,6 +55,18 @@ const handleControllerError = (res, error, fallbackMessage, status = 500, endpoi
   }
 
   res.status(status).json(response);
+};
+
+/**
+ * Fetch the Technician document ID for a given User ID.
+ * Throws if the technician profile is not found.
+ */
+const getTechnicianId = async (userId) => {
+  const technician = await Technician.findOne({ userId }).select('_id');
+  if (!technician) {
+    throw new Error('Technician profile not found');
+  }
+  return technician._id;
 };
 
 // ============================================================
@@ -214,7 +232,6 @@ exports.createBooking = async (req, res) => {
       data: booking,
     });
   } catch (error) {
-    // Log the full error details
     console.error('❌ createBooking caught error:', {
       message: error.message,
       stack: error.stack,
@@ -239,6 +256,11 @@ exports.createBooking = async (req, res) => {
 // GET MY BOOKINGS (client or technician)
 // ============================================================
 
+/**
+ * Get all bookings for the logged‑in user.
+ * - Clients: filter by clientId (User _id)
+ * - Technicians: filter by technicianId (Technician _id)
+ */
 exports.getMyBookings = async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id || req.user._id;
@@ -255,7 +277,26 @@ exports.getMyBookings = async (req, res) => {
     const isTechnician = req.user.role === 'technician';
     const { status, page = 1, limit = 20, sort = '-createdAt' } = req.query;
 
-    const filter = isTechnician ? { technicianId: userId } : { clientId: userId };
+    let filter = {};
+
+    if (isTechnician) {
+      // ✅ FIX: Get the Technician document _id for this user
+      try {
+        const technicianId = await getTechnicianId(userId);
+        filter.technicianId = technicianId;
+      } catch (err) {
+        return handleControllerError(
+          res,
+          err,
+          'You do not have a technician profile. Please complete your registration.',
+          404,
+          'getMyBookings'
+        );
+      }
+    } else {
+      filter.clientId = userId;
+    }
+
     if (status) filter.status = status;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -290,6 +331,10 @@ exports.getMyBookings = async (req, res) => {
 // GET SINGLE BOOKING
 // ============================================================
 
+/**
+ * Fetch a single booking by ID, with permission checks.
+ * Both client and technician can view if they are part of the booking.
+ */
 exports.getBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -321,14 +366,40 @@ exports.getBooking = async (req, res) => {
       );
     }
 
-    if (booking.clientId._id.toString() !== userId && booking.technicianId._id.toString() !== userId) {
-      return handleControllerError(
-        res,
-        new Error('Unauthorized'),
-        'You do not have permission to view this booking.',
-        403,
-        'getBooking'
-      );
+    // For technicians, compare against the Technician _id
+    if (isTechnician) {
+      let technicianId;
+      try {
+        technicianId = await getTechnicianId(userId);
+      } catch (err) {
+        return handleControllerError(
+          res,
+          err,
+          'Technician profile not found.',
+          404,
+          'getBooking'
+        );
+      }
+      if (booking.technicianId._id.toString() !== technicianId.toString()) {
+        return handleControllerError(
+          res,
+          new Error('Unauthorized'),
+          'You do not have permission to view this booking.',
+          403,
+          'getBooking'
+        );
+      }
+    } else {
+      // Client: compare against clientId (User _id)
+      if (booking.clientId._id.toString() !== userId.toString()) {
+        return handleControllerError(
+          res,
+          new Error('Unauthorized'),
+          'You do not have permission to view this booking.',
+          403,
+          'getBooking'
+        );
+      }
     }
 
     res.json({ success: true, data: booking });
@@ -341,6 +412,10 @@ exports.getBooking = async (req, res) => {
 // UPDATE BOOKING STATUS (generic)
 // ============================================================
 
+/**
+ * Update booking status with transition validation.
+ * Clients can only cancel; technicians can confirm, start, complete, or cancel.
+ */
 exports.updateBookingStatus = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -379,8 +454,21 @@ exports.updateBookingStatus = async (req, res) => {
       );
     }
 
+    // Permission checks
     if (isTechnician) {
-      if (booking.technicianId.toString() !== userId) {
+      let technicianId;
+      try {
+        technicianId = await getTechnicianId(userId);
+      } catch (err) {
+        return handleControllerError(
+          res,
+          err,
+          'Technician profile not found.',
+          404,
+          'updateBookingStatus'
+        );
+      }
+      if (booking.technicianId.toString() !== technicianId.toString()) {
         return handleControllerError(
           res,
           new Error('Unauthorized'),
@@ -390,7 +478,8 @@ exports.updateBookingStatus = async (req, res) => {
         );
       }
     } else {
-      if (booking.clientId.toString() !== userId) {
+      // Client: only allow cancellation
+      if (booking.clientId.toString() !== userId.toString()) {
         return handleControllerError(
           res,
           new Error('Unauthorized'),
@@ -410,6 +499,7 @@ exports.updateBookingStatus = async (req, res) => {
       }
     }
 
+    // Validate status transition
     const validTransitions = {
       pending: ['confirmed', 'cancelled'],
       confirmed: ['in-progress', 'cancelled'],
@@ -457,16 +547,33 @@ exports.updateBookingStatus = async (req, res) => {
 // CONFIRM BOOKING (technician only)
 // ============================================================
 
+/**
+ * Confirm a pending booking (technician only).
+ */
 exports.confirmBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const technicianId = req.user.userId || req.user.id || req.user._id;
-    if (!technicianId) {
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
       return handleControllerError(
         res,
         new Error('Authentication required'),
         'You must be logged in to confirm a booking.',
         401,
+        'confirmBooking'
+      );
+    }
+
+    // ✅ FIX: Get the Technician _id for this user
+    let technicianId;
+    try {
+      technicianId = await getTechnicianId(userId);
+    } catch (err) {
+      return handleControllerError(
+        res,
+        err,
+        'Technician profile not found.',
+        404,
         'confirmBooking'
       );
     }
@@ -482,7 +589,7 @@ exports.confirmBooking = async (req, res) => {
       );
     }
 
-    if (booking.technicianId.toString() !== technicianId) {
+    if (booking.technicianId.toString() !== technicianId.toString()) {
       return handleControllerError(
         res,
         new Error('Unauthorized'),
@@ -521,16 +628,32 @@ exports.confirmBooking = async (req, res) => {
 // START BOOKING (technician only)
 // ============================================================
 
+/**
+ * Start a confirmed booking (technician only).
+ */
 exports.startBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const technicianId = req.user.userId || req.user.id || req.user._id;
-    if (!technicianId) {
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
       return handleControllerError(
         res,
         new Error('Authentication required'),
         'You must be logged in to start a booking.',
         401,
+        'startBooking'
+      );
+    }
+
+    let technicianId;
+    try {
+      technicianId = await getTechnicianId(userId);
+    } catch (err) {
+      return handleControllerError(
+        res,
+        err,
+        'Technician profile not found.',
+        404,
         'startBooking'
       );
     }
@@ -546,7 +669,7 @@ exports.startBooking = async (req, res) => {
       );
     }
 
-    if (booking.technicianId.toString() !== technicianId) {
+    if (booking.technicianId.toString() !== technicianId.toString()) {
       return handleControllerError(
         res,
         new Error('Unauthorized'),
@@ -585,6 +708,10 @@ exports.startBooking = async (req, res) => {
 // COMPLETE BOOKING
 // ============================================================
 
+/**
+ * Mark a booking as completed (technician or client can trigger).
+ * The client can also rate later via /rate endpoint.
+ */
 exports.completeBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -612,14 +739,40 @@ exports.completeBooking = async (req, res) => {
       );
     }
 
-    if (booking.clientId.toString() !== userId && booking.technicianId.toString() !== userId) {
-      return handleControllerError(
-        res,
-        new Error('Unauthorized'),
-        'You are not part of this booking.',
-        403,
-        'completeBooking'
-      );
+    // Permission: either client or technician can mark complete
+    if (isTechnician) {
+      let technicianId;
+      try {
+        technicianId = await getTechnicianId(userId);
+      } catch (err) {
+        return handleControllerError(
+          res,
+          err,
+          'Technician profile not found.',
+          404,
+          'completeBooking'
+        );
+      }
+      if (booking.technicianId.toString() !== technicianId.toString()) {
+        return handleControllerError(
+          res,
+          new Error('Unauthorized'),
+          'You are not the technician for this booking.',
+          403,
+          'completeBooking'
+        );
+      }
+    } else {
+      // Client
+      if (booking.clientId.toString() !== userId.toString()) {
+        return handleControllerError(
+          res,
+          new Error('Unauthorized'),
+          'You are not the client for this booking.',
+          403,
+          'completeBooking'
+        );
+      }
     }
 
     if (booking.status !== 'in-progress') {
@@ -651,6 +804,10 @@ exports.completeBooking = async (req, res) => {
 // RATE TECHNICIAN (client only, after completion)
 // ============================================================
 
+/**
+ * Rate a technician for a completed booking.
+ * Updates the technician's overall rating and stores the review.
+ */
 exports.rateTechnician = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -677,7 +834,7 @@ exports.rateTechnician = async (req, res) => {
       );
     }
 
-    const booking = await Booking.findOne({ _id: bookingId, clientId, status: 'completed' });
+    const booking = await Booking.findOne({ _id: bookingId, clientId: clientId, status: 'completed' });
     if (!booking) {
       return handleControllerError(
         res,
@@ -747,6 +904,10 @@ exports.rateTechnician = async (req, res) => {
 // CANCEL BOOKING
 // ============================================================
 
+/**
+ * Cancel a booking – client or technician can cancel.
+ * Only pending or confirmed bookings can be cancelled.
+ */
 exports.cancelBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -775,16 +936,42 @@ exports.cancelBooking = async (req, res) => {
       );
     }
 
-    if (booking.clientId.toString() !== userId && booking.technicianId.toString() !== userId) {
-      return handleControllerError(
-        res,
-        new Error('Unauthorized'),
-        'You are not part of this booking.',
-        403,
-        'cancelBooking'
-      );
+    // Permission
+    if (isTechnician) {
+      let technicianId;
+      try {
+        technicianId = await getTechnicianId(userId);
+      } catch (err) {
+        return handleControllerError(
+          res,
+          err,
+          'Technician profile not found.',
+          404,
+          'cancelBooking'
+        );
+      }
+      if (booking.technicianId.toString() !== technicianId.toString()) {
+        return handleControllerError(
+          res,
+          new Error('Unauthorized'),
+          'You are not the technician for this booking.',
+          403,
+          'cancelBooking'
+        );
+      }
+    } else {
+      if (booking.clientId.toString() !== userId.toString()) {
+        return handleControllerError(
+          res,
+          new Error('Unauthorized'),
+          'You are not the client for this booking.',
+          403,
+          'cancelBooking'
+        );
+      }
     }
 
+    // Only pending/confirmed can be cancelled
     if (!['pending', 'confirmed'].includes(booking.status)) {
       return handleControllerError(
         res,
