@@ -415,46 +415,33 @@ TechnicianSchema.index({
 // VIRTUALS
 // ============================================================
 
-TechnicianSchema.virtual('fullName').get(function() {
-  return this.userId ? `${this.userId.firstName} ${this.userId.lastName}` : '';
-});
-
-TechnicianSchema.virtual('profilePicture').get(function() {
-  return this.userId ? this.userId.profileImage : '';
-});
-
-TechnicianSchema.virtual('contactEmail').get(function() {
-  return this.settings.showEmail && this.userId ? this.userId.email : null;
-});
-
-TechnicianSchema.virtual('contactPhone').get(function() {
-  return this.settings.showPhone && this.userId ? this.userId.phone : null;
-});
-
 TechnicianSchema.virtual('featuredPortfolio').get(function() {
-  return this.portfolio.filter(item => item.isFeatured);
+  return this.portfolio ? this.portfolio.filter(item => item.isFeatured) : [];
 });
 
 TechnicianSchema.virtual('allSubServices').get(function() {
   const all = [];
-  this.serviceCategories.forEach(category => {
-    if (category.subServices) {
-      category.subServices.forEach(sub => {
-        all.push({
-          subService: sub,
-          categoryName: category.categoryName,
-          mainCategory: category.mainCategory || this.mainCategory || ''
+  if (this.serviceCategories && Array.isArray(this.serviceCategories)) {
+    this.serviceCategories.forEach(category => {
+      if (category.subServices && Array.isArray(category.subServices)) {
+        category.subServices.forEach(sub => {
+          all.push({
+            subService: sub,
+            categoryName: category.categoryName,
+            mainCategory: category.mainCategory || this.mainCategory || ''
+          });
         });
-      });
-    }
-  });
+      }
+    });
+  }
   return all;
 });
 
 TechnicianSchema.virtual('categoryNames').get(function() {
-  return this.serviceCategories.map(cat => cat.categoryName);
+  return this.serviceCategories && Array.isArray(this.serviceCategories)
+    ? this.serviceCategories.map(cat => cat.categoryName)
+    : [];
 });
-
 // ============================================================
 // METHODS
 // ============================================================
