@@ -36,6 +36,7 @@ import AdminVerifyJobs from './components/admin/AdminVerifyJobs';
 import BookService from './pages/BookService';
 import PaymentCallback from './pages/PaymentCallback';
 import TechnicianBookings from './pages/TechnicianBookings';
+import BookingDetails from './pages/BookingDetails';
 
 import './App.css';
 
@@ -80,6 +81,15 @@ function App() {
                 <Profile />
               </PrivateRoute>
             } />
+
+            <Route
+  path="/bookings/:id"
+  element={
+    <PrivateRoute>
+      <BookingDetails />
+    </PrivateRoute>
+  }
+/>
             
             <Route
   path="/technician-dashboard/bookings"
