@@ -11,7 +11,7 @@
  * - Advanced filters (rating, hourly rate)
  * - Results display with plan badges, visibility radius, and booking actions
  * 
- * @version 2.1.0 – Added 'test' plan, improved error handling, comments
+ * @version 2.2.0 – Fixed sub-service object rendering (React error #31)
  * @author Weba-Hub Team
  */
 
@@ -43,7 +43,7 @@ import api from '../services/api';
 // ============================================================
 const planConfig = {
   free: { label: 'Free', color: 'text-gray-600', bg: 'bg-gray-100', border: 'border-gray-200', icon: null },
-  test: { label: 'Test', color: 'text-pink-600', bg: 'bg-pink-100', border: 'border-pink-200', icon: null }, // Added
+  test: { label: 'Test', color: 'text-pink-600', bg: 'bg-pink-100', border: 'border-pink-200', icon: null },
   basic: { label: 'Basic', color: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-200', icon: null },
   premium: { label: 'Premium', color: 'text-yellow-600', bg: 'bg-yellow-100', border: 'border-yellow-200', icon: Crown },
   business: { label: 'Business', color: 'text-purple-600', bg: 'bg-purple-100', border: 'border-purple-200', icon: Briefcase },
@@ -58,7 +58,7 @@ const SearchPage = () => {
   // --- Search & results state ---
   const [loading, setLoading] = useState(false);
   const [technicians, setTechnicians] = useState([]);
-  const [searchError, setSearchError] = useState(''); // search‑specific error
+  const [searchError, setSearchError] = useState('');
 
   // --- Location state ---
   const [userLocation, setUserLocation] = useState(null);
@@ -66,13 +66,13 @@ const SearchPage = () => {
 
   // --- Catalog state ---
   const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState(''); // catalog load error
+  const [catalogError, setCatalogError] = useState('');
   const [catalogData, setCatalogData] = useState({
     mainCategories: [],
-    serviceCategoriesMap: {}, // mainCategory → array of service category names
-    subServicesMap: {}, // serviceCategory → array of sub‑service names
+    serviceCategoriesMap: {},
+    subServicesMap: {},
   });
-  const [usingDefaultCatalog, setUsingDefaultCatalog] = useState(false); // true if we fell back
+  const [usingDefaultCatalog, setUsingDefaultCatalog] = useState(false);
 
   // --- Filter state ---
   const [filters, setFilters] = useState({
@@ -116,7 +116,6 @@ const SearchPage = () => {
         setCatalogLoading(false);
         return;
       } catch {
-        // If cache is corrupted, ignore and fetch fresh
         sessionStorage.removeItem('catalogData');
       }
     }
@@ -131,11 +130,18 @@ const SearchPage = () => {
         const subServicesMap = {};
 
         categories.forEach((cat) => {
+          // Main category name
           mainCategories.push(cat.mainCategory);
+          // Service categories: array of names
           serviceCategoriesMap[cat.mainCategory] = (cat.serviceCategories || []).map((s) => s.name);
 
+          // Sub-services: store only the names (not the full objects)
           (cat.serviceCategories || []).forEach((sc) => {
-            subServicesMap[sc.name] = sc.subServices || [];
+            // Ensure subServices is an array of strings (or extract .name)
+            const subNames = (sc.subServices || []).map((sub) =>
+              typeof sub === 'string' ? sub : sub.name || sub.subService || ''
+            );
+            subServicesMap[sc.name] = subNames;
           });
         });
 
@@ -143,13 +149,11 @@ const SearchPage = () => {
         setCatalogData(payload);
         sessionStorage.setItem('catalogData', JSON.stringify(payload));
       } else {
-        // API returned success: false
         throw new Error(response.data.message || 'Catalog data unavailable');
       }
     } catch (error) {
       console.error('Failed to load catalog:', error);
       setCatalogError(error.message || 'Could not load service catalog.');
-      // Fall back to default catalog so the page remains usable
       useDefaultCatalog();
       setUsingDefaultCatalog(true);
     } finally {
@@ -223,7 +227,6 @@ const SearchPage = () => {
     if (filters.mainCategory) {
       const services = catalogData.serviceCategoriesMap[filters.mainCategory] || [];
       setServiceCategories(services);
-      // Reset dependent selections
       setFilters((prev) => ({ ...prev, serviceCategory: '', subService: '' }));
       setSubServices([]);
     } else {
@@ -235,8 +238,13 @@ const SearchPage = () => {
   // When service category changes, update sub-services
   useEffect(() => {
     if (filters.serviceCategory) {
+      // Ensure subServices is always an array of strings
       const subs = catalogData.subServicesMap[filters.serviceCategory] || [];
-      setSubServices(subs);
+      // If subs contains objects, extract the name property
+      const subNames = subs.map((sub) =>
+        typeof sub === 'string' ? sub : sub.name || sub.subService || ''
+      );
+      setSubServices(subNames);
       setFilters((prev) => ({ ...prev, subService: '' }));
     } else {
       setSubServices([]);
@@ -253,7 +261,7 @@ const SearchPage = () => {
    */
   const getCurrentLocation = () => {
     setGettingLocation(true);
-    setSearchError(''); // Clear previous search errors
+    setSearchError('');
 
     if (!navigator.geolocation) {
       setSearchError('Geolocation is not supported by your browser.');
@@ -288,7 +296,6 @@ const SearchPage = () => {
         }
         setSearchError(errorMessage);
         setGettingLocation(false);
-        // Still attempt search without location
         performSearch();
       }
     );
@@ -306,17 +313,15 @@ const SearchPage = () => {
    */
   const performSearch = async (lat, lng) => {
     setLoading(true);
-    setSearchError(''); // Clear previous error
+    setSearchError('');
 
     try {
       const params = new URLSearchParams();
 
-      // Three‑level service selection
       if (filters.mainCategory) params.append('mainCategory', filters.mainCategory);
       if (filters.serviceCategory) params.append('serviceCategory', filters.serviceCategory);
       if (filters.subService) params.append('subService', filters.subService);
 
-      // Location & radius
       if (lat && lng) {
         params.append('lat', lat);
         params.append('lng', lng);
@@ -326,7 +331,6 @@ const SearchPage = () => {
       }
       if (filters.radius) params.append('radius', filters.radius);
 
-      // Advanced filters
       if (filters.minRating) params.append('minRating', filters.minRating);
       if (filters.maxHourlyRate) params.append('maxHourlyRate', filters.maxHourlyRate);
       if (filters.minHourlyRate) params.append('minHourlyRate', filters.minHourlyRate);
@@ -335,12 +339,10 @@ const SearchPage = () => {
 
       if (response.data.success) {
         setTechnicians(response.data.data || []);
-        // If the backend returns a message (e.g., "No technicians found"), we could show it
         if (response.data.data?.length === 0) {
           setSearchError('No technicians match your criteria. Try broadening your search.');
         }
       } else {
-        // Backend returned success: false
         setTechnicians([]);
         setSearchError(response.data.message || 'Search failed. Please try again.');
       }
@@ -368,7 +370,6 @@ const SearchPage = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    // If we have a location, use it; otherwise attempt search without location
     if (userLocation) {
       performSearch(userLocation.lat, userLocation.lng);
     } else {
@@ -380,7 +381,6 @@ const SearchPage = () => {
     navigate(`/technician/${technicianId}`);
   };
 
-  /** Clear all filters and reset to defaults, then re‑search */
   const clearFilters = () => {
     setFilters({
       mainCategory: '',
@@ -393,7 +393,6 @@ const SearchPage = () => {
     });
     setServiceCategories([]);
     setSubServices([]);
-    // Re‑search with new filters
     if (userLocation) {
       performSearch(userLocation.lat, userLocation.lng);
     } else {
@@ -401,10 +400,8 @@ const SearchPage = () => {
     }
   };
 
-  /** Dismiss the current search error */
   const dismissSearchError = () => setSearchError('');
 
-  /** Retry catalog loading */
   const retryCatalogLoad = () => {
     sessionStorage.removeItem('catalogData');
     fetchCatalogData();
@@ -438,7 +435,6 @@ const SearchPage = () => {
   // RENDER
   // ============================================================
 
-  // Show full‑page loader while catalog is loading
   if (catalogLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -450,7 +446,6 @@ const SearchPage = () => {
     );
   }
 
-  // If catalog failed to load and we don't have a fallback (shouldn't happen, but just in case)
   if (catalogError && !usingDefaultCatalog) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
