@@ -8,7 +8,6 @@ import Technicians from './pages/Technicians';
 import TechnicianProfile from './pages/TechnicianProfile';
 import TechnicianSearchResults from './pages/TechnicianSearchResults';
 import Search from './pages/Search';
-import BookService from './pages/BookService';
 import SignUp from './pages/SignUp';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
