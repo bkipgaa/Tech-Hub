@@ -109,7 +109,7 @@ const Navbar = () => {
     { name: "Services", icon: Settings, path: "/services" },
     { name: "Available Jobs", icon: Briefcase, path: "/available-jobs" },
     { name: "Search", icon: Search, path: "/search", highlight: true },
-    { name: "Book Service", icon: Calendar, path: "/book-service" },
+    { name: "My Bookings", icon: Calendar, path: "/bookings" },
   ];
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);

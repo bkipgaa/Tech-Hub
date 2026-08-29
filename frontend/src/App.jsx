@@ -34,7 +34,9 @@ import MyJobs from './components/jobs/MyJobs';
 import JobDetails from './components/jobs/JobDetails';
 import MyApplications from './components/applications/MyApplications';
 import AdminVerifyJobs from './components/admin/AdminVerifyJobs';
+import BookService from './pages/BookService';
 import PaymentCallback from './pages/PaymentCallback';
+
 import './App.css';
 
 function App() {
@@ -70,6 +72,8 @@ function App() {
 <Route path="/payment-callback" element={<PaymentCallback />} />
 <Route path="/forgot-password" element={<ForgotPassword />} />
 <Route path="/reset-password/:token" element={<ResetPassword />} />
+// Inside your routes:
+<Route path="/bookings" element={<BookService />} />
 
             <Route path="profile" element={
               <PrivateRoute>
