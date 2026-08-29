@@ -84,9 +84,9 @@ function App() {
             <Route
   path="/technician-dashboard/bookings"
   element={
-    <ProtectedRoute requiredRole="technician">
+    <PrivateRoute requiredRole="technician">
       <TechnicianBookings />
-    </ProtectedRoute>
+    </PrivateRoute>
   }
 />
 
