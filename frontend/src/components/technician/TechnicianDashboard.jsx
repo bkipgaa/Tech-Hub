@@ -12,6 +12,7 @@
  * - Profile completion tracking
  * - Verification status display
  * - Admin view mode (read-only for support)
+ * - ✅ NEW: "Job Requests" button to manage bookings (navigates to /technician-dashboard/bookings)
  * 
  * Access Control:
  * - Technicians: Full access to edit their own profile
@@ -19,7 +20,7 @@
  * - Admins viewing other technicians: Read-only access
  * - Regular users (clients): Redirected to home
  * 
- * @version 3.0.0 - Supports multiple main categories with primary sync
+ * @version 3.1.0 - Added Job Requests navigation
  * @author Weba-Hub Team
  */
 
@@ -43,7 +44,7 @@ import ProfileCompletionBar from './common/ProfileCompletionBar';
 import TabNavigation from './common/TabNavigation';
 
 // Import icons
-import { Edit, Save, X, Shield, Eye } from 'lucide-react';
+import { Edit, Save, X, Shield, Eye, Briefcase } from 'lucide-react';
 
 const TechnicianDashboard = () => {
   // ============================================================
@@ -51,6 +52,7 @@ const TechnicianDashboard = () => {
   // ============================================================
   
   const { id } = useParams();
+  const navigate = useNavigate(); // for navigation
   
   const { 
     user, 
@@ -61,8 +63,6 @@ const TechnicianDashboard = () => {
     addServiceCategory,
     removeServiceCategory
   } = useAuth();
-  
-  const navigate = useNavigate();
 
   // ============================================================
   // STATE VARIABLES
@@ -202,12 +202,6 @@ const TechnicianDashboard = () => {
     isSyncingRef.current = false;
   }, [formData.mainCategories, formData.mainCategory]);
 
-  /**
-   * When mainCategory is manually changed (e.g., by ServicesTab filter),
-   * we could optionally reorder mainCategories to put it first.
-   * But we'll keep it simple and only sync one way.
-   */
-
   // ============================================================
   // EFFECTS
   // ============================================================
@@ -274,8 +268,6 @@ const TechnicianDashboard = () => {
 
   /**
    * EFFECT 2: POPULATE FORM DATA FROM PROFILE
-   * =========================================
-   * Reads both mainCategory (single) and mainCategories (array) from profile.
    */
   useEffect(() => {
     const profile = isAdminView ? viewingTechnician : technicianProfile;
@@ -290,8 +282,8 @@ const TechnicianDashboard = () => {
 
       // Determine categories array
       const categoriesArray = (profile.mainCategories && profile.mainCategories.length > 0)
-  ? profile.mainCategories
-  : (profile.mainCategory ? [profile.mainCategory] : []);
+        ? profile.mainCategories
+        : (profile.mainCategory ? [profile.mainCategory] : []);
 
       setFormData({
         aboutMe: profile.aboutMe || '',
@@ -378,58 +370,58 @@ const TechnicianDashboard = () => {
   }, [technicianProfile, viewingTechnician, isAdminView]);
 
   // ============================================================
-  // SERVICE CATEGORY HANDLERS (unchanged)
+  // SERVICE CATEGORY HANDLERS
   // ============================================================
 
- const handleAddServiceCategory = async (categoryData) => {
-  setServiceUpdateLoading(true);
-  try {
-    const result = await addServiceCategory(categoryData);
-    if (result.success) {
-      const updatedProfile = result.technician;
-      setFormData(prev => ({
-        ...prev,
-        serviceCategories: updatedProfile.serviceCategories || []
-      }));
-      await getTechnicianProfile();
-      return { success: true };
-    } else {
-      setError(result.error || 'Failed to add service category');
-      return { success: false, error: result.error };
+  const handleAddServiceCategory = async (categoryData) => {
+    setServiceUpdateLoading(true);
+    try {
+      const result = await addServiceCategory(categoryData);
+      if (result.success) {
+        const updatedProfile = result.technician;
+        setFormData(prev => ({
+          ...prev,
+          serviceCategories: updatedProfile.serviceCategories || []
+        }));
+        await getTechnicianProfile();
+        return { success: true };
+      } else {
+        setError(result.error || 'Failed to add service category');
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      console.error('Error adding service category:', error);
+      setError('Failed to add service category');
+      return { success: false, error: 'Failed to add service category' };
+    } finally {
+      setServiceUpdateLoading(false);
     }
-  } catch (error) {
-    console.error('Error adding service category:', error);
-    setError('Failed to add service category');
-    return { success: false, error: 'Failed to add service category' };
-  } finally {
-    setServiceUpdateLoading(false);
-  }
-};
+  };
 
-const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
-  setServiceUpdateLoading(true);
-  try {
-    const result = await removeServiceCategory(categoryName, mainCategory);
-    if (result.success) {
-      const updatedProfile = result.technician;
-      setFormData(prev => ({
-        ...prev,
-        serviceCategories: updatedProfile.serviceCategories || []
-      }));
-      await getTechnicianProfile();
-      return { success: true };
-    } else {
-      setError(result.error || 'Failed to remove service category');
-      return { success: false, error: result.error };
+  const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
+    setServiceUpdateLoading(true);
+    try {
+      const result = await removeServiceCategory(categoryName, mainCategory);
+      if (result.success) {
+        const updatedProfile = result.technician;
+        setFormData(prev => ({
+          ...prev,
+          serviceCategories: updatedProfile.serviceCategories || []
+        }));
+        await getTechnicianProfile();
+        return { success: true };
+      } else {
+        setError(result.error || 'Failed to remove service category');
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      console.error('Error removing service category:', error);
+      setError('Failed to remove service category');
+      return { success: false, error: 'Failed to remove service category' };
+    } finally {
+      setServiceUpdateLoading(false);
     }
-  } catch (error) {
-    console.error('Error removing service category:', error);
-    setError('Failed to remove service category');
-    return { success: false, error: 'Failed to remove service category' };
-  } finally {
-    setServiceUpdateLoading(false);
-  }
-};
+  };
 
   // ============================================================
   // EVENT HANDLERS
@@ -437,9 +429,6 @@ const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
 
   /**
    * HANDLE INPUT CHANGES
-   * ====================
-   * Still handles nested fields, but no special case for mainCategory.
-   * mainCategory is synced automatically via useEffect.
    */
   const handleInputChange = (e) => {
     if (isAdminView) {
@@ -448,8 +437,6 @@ const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
     }
     
     const { name, value, type, checked } = e.target;
-    
-    // No special case for 'mainCategory' – it is synced from mainCategories.
     
     if (name.includes('.')) {
       const parts = name.split('.');
@@ -486,8 +473,6 @@ const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
 
   /**
    * HANDLE FORM SUBMISSION
-   * ======================
-   * Validates that at least one main category exists.
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -533,6 +518,36 @@ const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
     } else {
       console.error('❌ Profile update failed:', result.error);
       setError(result.error || 'Failed to update profile');
+    }
+  };
+
+  // ============================================================
+  // NAVIGATION HANDLER – NEW
+  // ============================================================
+
+  /**
+   * Navigate to the Job Requests (booking management) page.
+   * Destination: /technician-dashboard/bookings
+   * Only available for technicians (or admin viewing own profile).
+   * 
+   * Error handling:
+   * - If user is not a technician, shows an error.
+   * - If navigation fails, logs error and sets error state.
+   */
+  const handleJobRequests = () => {
+    try {
+      // Check if user is a technician (or admin viewing own profile)
+      if (user?.role === 'technician' || (user?.role === 'admin' && !id)) {
+        console.log('📋 Navigating to Job Requests page...');
+        navigate('/technician-dashboard/bookings');
+      } else {
+        // If admin viewing another technician, show a message
+        console.warn('⚠️ Admins cannot view job requests for other technicians');
+        setError('Admins cannot view job requests for other technicians. Please switch to your own profile.');
+      }
+    } catch (err) {
+      console.error('❌ Navigation error:', err);
+      setError('Failed to open Job Requests. Please try again.');
     }
   };
 
@@ -673,8 +688,10 @@ const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
 
         <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
           
-          <div className="bg-gray-50 px-6 py-5 border-b border-gray-200 flex justify-between items-center flex-wrap gap-3">
+          {/* ─── TOP ACTION BAR ───────────────────────────────────── */}
+          <div className="bg-gray-50 px-6 py-5 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
             
+            {/* Left: Tab title */}
             <h2 className="text-2xl font-bold text-gray-800">
               {activeTab === 'profile' && '📋 Professional Information'}
               {activeTab === 'services' && '🔧 Services & Pricing'}
@@ -685,65 +702,104 @@ const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
               {activeTab === 'settings' && '⚙️ Account Settings'}
             </h2>
             
-            {!isAdminView && user?.role === 'technician' && (
-              !isEditing ? (
+            {/* Right: Action Buttons */}
+            <div className="flex flex-wrap items-center gap-3">
+              
+              {/* ─── NEW: JOB REQUESTS BUTTON ─── */}
+              {/* Only show for technicians or admin viewing own profile */}
+              {(user?.role === 'technician' || (user?.role === 'admin' && !id)) && (
                 <button
-                  onClick={() => {
-                    console.log('✏️ Entering edit mode');
-                    setIsEditing(true);
-                  }}
+                  onClick={handleJobRequests}
+                  className="bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-all duration-200 flex items-center gap-2 shadow-sm"
+                >
+                  <Briefcase className="w-4 h-4" />
+                  <span>Job Requests</span>
+                  {/* Optional badge for pending count – can be added later */}
+                </button>
+              )}
+              
+              {/* ─── EDIT / SAVE / CANCEL BUTTONS ─── */}
+              {!isAdminView && user?.role === 'technician' && (
+                !isEditing ? (
+                  <button
+                    onClick={() => {
+                      console.log('✏️ Entering edit mode');
+                      setIsEditing(true);
+                    }}
+                    className="bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-red-600 transition-all duration-200 flex items-center space-x-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span>Edit Profile</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        console.log('❌ Cancelling edit mode');
+                        setIsEditing(false);
+                        const profile = isAdminView ? viewingTechnician : technicianProfile;
+                        if (profile) {
+                          const { gallery, ...rest } = profile;
+                          setFormData({
+                            ...rest,
+                            gallery: profile.portfolio?.map(item => item.mediaUrl) || []
+                          });
+                        }
+                      }}
+                      className="bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-red-600 hover:text-white transition-all duration-200 flex items-center space-x-2"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Cancel</span>
+                    </button>
+                    <button
+                      type="submit"
+                      form="dashboard-form"
+                      disabled={loading}
+                      className="bg-gray-800 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-red-600 transition-all duration-200 disabled:opacity-50 flex items-center space-x-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>{loading ? 'Saving...' : 'Save Changes'}</span>
+                    </button>
+                  </>
+                )
+              )}
+              
+              {user?.role === 'admin' && !id && !isEditing && (
+                <button
+                  onClick={() => setIsEditing(true)}
                   className="bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-red-600 transition-all duration-200 flex items-center space-x-2"
                 >
                   <Edit className="w-4 h-4" />
-                  <span>Edit Profile</span>
+                  <span>Edit Profile (Admin)</span>
                 </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    console.log('❌ Cancelling edit mode');
-                    setIsEditing(false);
-                    const profile = isAdminView ? viewingTechnician : technicianProfile;
-                    if (profile) {
-                      const { gallery, ...rest } = profile;
-                      setFormData({
-                        ...rest,
-                        gallery: profile.portfolio?.map(item => item.mediaUrl) || []
-                      });
-                    }
-                  }}
-                  className="bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-red-600 hover:text-white transition-all duration-200 flex items-center space-x-2"
-                >
-                  <X className="w-4 h-4" />
-                  <span>Cancel</span>
-                </button>
-              )
-            )}
-            
-            {user?.role === 'admin' && !id && !isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-red-600 transition-all duration-200 flex items-center space-x-2"
-              >
-                <Edit className="w-4 h-4" />
-                <span>Edit Profile (Admin)</span>
-              </button>
-            )}
-            
-            {isAdminView && (
-              <div className="flex items-center gap-2 text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
-                <Eye className="w-4 h-4" />
-                <span className="text-sm">Read-Only Mode</span>
-              </div>
-            )}
+              )}
+              
+              {isAdminView && (
+                <div className="flex items-center gap-2 text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
+                  <Eye className="w-4 h-4" />
+                  <span className="text-sm">Read-Only Mode</span>
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* ─── ERROR DISPLAY ────────────────────────────────── */}
           {error && (
-            <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-              <strong>❌ Error:</strong> {error}
+            <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2">
+              <strong>❌ Error:</strong>
+              <span className="flex-1">{error}</span>
+              <button
+                onClick={() => setError('')}
+                className="text-red-500 hover:text-red-700 text-sm font-medium"
+                aria-label="Dismiss error"
+              >
+                Dismiss
+              </button>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="p-6">
+          {/* ─── FORM ──────────────────────────────────────────── */}
+          <form id="dashboard-form" onSubmit={handleSubmit} className="p-6">
             
             {activeTab === 'profile' && (
               <ProfileTab 
@@ -817,28 +873,7 @@ const handleRemoveServiceCategory = async (categoryName, mainCategory) => {
                 user={isAdminView ? viewingTechnician?.userId : user}
               />
             )}
-
-            {canEdit && (
-              <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="bg-gray-800 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-red-600 transition-all duration-200 disabled:opacity-50 flex items-center space-x-2"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>
-                    {loading ? (
-                      <>
-                        <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Changes'
-                    )}
-                  </span>
-                </button>
-              </div>
-            )}
+            
           </form>
         </div>
       </div>

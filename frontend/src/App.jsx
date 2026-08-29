@@ -35,6 +35,7 @@ import MyApplications from './components/applications/MyApplications';
 import AdminVerifyJobs from './components/admin/AdminVerifyJobs';
 import BookService from './pages/BookService';
 import PaymentCallback from './pages/PaymentCallback';
+import TechnicianBookings from './pages/TechnicianBookings';
 
 import './App.css';
 
@@ -80,6 +81,15 @@ function App() {
               </PrivateRoute>
             } />
             
+            <Route
+  path="/technician-dashboard/bookings"
+  element={
+    <ProtectedRoute requiredRole="technician">
+      <TechnicianBookings />
+    </ProtectedRoute>
+  }
+/>
+
             {/* Technician & Admin Accessible Routes */}
             <Route path="technician-dashboard" element={
               <TechnicianRoute>
