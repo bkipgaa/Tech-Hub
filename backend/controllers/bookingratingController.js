@@ -65,7 +65,6 @@ const handleControllerError = (res, error, fallbackMessage, status = 500, endpoi
  */
 exports.createBooking = async (req, res) => {
   try {
-    // ✅ FIX: use req.user.userId (auth middleware sets userId)
     const clientId = req.user.userId || req.user.id || req.user._id;
     if (!clientId) {
       return handleControllerError(
@@ -82,7 +81,7 @@ exports.createBooking = async (req, res) => {
       serviceCategory,
       subService,
       serviceDescription,
-      hourlyRate,        // optional – may be undefined, null, or 0
+      hourlyRate,
       estimatedHours,
       preferredDate,
       preferredTime,
@@ -92,7 +91,23 @@ exports.createBooking = async (req, res) => {
       paymentMethod,
     } = req.body;
 
-    // ── Validate required fields (hourlyRate is NOT required) ──
+    // ── LOG THE RECEIVED DATA ──
+    console.log('📝 Booking request body:', {
+      technicianId,
+      serviceCategory,
+      subService,
+      serviceDescription,
+      hourlyRate,
+      estimatedHours,
+      preferredDate,
+      preferredTime,
+      duration,
+      location,
+      clientNotes,
+      paymentMethod,
+    });
+
+    // ── Validate required fields ──
     if (!technicianId || !serviceCategory || !subService || !serviceDescription ||
         !estimatedHours || estimatedHours <= 0 ||
         !preferredDate || !preferredTime || !location?.address) {
@@ -105,7 +120,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Validate hourlyRate if provided ──
+    // ── Validate hourlyRate ──
     if (hourlyRate !== undefined && hourlyRate !== null && (isNaN(hourlyRate) || hourlyRate < 0)) {
       return handleControllerError(
         res,
@@ -116,7 +131,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Validate preferredDate ──
+    // ── Validate date ──
     const selectedDate = new Date(preferredDate);
     if (isNaN(selectedDate.getTime())) {
       return handleControllerError(
@@ -139,7 +154,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Validate preferredTime ──
+    // ── Validate time ──
     if (!preferredTime || preferredTime.trim() === '') {
       return handleControllerError(
         res,
@@ -150,7 +165,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Verify technician exists and is active ──
+    // ── Verify technician ──
     const technician = await Technician.findById(technicianId);
     if (!technician || !technician.isActive) {
       return handleControllerError(
@@ -162,7 +177,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Calculate total amount (0 if no hourly rate) ──
+    // ── Calculate total ──
     const rate = (hourlyRate && hourlyRate > 0) ? hourlyRate : 0;
     const totalAmount = rate * estimatedHours;
 
@@ -186,6 +201,8 @@ exports.createBooking = async (req, res) => {
       paymentStatus: 'pending',
     });
 
+    console.log('💾 About to save booking:', booking);
+
     await booking.save();
 
     await booking.populate('clientId', 'firstName lastName email phone');
@@ -197,7 +214,13 @@ exports.createBooking = async (req, res) => {
       data: booking,
     });
   } catch (error) {
-    // Enhanced error logging for specific cases
+    // Log the full error details
+    console.error('❌ createBooking caught error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
+
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(e => e.message);
       return handleControllerError(
