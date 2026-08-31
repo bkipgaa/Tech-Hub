@@ -140,6 +140,27 @@ const bookingSchema = new mongoose.Schema({
     lastNotificationSent: Date
   },
 
+  // In models/Booking.js – add these fields inside the schema definition
+
+paymentConfirmed: {
+  type: Boolean,
+  default: false
+},
+paymentConfirmedAt: Date,
+paymentConfirmedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User'
+},
+paymentAmountReceived: {
+  type: Number,
+  min: 0,
+  default: null
+},
+paymentConfirmationNote: {
+  type: String,
+  maxlength: 200
+},
+
   // ── System ──
   isActive: {
     type: Boolean,

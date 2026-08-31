@@ -775,6 +775,17 @@ exports.completeBooking = async (req, res) => {
       }
     }
 
+    // ✅ NEW: Ensure payment is confirmed before allowing completion
+    if (!booking.paymentConfirmed) {
+      return handleControllerError(
+        res,
+        new Error('Payment not confirmed'),
+        'Please confirm payment before completing the booking.',
+        400,
+        'completeBooking'
+      );
+    }
+
     if (booking.status !== 'in-progress') {
       return handleControllerError(
         res,
@@ -994,5 +1005,123 @@ exports.cancelBooking = async (req, res) => {
     });
   } catch (error) {
     handleControllerError(res, error, 'Failed to cancel booking.', 500, 'cancelBooking');
+  }
+};
+
+
+/**
+ * Confirm payment for a booking (technician only).
+ * Sets paymentConfirmed = true, records timestamp and optional amount.
+ * Only allowed when booking status is 'in-progress'.
+ */
+exports.confirmPayment = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { amountReceived, note } = req.body;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to confirm payment.',
+        401,
+        'confirmPayment'
+      );
+    }
+
+    // Must be a technician
+    if (req.user.role !== 'technician') {
+      return handleControllerError(
+        res,
+        new Error('Unauthorized'),
+        'Only technicians can confirm payment.',
+        403,
+        'confirmPayment'
+      );
+    }
+
+    // Get the technician's _id
+    let technicianId;
+    try {
+      technicianId = await getTechnicianId(userId);
+    } catch (err) {
+      return handleControllerError(
+        res,
+        err,
+        'Technician profile not found.',
+        404,
+        'confirmPayment'
+      );
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(
+        res,
+        new Error('Booking not found'),
+        'Booking not found.',
+        404,
+        'confirmPayment'
+      );
+    }
+
+    // Verify this technician owns the booking
+    if (booking.technicianId.toString() !== technicianId.toString()) {
+      return handleControllerError(
+        res,
+        new Error('Unauthorized'),
+        'You are not the technician for this booking.',
+        403,
+        'confirmPayment'
+      );
+    }
+
+    // Only allow if status is 'in-progress' (or maybe 'confirmed' as well? but work should be in progress)
+    if (booking.status !== 'in-progress') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'Payment can only be confirmed when the job is in progress.',
+        400,
+        'confirmPayment'
+      );
+    }
+
+    // Prevent double confirmation
+    if (booking.paymentConfirmed) {
+      return handleControllerError(
+        res,
+        new Error('Already confirmed'),
+        'Payment has already been confirmed for this booking.',
+        400,
+        'confirmPayment'
+      );
+    }
+
+    // Update booking
+    booking.paymentConfirmed = true;
+    booking.paymentConfirmedAt = new Date();
+    booking.paymentConfirmedBy = userId;
+    if (amountReceived !== undefined && amountReceived !== null) {
+      const parsed = parseFloat(amountReceived);
+      if (!isNaN(parsed) && parsed >= 0) {
+        booking.paymentAmountReceived = parsed;
+      }
+    }
+    if (note) booking.paymentConfirmationNote = note.trim();
+
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({
+      success: true,
+      message: 'Payment confirmed successfully.',
+      data: booking,
+    });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to confirm payment.', 500, 'confirmPayment');
   }
 };

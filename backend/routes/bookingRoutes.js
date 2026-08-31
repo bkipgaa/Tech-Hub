@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { auth} = require('../middleware/auth'); // your auth middleware
+const { auth } = require('../middleware/auth'); // your auth middleware
 const {
   createBooking,
   getMyBookings,
@@ -11,6 +11,7 @@ const {
   completeBooking,
   rateTechnician,
   cancelBooking,
+  confirmPayment,              // ✅ NEW import
 } = require('../controllers/bookingratingController');
 
 // All booking routes require authentication
@@ -42,5 +43,8 @@ router.post('/:bookingId/rate', rateTechnician);
 
 // Cancel booking (client or technician)
 router.post('/:bookingId/cancel', cancelBooking);
+
+// ✅ NEW: Confirm payment (technician only, when job is in progress)
+router.post('/:bookingId/confirm-payment', confirmPayment);
 
 module.exports = router;

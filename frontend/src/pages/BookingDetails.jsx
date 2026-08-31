@@ -9,10 +9,13 @@
  * - Status timeline showing history of status changes
  * - Role-based action buttons:
  *   - Client: Cancel (pending/confirmed), Rate (completed)
- *   - Technician: Confirm (pending), Start (confirmed), Complete (in-progress), Cancel (pending/confirmed/in-progress)
+ *   - Technician: Confirm (pending), Start (confirmed), 
+ *                 Confirm Payment (in-progress), Complete (in-progress, after payment confirmed),
+ *                 Cancel (pending/confirmed/in-progress)
+ * - Payment confirmation flow: technician must confirm payment before completing job
  * - Responsive design with comprehensive error handling
  * 
- * @version 1.0.0
+ * @version 2.0.0
  * @author Weba-Hub Team
  */
 
@@ -198,12 +201,11 @@ const BookingDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [userRole, setUserRole] = useState(''); // 'client' or 'technician'
 
   // ── Action modal state ──
   const [actionModal, setActionModal] = useState({
     open: false,
-    action: '', // 'confirm', 'start', 'complete', 'cancel', 'rate'
+    action: '', // 'confirm', 'start', 'complete', 'cancel', 'rate', 'confirmPayment'
     title: '',
     message: '',
     buttonText: '',
@@ -212,6 +214,9 @@ const BookingDetails = () => {
     error: '',
     rating: 0,
     review: '',
+    amount: '',        // for confirmPayment
+    note: '',          // for confirmPayment
+    needsRating: false,
   });
 
   // ─── API CALLS ───────────────────────────────────────────────
@@ -234,11 +239,6 @@ const BookingDetails = () => {
 
       if (response.data.success) {
         setBooking(response.data.data);
-        // Determine user role from the booking data
-        // (could also get from auth context, but this is safer)
-        // We'll check if the logged-in user is the client or technician
-        // by comparing IDs with what's in the booking.
-        // This is handled in the action buttons logic.
       } else {
         setError(response.data.message || 'Failed to load booking.');
         setBooking(null);
@@ -410,7 +410,6 @@ const BookingDetails = () => {
 
       // If completed, also add the in-progress step if it exists
       if (booking.status === 'completed' && booking.startedAt) {
-        // Insert in-progress before completed
         const inProgressIndex = timeline.findIndex(t => t.status === 'completed');
         if (inProgressIndex > -1) {
           timeline.splice(inProgressIndex, 0, {
@@ -441,8 +440,6 @@ const BookingDetails = () => {
 
     // If cancelled, add the cancellation reason if available
     if (booking.status === 'cancelled' && booking.cancellationReason) {
-      // Add the reason as a note on the timeline
-      // We'll just add it to the cancelled item
       const cancelledItem = timeline.find(t => t.status === 'cancelled');
       if (cancelledItem) {
         cancelledItem.reason = booking.cancellationReason;
@@ -496,6 +493,13 @@ const BookingDetails = () => {
         buttonColor: 'bg-yellow-500 hover:bg-yellow-600',
         needsRating: true,
       },
+      confirmPayment: {
+        title: 'Confirm Payment',
+        message: 'Has the client paid for this job? You can optionally enter the amount received and a note.',
+        buttonText: 'Confirm Payment',
+        buttonColor: 'bg-green-600 hover:bg-green-700',
+        needsRating: false,
+      },
     };
 
     const config = configs[action];
@@ -512,7 +516,9 @@ const BookingDetails = () => {
       error: '',
       rating: 0,
       review: '',
-      needsRating: config.needsRating,
+      amount: '',
+      note: '',
+      needsRating: config.needsRating || false,
     });
   };
 
@@ -533,6 +539,8 @@ const BookingDetails = () => {
       error: '',
       rating: 0,
       review: '',
+      amount: '',
+      note: '',
       needsRating: false,
     });
   };
@@ -545,7 +553,7 @@ const BookingDetails = () => {
   const handleActionSubmit = async (e) => {
     e.preventDefault();
 
-    const { action, rating, review, needsRating } = actionModal;
+    const { action, rating, review, needsRating, amount, note } = actionModal;
     if (!booking) return;
 
     // Validate rating if needed
@@ -583,6 +591,14 @@ const BookingDetails = () => {
         case 'rate':
           endpoint = `/bookings/${booking._id}/rate`;
           payload = { rating, review: review.trim() };
+          break;
+        case 'confirmPayment':
+          endpoint = `/bookings/${booking._id}/confirm-payment`;
+          // Only send amount if it's a valid positive number
+          if (amount && !isNaN(parseFloat(amount)) && parseFloat(amount) >= 0) {
+            payload.amountReceived = parseFloat(amount);
+          }
+          if (note) payload.note = note.trim();
           break;
         default:
           throw new Error('Invalid action');
@@ -702,11 +718,6 @@ const BookingDetails = () => {
 
   // ─── DETERMINE USER ROLE & ACTIONS ──────────────────────────
 
-  // Determine if the current user is the client or technician
-  // This would normally come from the auth context, but we can infer from the booking
-  // We'll use the auth context in a real app, but for now we'll assume
-  // the user is whoever is logged in (the backend handles permissions)
-  // We'll get the user role from localStorage or context
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isClient = user?.role === 'client';
   const isTechnician = user?.role === 'technician';
@@ -725,8 +736,9 @@ const BookingDetails = () => {
   // Technician actions
   const techCanConfirm = isPending;
   const techCanStart = isConfirmed;
-  const techCanComplete = isInProgress;
+  const techCanComplete = isInProgress && booking.paymentConfirmed === true; // only if payment confirmed
   const techCanCancel = isPending || isConfirmed || isInProgress;
+  const techCanConfirmPayment = isInProgress && booking.paymentConfirmed !== true;
 
   // Build timeline
   const timeline = buildStatusTimeline(booking);
@@ -821,7 +833,7 @@ const BookingDetails = () => {
               <p className="text-gray-700">{booking.location?.address || 'No address provided'}</p>
             </div>
 
-            {/* Pricing Card */}
+            {/* Pricing Card - with Payment Confirmation */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-green-600" />
@@ -850,6 +862,27 @@ const BookingDetails = () => {
                   </div>
                 )}
               </div>
+
+              {/* Payment Confirmation Status */}
+              {booking.paymentConfirmed && (
+                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-700 flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Payment confirmed</span>
+                    {booking.paymentAmountReceived !== null && booking.paymentAmountReceived !== undefined && (
+                      <span className="font-medium"> ({formatCurrency(booking.paymentAmountReceived)})</span>
+                    )}
+                    {booking.paymentConfirmedAt && (
+                      <span className="text-xs text-gray-500 ml-2">
+                        {formatDateTime(booking.paymentConfirmedAt)}
+                      </span>
+                    )}
+                  </p>
+                  {booking.paymentConfirmationNote && (
+                    <p className="text-xs text-green-600 mt-1">Note: {booking.paymentConfirmationNote}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Notes Card */}
@@ -932,7 +965,7 @@ const BookingDetails = () => {
 
             {/* Actions Card */}
             {((isClient && (clientCanCancel || clientCanRate)) ||
-              (isTechnician && (techCanConfirm || techCanStart || techCanComplete || techCanCancel))) && (
+              (isTechnician && (techCanConfirm || techCanStart || techCanComplete || techCanCancel || techCanConfirmPayment))) && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-800 mb-4">⚡ Actions</h2>
                 <div className="space-y-2">
@@ -973,6 +1006,15 @@ const BookingDetails = () => {
                     >
                       <Play className="w-4 h-4" />
                       Start Job
+                    </button>
+                  )}
+                  {isTechnician && techCanConfirmPayment && (
+                    <button
+                      onClick={() => openActionModal('confirmPayment')}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                    >
+                      <DollarSign className="w-4 h-4" />
+                      Confirm Payment
                     </button>
                   )}
                   {isTechnician && techCanComplete && (
@@ -1089,6 +1131,42 @@ const BookingDetails = () => {
                     <p className="text-xs text-gray-400 mt-1">
                       {actionModal.review.length}/500 characters
                     </p>
+                  </div>
+                </>
+              )}
+
+              {/* Payment confirmation fields (for confirmPayment action) */}
+              {actionModal.action === 'confirmPayment' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Amount Received (optional)
+                    </label>
+                    <input
+                      type="number"
+                      value={actionModal.amount}
+                      onChange={(e) => setActionModal((prev) => ({ ...prev, amount: e.target.value }))}
+                      placeholder="e.g. 2500"
+                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      disabled={actionModal.loading}
+                      min="0"
+                      step="1"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Leave empty if you don't want to record the exact amount.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Note (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={actionModal.note}
+                      onChange={(e) => setActionModal((prev) => ({ ...prev, note: e.target.value }))}
+                      placeholder="Any additional info"
+                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      disabled={actionModal.loading}
+                      maxLength={200}
+                    />
                   </div>
                 </>
               )}
