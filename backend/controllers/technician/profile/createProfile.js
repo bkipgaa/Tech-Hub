@@ -1,5 +1,6 @@
 const User = require('../../../models/User');
 const Technician = require('../../../models/Technician');
+const { subscriptionPlans } = require('../../../utils/subscriptionPlans'); // ✅ import
 const { updateCompletionStats } = require('./helpers');
 
 exports.createProfile = async (req, res) => {
@@ -7,64 +8,63 @@ exports.createProfile = async (req, res) => {
     // 1. Validate user
     const user = await User.findById(req.user.userId);
     if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'User not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
       });
     }
-    
+
     if (user.role !== 'technician') {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Please become a technician first' 
+      return res.status(403).json({
+        success: false,
+        message: 'Please become a technician first'
       });
     }
 
     // 2. Check if profile already exists
     const existing = await Technician.findOne({ userId: req.user.userId });
     if (existing) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Profile already exists' 
+      return res.status(400).json({
+        success: false,
+        message: 'Profile already exists'
       });
     }
 
     // 3. Validate required fields
-    const { 
-      mainCategory, 
-      serviceCategories, 
-      address, 
-      yearsOfExperience 
+    const {
+      mainCategory,
+      serviceCategories,
+      address,
+      yearsOfExperience
     } = req.body;
 
     if (!mainCategory) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Main category is required' 
+      return res.status(400).json({
+        success: false,
+        message: 'Main category is required'
       });
     }
 
     if (!serviceCategories || serviceCategories.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'At least one service category with sub-services is required' 
+      return res.status(400).json({
+        success: false,
+        message: 'At least one service category with sub-services is required'
       });
     }
 
-    // Validate each service category has sub-services
     for (const category of serviceCategories) {
       if (!category.categoryName || !category.subServices || category.subServices.length === 0) {
-        return res.status(400).json({ 
-          success: false, 
-          message: `Service category "${category.categoryName || 'unknown'}" must have at least one sub-service` 
+        return res.status(400).json({
+          success: false,
+          message: `Service category "${category.categoryName || 'unknown'}" must have at least one sub-service`
         });
       }
     }
 
     if (!address?.city || !address?.state) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'City and state are required' 
+      return res.status(400).json({
+        success: false,
+        message: 'City and state are required'
       });
     }
 
@@ -72,23 +72,22 @@ exports.createProfile = async (req, res) => {
     const coordinates = req.body.location?.coordinates || [36.8219, -1.2921];
     const [lng, lat] = coordinates;
     if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid location coordinates' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid location coordinates'
       });
     }
 
-
-// 5. Build technician data
+    // 5. Build technician data
     const technicianData = {
       userId: req.user.userId,
       aboutMe: req.body.aboutMe || '',
       profileHeadline: req.body.profileHeadline || '',
       skills: req.body.skills || [],
-      mainCategory: mainCategory, // ✅ Only use mainCategory
-      mainCategories: [mainCategory], // ✅ add this line
+      mainCategory: mainCategory,
+      mainCategories: [mainCategory],
       serviceCategories: serviceCategories.map(sc => ({
-        mainCategory: mainCategory, // from req.body.mainCategory
+        mainCategory: mainCategory,
         categoryName: sc.categoryName.trim(),
         subServices: sc.subServices.map(s => s.trim()).filter(Boolean)
       })),
@@ -117,6 +116,7 @@ exports.createProfile = async (req, res) => {
         formattedAddress: req.body.location?.formattedAddress || '',
         placeId: req.body.location?.placeId || ''
       },
+      // serviceRadius will be overridden by trial plan below
       serviceRadius: Number(req.body.serviceRadius) || 10,
       languages: req.body.languages || [{ name: 'English', proficiency: 'Fluent' }],
       availability: req.body.availability || {
@@ -151,35 +151,51 @@ exports.createProfile = async (req, res) => {
       lastActive: new Date()
     };
 
+    // ============================================================
+    // ✅ AUTOMATIC 30‑DAY TRIAL SUBSCRIPTION
+    // ============================================================
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 30);
+
+    technicianData.subscription = {
+      plan: 'trial',
+      planDetails: subscriptionPlans.trial,
+      startDate: new Date(),
+      trialEndDate: trialEndDate,
+      isTrial: true,
+      autoRenew: false
+    };
+    // Override service radius to match trial plan (10km)
+    technicianData.serviceRadius = subscriptionPlans.trial.visibilityRadius;
+
     // 6. Create and save technician profile
     const technician = new Technician(technicianData);
     await technician.save();
-    
+
     // 7. Update completion stats
     await updateCompletionStats(technician);
-    
+
     // 8. Populate user data
     await technician.populate('userId', 'email firstName lastName phone profileImage');
 
-    res.status(201).json({ 
-      success: true, 
-      message: 'Technician profile created successfully', 
-      data: technician 
+    res.status(201).json({
+      success: true,
+      message: 'Technician profile created successfully with 30‑day free trial',
+      data: technician
     });
-    
+
   } catch (error) {
     console.error('Create profile error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error during profile creation', 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: 'Server error during profile creation',
+      error: error.message
     });
   }
 };
 
-
-    // ===========================================
-// COMPLETE CATALOG — single query, flat response
+// ===========================================
+// COMPLETE CATALOG — unchanged
 // ===========================================
 exports.getCompleteCatalog = async (req, res) => {
   try {
@@ -187,12 +203,10 @@ exports.getCompleteCatalog = async (req, res) => {
       return res.status(503).json({ success: false, message: 'Database unavailable' });
     }
 
-    // One lightweight query — only the fields the frontend needs
     const catalogs = await ServiceCatalog.find({ isActive: true })
       .select('mainCategory serviceCategories.name serviceCategories.isActive serviceCategories.subServices.name serviceCategories.subServices.isActive')
       .lean();
 
-    // Reshape into the exact structure the frontend expects
     const data = {};
     catalogs.forEach(catalog => {
       data[catalog.mainCategory] = (catalog.serviceCategories || [])
@@ -215,4 +229,3 @@ exports.getCompleteCatalog = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
-    

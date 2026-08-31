@@ -352,17 +352,26 @@ function getVisibilityDescription(planId) {
 
 function isPlanActive(plan, endDate, trialEndDate) {
   const now = new Date();
-  if (plan === 'trial' || plan === 'free') {
+
+  // Trial: active only if trialEndDate exists and is in the future
+  if (plan === 'trial') {
     if (trialEndDate) {
-      const trialEnd = new Date(trialEndDate);
-      return now < trialEnd;
+      return now < new Date(trialEndDate);
     }
-    return true;
+    return false; // no trial end date = inactive
   }
+
+  // Free: never active (it's a fallback/dormant state)
+  if (plan === 'free') {
+    return false;
+  }
+
+  // Paid plans: active if endDate exists and is in the future
   if (endDate) {
-    const subscriptionEnd = new Date(endDate);
-    return now < subscriptionEnd;
+    return now < new Date(endDate);
   }
+
+  // Any other case: inactive
   return false;
 }
 

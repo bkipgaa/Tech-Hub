@@ -129,7 +129,7 @@ const SubscriptionManager = () => {
       <h1 className="text-2xl font-bold mb-2">Subscription Management</h1>
       <p className="text-gray-600 mb-6">Choose a plan that fits your business needs</p>
 
-      {/* Current Subscription Card (unchanged) */}
+      {/* Current Subscription Card */}
       {currentSubscription && (
         <div className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
           <div className="flex items-start justify-between flex-wrap gap-4">
@@ -185,6 +185,24 @@ const SubscriptionManager = () => {
               )}
             </div>
           </div>
+
+          {/* ====== NEW: Upgrade prompt when subscription is inactive ====== */}
+          {!currentSubscription.isActive && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <span className="text-red-700 font-medium flex-1">
+                Your subscription has expired. To continue using the platform and be visible to clients, please upgrade to a paid plan.
+              </span>
+              <button
+                onClick={() => {
+                  document.getElementById('plans-grid')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Upgrade Now
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -196,8 +214,8 @@ const SubscriptionManager = () => {
         </div>
       )}
 
-      {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Plans Grid - added id for scrolling */}
+      <div id="plans-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {plans.filter(p => p.id !== 'trial').map((plan) => (
           <div key={plan.id} className="bg-white rounded-lg shadow-lg border overflow-hidden hover:shadow-xl transition-shadow">
             <div className="p-6">
@@ -246,7 +264,7 @@ const SubscriptionManager = () => {
               Are you sure you want to upgrade to {plans.find(p => p.id === selectedPlan)?.name} plan?
             </p>
 
-            {/* ===== NEW: Payment Method Selection ===== */}
+            {/* ===== Payment Method Selection ===== */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Choose Payment Method

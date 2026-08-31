@@ -9,9 +9,8 @@
  */
 
 const Technician = require('../models/Technician');
-const User = require('../models/User'); // Needed to fetch email for Paystack
-const { subscriptionPlans, plansList } = require('../utils/subscriptionPlans');
-
+const User = require('../models/User');
+const { subscriptionPlans, plansList, isPlanActive } = require('../utils/subscriptionPlans');
 
 // Initialize Paystack with secret key from environment
 const Paystack = require('paystack-api')(process.env.PAYSTACK_SECRET_KEY);
@@ -22,9 +21,11 @@ const Paystack = require('paystack-api')(process.env.PAYSTACK_SECRET_KEY);
  */
 exports.getPlans = async (req, res) => {
   try {
+    // Filter out 'free' and 'trial' – they are not paid upgrade options
+    const paidPlans = plansList.filter(p => p.id !== 'free' && p.id !== 'trial');
     res.json({
       success: true,
-      data: plansList.map(plan => ({
+      data: paidPlans.map(plan => ({
         ...plan,
         features: subscriptionPlans[plan.id]?.features || []
       }))
@@ -46,21 +47,38 @@ exports.getCurrentSubscription = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Technician profile not found' });
     }
 
+    // Default subscription if none exists
     const subscription = technician.subscription || {
       plan: 'free',
       isActive: true,
       visibilityRadius: 10
     };
 
-    const isActive = checkSubscriptionActive(technician);
-    const daysRemaining = getDaysRemaining(technician);
+    // Use the shared isPlanActive helper from subscriptionPlans.js
+    const isActive = isPlanActive(
+      technician.subscription?.plan,
+      technician.subscription?.endDate,
+      technician.subscription?.trialEndDate
+    );
+
+    // Compute days remaining
+    let daysRemaining = 0;
+    if (technician.subscription) {
+      const end = technician.subscription.isTrial
+        ? technician.subscription.trialEndDate
+        : technician.subscription.endDate;
+      if (end) {
+        daysRemaining = Math.ceil((new Date(end) - new Date()) / (1000 * 60 * 60 * 24));
+        if (daysRemaining < 0) daysRemaining = 0;
+      }
+    }
 
     res.json({
       success: true,
       data: {
         ...subscription,
         isActive,
-        daysRemaining: daysRemaining > 0 ? daysRemaining : 0,
+        daysRemaining,
         visibilityRadius: getVisibilityRadius(technician),
         canUpgrade: true,
         canActivateTrial: !technician.subscription?.isTrial && !technician.subscription?.endDate
@@ -133,10 +151,6 @@ exports.activateTrial = async (req, res) => {
  * Initiate Paystack payment for subscription upgrade
  * @route POST /api/subscription/upgrade
  * 
-/**
- * Initiate Paystack payment for subscription upgrade
- * @route POST /api/subscription/upgrade
- * 
  * Accepts 'paymentMethod' from frontend: 'card', 'mpesa', or 'both' (default).
  * Currency is always KES – M-Pesa only works with KES.
  */
@@ -152,6 +166,14 @@ exports.upgradeSubscription = async (req, res) => {
     const plan = subscriptionPlans[planId];
     if (!plan) {
       return res.status(400).json({ success: false, message: 'Invalid plan' });
+    }
+
+    // 🔒 Prevent upgrading to free or trial plans (price = 0)
+    if (plan.price === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This plan is free and cannot be purchased. Please select a paid plan.'
+      });
     }
 
     const user = await User.findById(req.user.userId);
@@ -171,13 +193,12 @@ exports.upgradeSubscription = async (req, res) => {
       autoRenew: autoRenew
     };
 
-    // ✅ Direct multiplication – no helper needed
     const amountInKobo = plan.price * 100; // KES → kobo
 
     const response = await Paystack.transaction.initialize({
       amount: amountInKobo,
       email: user.email,
-      currency: 'KES',                // required for M-Pesa
+      currency: 'KES',
       channels: channels,
       metadata: metadata,
       callback_url: `${process.env.FRONTEND_URL}/payment-callback`
@@ -205,6 +226,7 @@ exports.upgradeSubscription = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 /**
  * Paystack Webhook Handler
  * @route POST /api/subscription/webhook
@@ -214,47 +236,24 @@ exports.upgradeSubscription = async (req, res) => {
  * 
  * Security: Verifies the X-Paystack-Signature header to confirm the request is from Paystack.
  */
-/**
- * Paystack Webhook Handler
- * ========================
- * 
- * - This endpoint is called by Paystack when a transaction status changes.
- * - It must be public (no authentication) and use the raw request body.
- * - The raw body is required to verify the X-Paystack-Signature header.
- * - We only process 'charge.success' events and update the technician's subscription.
- * 
- * @route POST /api/subscription/webhook
- * @access Public (webhook secret verified via signature)
- */
 exports.paystackWebhook = async (req, res) => {
-  const crypto = require('crypto'); // Crypto for HMAC verification
+  const crypto = require('crypto');
 
-  // ------------------------------------------------------------------
   // 1. Extract the raw request body (Buffer) and convert to string
-  // ------------------------------------------------------------------
-  // The route uses express.raw({ type: 'application/json' }) middleware,
-  // so req.body is a Buffer containing the raw JSON payload.
   const rawBody = req.body.toString('utf8');
 
-  // ------------------------------------------------------------------
   // 2. Verify the webhook signature using the raw body string
-  // ------------------------------------------------------------------
-  // Paystack signs the webhook with a SHA512 HMAC of the raw body.
-  // If the signature doesn't match, the request is not from Paystack.
   const hash = crypto
     .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
-    .update(rawBody)   // raw string, NOT JSON.stringify(req.body)
+    .update(rawBody)
     .digest('hex');
 
-  // Compare the computed hash with the signature in the request header
   if (hash !== req.headers['x-paystack-signature']) {
     console.error('❌ Webhook signature mismatch – possible spoofed request');
     return res.status(401).send('Unauthorized');
   }
 
-  // ------------------------------------------------------------------
   // 3. Parse the JSON body
-  // ------------------------------------------------------------------
   let event;
   try {
     event = JSON.parse(rawBody);
@@ -265,14 +264,11 @@ exports.paystackWebhook = async (req, res) => {
 
   console.log(`📩 Webhook received: ${event.event} (reference: ${event.data?.reference || 'unknown'})`);
 
-  // ------------------------------------------------------------------
   // 4. Process only 'charge.success' events
-  // ------------------------------------------------------------------
   if (event.event === 'charge.success') {
     const transaction = event.data;
     const metadata = transaction.metadata || {};
 
-    // Ensure we have the required metadata
     if (!metadata.technicianId || !metadata.planId) {
       console.error('❌ Missing metadata in webhook:', metadata);
       return res.status(400).send('Missing metadata');
@@ -282,10 +278,7 @@ exports.paystackWebhook = async (req, res) => {
     const autoRenew = metadata.autoRenew === 'true' || metadata.autoRenew === true;
 
     try {
-      // ------------------------------------------------------------------
-      // 5. Find the technician in the database
-      // ------------------------------------------------------------------
-      const Technician = require('../models/Technician'); // adjust path as needed
+      const Technician = require('../models/Technician');
       const technician = await Technician.findById(technicianId);
 
       if (!technician) {
@@ -293,36 +286,27 @@ exports.paystackWebhook = async (req, res) => {
         return res.status(404).send('Technician not found');
       }
 
-      // ------------------------------------------------------------------
-      // 6. Idempotency check – avoid double processing
-      // ------------------------------------------------------------------
+      // Idempotency check – avoid double processing
       const alreadyProcessed = technician.subscription?.paymentHistory?.some(
         p => p.transactionId === transaction.reference
       );
       if (alreadyProcessed) {
         console.log(`⏭️ Transaction ${transaction.reference} already processed, skipping.`);
-        return res.sendStatus(200); // Acknowledge, but don't update again
+        return res.sendStatus(200);
       }
 
-      // ------------------------------------------------------------------
-      // 7. Look up the plan details
-      // ------------------------------------------------------------------
-      const { subscriptionPlans } = require('../utils/subscriptionPlans'); // adjust path
+      const { subscriptionPlans } = require('../utils/subscriptionPlans');
       const plan = subscriptionPlans[planId];
       if (!plan) {
         console.error(`❌ Invalid plan ID from webhook: ${planId}`);
         return res.status(400).send('Invalid plan');
       }
 
-      // ------------------------------------------------------------------
-      // 8. Calculate subscription end date (durationDays from plan)
-      // ------------------------------------------------------------------
+      // Calculate subscription end date (durationDays from plan)
       const endDate = new Date();
       endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
 
-      // ------------------------------------------------------------------
-      // 9. Update the technician's subscription document
-      // ------------------------------------------------------------------
+      // Update the technician's subscription document
       technician.subscription = {
         plan: planId,
         planDetails: {
@@ -341,7 +325,7 @@ exports.paystackWebhook = async (req, res) => {
         paymentHistory: [
           ...(technician.subscription?.paymentHistory || []),
           {
-            amount: transaction.amount / 100, // Paystack amount is in kobo (cents)
+            amount: transaction.amount / 100,
             date: new Date(),
             transactionId: transaction.reference,
             status: 'success',
@@ -350,49 +334,28 @@ exports.paystackWebhook = async (req, res) => {
         ]
       };
 
-      // ------------------------------------------------------------------
-      // 10. Update service radius based on the new plan
-      // ------------------------------------------------------------------
       technician.serviceRadius = plan.visibilityRadius;
-
-      // ------------------------------------------------------------------
-      // 11. Clear any pending payment record (if it exists)
-      // ------------------------------------------------------------------
       technician.paymentPending = undefined;
 
-      // ------------------------------------------------------------------
-      // 12. Save the updated technician document
-      // ------------------------------------------------------------------
       await technician.save();
       console.log(`✅ Subscription upgraded successfully for technician ${technicianId} to ${planId}`);
 
-      // ------------------------------------------------------------------
-      // 13. (Optional) Send email/SMS notification to the technician
-      // ------------------------------------------------------------------
       // TODO: Send notification
 
     } catch (error) {
       console.error('❌ Error processing webhook:', error);
-      // Return 500 so Paystack retries the webhook later
       return res.status(500).send('Internal Server Error');
     }
   } else {
-    // Log other events (e.g., charge.failed, charge.dispute) for monitoring
     console.log(`ℹ️ Ignoring webhook event: ${event.event}`);
   }
 
-  // ------------------------------------------------------------------
-  // 14. Always respond with 200 OK to acknowledge receipt
-  // ------------------------------------------------------------------
   res.sendStatus(200);
 };
 
 /**
  * Verify Payment (optional)
  * @route GET /api/subscription/verify?reference=...
- * 
- * Can be called by frontend after the user returns from Paystack to double-check status.
- * However, the webhook is the primary source of truth.
  */
 exports.verifyPayment = async (req, res) => {
   try {
@@ -403,8 +366,6 @@ exports.verifyPayment = async (req, res) => {
 
     const response = await Paystack.transaction.verify(reference);
     if (response.data.status === 'success') {
-      // You could update subscription here as a fallback, but webhook is more reliable.
-      // For safety, we'll just return the status and let the frontend decide.
       return res.json({ success: true, data: response.data });
     } else {
       return res.json({ success: false, message: 'Payment not successful' });
@@ -466,32 +427,8 @@ exports.getSubscriptionHistory = async (req, res) => {
 };
 
 // ============================================================
-// HELPER FUNCTIONS
+// HELPER FUNCTION (kept only for visibility radius)
 // ============================================================
-
-function checkSubscriptionActive(technician) {
-  if (!technician.subscription) return true; // Free plan is active
-  if (technician.subscription.plan === 'free') return true;
-  if (technician.subscription.isTrial && technician.subscription.trialEndDate) {
-    return new Date() < new Date(technician.subscription.trialEndDate);
-  }
-  if (technician.subscription.endDate) {
-    return new Date() < new Date(technician.subscription.endDate);
-  }
-  return false;
-}
-
-function getDaysRemaining(technician) {
-  if (!technician.subscription) return -1;
-  if (technician.subscription.plan === 'free') return -1;
-  
-  const endDate = technician.subscription.isTrial 
-    ? technician.subscription.trialEndDate 
-    : technician.subscription.endDate;
-    
-  if (!endDate) return 0;
-  return Math.ceil((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24));
-}
 
 function getVisibilityRadius(technician) {
   const plan = technician.subscription?.plan || 'free';
