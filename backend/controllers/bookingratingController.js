@@ -1014,6 +1014,12 @@ exports.cancelBooking = async (req, res) => {
  * Sets paymentConfirmed = true, records timestamp and optional amount.
  * Only allowed when booking status is 'in-progress'.
  */
+/**
+ * Confirm payment for a booking (technician only).
+ * Sets paymentConfirmed = true, paymentStatus = 'paid',
+ * records timestamp and optional amount.
+ * Only allowed when booking status is 'in-progress'.
+ */
 exports.confirmPayment = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -1077,7 +1083,7 @@ exports.confirmPayment = async (req, res) => {
       );
     }
 
-    // Only allow if status is 'in-progress' (or maybe 'confirmed' as well? but work should be in progress)
+    // Only allow if status is 'in-progress'
     if (booking.status !== 'in-progress') {
       return handleControllerError(
         res,
@@ -1099,16 +1105,22 @@ exports.confirmPayment = async (req, res) => {
       );
     }
 
-    // Update booking
+    // ─── UPDATE BOOKING ──────────────────────────────────────
     booking.paymentConfirmed = true;
     booking.paymentConfirmedAt = new Date();
     booking.paymentConfirmedBy = userId;
+
+    // ✅ Set payment status to 'paid'
+    booking.paymentStatus = 'paid';
+
+    // Store optional amount
     if (amountReceived !== undefined && amountReceived !== null) {
       const parsed = parseFloat(amountReceived);
       if (!isNaN(parsed) && parsed >= 0) {
         booking.paymentAmountReceived = parsed;
       }
     }
+
     if (note) booking.paymentConfirmationNote = note.trim();
 
     await booking.save();
