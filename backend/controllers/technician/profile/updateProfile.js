@@ -31,8 +31,10 @@ exports.updateProfile = async (req, res) => {
         categories = [categories];
       }
       technician.mainCategories = [...new Set(categories.filter(cat => cat && cat.trim() !== ''))];
-      delete req.body.mainCategories;
-    }
+  // Set primary category to first one
+  technician.mainCategory = technician.mainCategories[0] || '';
+  delete req.body.mainCategories;
+}
 
     // ============================================================
     // 2. HANDLE SINGLE MAIN CATEGORY (backward compatibility)

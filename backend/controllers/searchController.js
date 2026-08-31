@@ -260,9 +260,22 @@ exports.searchTechnicians = async (req, res) => {
     }
 
     // --- MAIN CATEGORY (exact, case‑insensitive) ---
-    if (mainCategory) {
-      query.mainCategory = { $regex: new RegExp(`^${mainCategory}$`, 'i') };
-    }
+    // --- MAIN CATEGORY (match single field OR array) ---
+if (mainCategory) {
+  const mainCatRegex = new RegExp(`^${mainCategory}$`, 'i');
+  // If we already have an $or from searchTerm, extend it; otherwise create a new $or
+  if (query.$or) {
+    query.$or.push(
+      { mainCategory: mainCatRegex },
+      { mainCategories: { $in: [mainCategory] } }
+    );
+  } else {
+    query.$or = [
+      { mainCategory: mainCatRegex },
+      { mainCategories: { $in: [mainCategory] } }
+    ];
+  }
+}
 
     // --- SERVICE CATEGORY & SUB‑SERVICE (nested) ---
     if (serviceCategory && subService) {
