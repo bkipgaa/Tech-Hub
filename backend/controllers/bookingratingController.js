@@ -2,10 +2,13 @@
  * bookingController.js
  * ====================
  * Handles the full booking lifecycle:
- * - Create, read, update status, complete, rate, cancel.
+ * - Create, read, cancel (basic CRUD)
+ * - 12‑step advanced flow: quotation → materials → work → labor payment → rating
+ * - Commission (5%) calculation and storage
+ * - Technician statistics (completed jobs count)
  * 
  * @author Weba-Hub Team
- * @version 2.0.0 – Fixed technician ID mismatches & enhanced logging
+ * @version 3.0.0 – Complete 12‑step flow with commission
  */
 
 const Booking = require('../models/Booking');
@@ -70,16 +73,12 @@ const getTechnicianId = async (userId) => {
 };
 
 // ============================================================
-// CREATE BOOKING
+// BASIC CRUD OPERATIONS (unchanged)
 // ============================================================
 
 /**
  * Create a new booking (client only).
  * POST /api/bookings
- * 
- * Note: hourlyRate is optional (in Kenya, technicians often quote fixed prices).
- * If hourlyRate is not provided or is 0, totalAmount will be 0 and the client
- * and technician will agree on price directly.
  */
 exports.createBooking = async (req, res) => {
   try {
@@ -109,23 +108,7 @@ exports.createBooking = async (req, res) => {
       paymentMethod,
     } = req.body;
 
-    // ── LOG THE RECEIVED DATA ──
-    console.log('📝 Booking request body:', {
-      technicianId,
-      serviceCategory,
-      subService,
-      serviceDescription,
-      hourlyRate,
-      estimatedHours,
-      preferredDate,
-      preferredTime,
-      duration,
-      location,
-      clientNotes,
-      paymentMethod,
-    });
-
-    // ── Validate required fields ──
+    // Validate required fields
     if (!technicianId || !serviceCategory || !subService || !serviceDescription ||
         !estimatedHours || estimatedHours <= 0 ||
         !preferredDate || !preferredTime || !location?.address) {
@@ -138,7 +121,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Validate hourlyRate ──
+    // Validate hourlyRate
     if (hourlyRate !== undefined && hourlyRate !== null && (isNaN(hourlyRate) || hourlyRate < 0)) {
       return handleControllerError(
         res,
@@ -149,7 +132,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Validate date ──
+    // Validate date
     const selectedDate = new Date(preferredDate);
     if (isNaN(selectedDate.getTime())) {
       return handleControllerError(
@@ -172,7 +155,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Validate time ──
+    // Validate time
     if (!preferredTime || preferredTime.trim() === '') {
       return handleControllerError(
         res,
@@ -183,7 +166,7 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Verify technician ──
+    // Verify technician
     const technician = await Technician.findById(technicianId);
     if (!technician || !technician.isActive) {
       return handleControllerError(
@@ -195,11 +178,11 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // ── Calculate total ──
+    // Calculate total
     const rate = (hourlyRate && hourlyRate > 0) ? hourlyRate : 0;
     const totalAmount = rate * estimatedHours;
 
-    // ── Create booking ──
+    // Create booking
     const booking = new Booking({
       clientId,
       technicianId,
@@ -219,10 +202,7 @@ exports.createBooking = async (req, res) => {
       paymentStatus: 'pending',
     });
 
-    console.log('💾 About to save booking:', booking);
-
     await booking.save();
-
     await booking.populate('clientId', 'firstName lastName email phone');
     await booking.populate('technicianId', 'businessName mainCategory');
 
@@ -232,12 +212,6 @@ exports.createBooking = async (req, res) => {
       data: booking,
     });
   } catch (error) {
-    console.error('❌ createBooking caught error:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-    });
-
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(e => e.message);
       return handleControllerError(
@@ -252,14 +226,9 @@ exports.createBooking = async (req, res) => {
   }
 };
 
-// ============================================================
-// GET MY BOOKINGS (client or technician)
-// ============================================================
-
 /**
  * Get all bookings for the logged‑in user.
- * - Clients: filter by clientId (User _id)
- * - Technicians: filter by technicianId (Technician _id)
+ * GET /api/bookings
  */
 exports.getMyBookings = async (req, res) => {
   try {
@@ -280,7 +249,6 @@ exports.getMyBookings = async (req, res) => {
     let filter = {};
 
     if (isTechnician) {
-      // ✅ FIX: Get the Technician document _id for this user
       try {
         const technicianId = await getTechnicianId(userId);
         filter.technicianId = technicianId;
@@ -327,13 +295,9 @@ exports.getMyBookings = async (req, res) => {
   }
 };
 
-// ============================================================
-// GET SINGLE BOOKING
-// ============================================================
-
 /**
  * Fetch a single booking by ID, with permission checks.
- * Both client and technician can view if they are part of the booking.
+ * GET /api/bookings/:bookingId
  */
 exports.getBooking = async (req, res) => {
   try {
@@ -366,7 +330,7 @@ exports.getBooking = async (req, res) => {
       );
     }
 
-    // For technicians, compare against the Technician _id
+    // Permission checks
     if (isTechnician) {
       let technicianId;
       try {
@@ -390,7 +354,6 @@ exports.getBooking = async (req, res) => {
         );
       }
     } else {
-      // Client: compare against clientId (User _id)
       if (booking.clientId._id.toString() !== userId.toString()) {
         return handleControllerError(
           res,
@@ -408,516 +371,10 @@ exports.getBooking = async (req, res) => {
   }
 };
 
-// ============================================================
-// UPDATE BOOKING STATUS (generic)
-// ============================================================
-
-/**
- * Update booking status with transition validation.
- * Clients can only cancel; technicians can confirm, start, complete, or cancel.
- */
-exports.updateBookingStatus = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const { status, note } = req.body;
-    const userId = req.user.userId || req.user.id || req.user._id;
-    if (!userId) {
-      return handleControllerError(
-        res,
-        new Error('Authentication required'),
-        'You must be logged in to update booking status.',
-        401,
-        'updateBookingStatus'
-      );
-    }
-
-    const isTechnician = req.user.role === 'technician';
-
-    if (!status) {
-      return handleControllerError(
-        res,
-        new Error('Status required'),
-        'Please provide a status.',
-        400,
-        'updateBookingStatus'
-      );
-    }
-
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(
-        res,
-        new Error('Booking not found'),
-        'Booking not found.',
-        404,
-        'updateBookingStatus'
-      );
-    }
-
-    // Permission checks
-    if (isTechnician) {
-      let technicianId;
-      try {
-        technicianId = await getTechnicianId(userId);
-      } catch (err) {
-        return handleControllerError(
-          res,
-          err,
-          'Technician profile not found.',
-          404,
-          'updateBookingStatus'
-        );
-      }
-      if (booking.technicianId.toString() !== technicianId.toString()) {
-        return handleControllerError(
-          res,
-          new Error('Unauthorized'),
-          'You are not the technician for this booking.',
-          403,
-          'updateBookingStatus'
-        );
-      }
-    } else {
-      // Client: only allow cancellation
-      if (booking.clientId.toString() !== userId.toString()) {
-        return handleControllerError(
-          res,
-          new Error('Unauthorized'),
-          'You are not the client for this booking.',
-          403,
-          'updateBookingStatus'
-        );
-      }
-      if (status !== 'cancelled') {
-        return handleControllerError(
-          res,
-          new Error('Invalid action'),
-          'Clients can only cancel bookings.',
-          403,
-          'updateBookingStatus'
-        );
-      }
-    }
-
-    // Validate status transition
-    const validTransitions = {
-      pending: ['confirmed', 'cancelled'],
-      confirmed: ['in-progress', 'cancelled'],
-      'in-progress': ['completed', 'cancelled'],
-      completed: [],
-      cancelled: [],
-      'no-show': [],
-    };
-    if (!validTransitions[booking.status].includes(status)) {
-      return handleControllerError(
-        res,
-        new Error(`Invalid transition from ${booking.status} to ${status}`),
-        `Cannot change status from ${booking.status} to ${status}.`,
-        400,
-        'updateBookingStatus'
-      );
-    }
-
-    booking.status = status;
-
-    if (status === 'confirmed') booking.confirmedAt = new Date();
-    if (status === 'in-progress') booking.startedAt = new Date();
-    if (status === 'completed') booking.completedAt = new Date();
-    if (status === 'cancelled') {
-      booking.cancelledAt = new Date();
-      booking.cancelledBy = isTechnician ? 'technician' : 'client';
-      booking.cancellationReason = note || 'Cancelled by user';
-    }
-
-    await booking.save();
-    await booking.populate('clientId', 'firstName lastName email phone');
-    await booking.populate('technicianId', 'businessName mainCategory');
-
-    res.json({
-      success: true,
-      message: `Booking status updated to ${status}.`,
-      data: booking,
-    });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to update booking status.', 500, 'updateBookingStatus');
-  }
-};
-
-// ============================================================
-// CONFIRM BOOKING (technician only)
-// ============================================================
-
-/**
- * Confirm a pending booking (technician only).
- */
-exports.confirmBooking = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const userId = req.user.userId || req.user.id || req.user._id;
-    if (!userId) {
-      return handleControllerError(
-        res,
-        new Error('Authentication required'),
-        'You must be logged in to confirm a booking.',
-        401,
-        'confirmBooking'
-      );
-    }
-
-    // ✅ FIX: Get the Technician _id for this user
-    let technicianId;
-    try {
-      technicianId = await getTechnicianId(userId);
-    } catch (err) {
-      return handleControllerError(
-        res,
-        err,
-        'Technician profile not found.',
-        404,
-        'confirmBooking'
-      );
-    }
-
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(
-        res,
-        new Error('Booking not found'),
-        'Booking not found.',
-        404,
-        'confirmBooking'
-      );
-    }
-
-    if (booking.technicianId.toString() !== technicianId.toString()) {
-      return handleControllerError(
-        res,
-        new Error('Unauthorized'),
-        'You are not the technician for this booking.',
-        403,
-        'confirmBooking'
-      );
-    }
-
-    if (booking.status !== 'pending') {
-      return handleControllerError(
-        res,
-        new Error('Invalid status'),
-        'Only pending bookings can be confirmed.',
-        400,
-        'confirmBooking'
-      );
-    }
-
-    await booking.confirm();
-
-    await booking.populate('clientId', 'firstName lastName email phone');
-    await booking.populate('technicianId', 'businessName mainCategory');
-
-    res.json({
-      success: true,
-      message: 'Booking confirmed successfully.',
-      data: booking,
-    });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to confirm booking.', 500, 'confirmBooking');
-  }
-};
-
-// ============================================================
-// START BOOKING (technician only)
-// ============================================================
-
-/**
- * Start a confirmed booking (technician only).
- */
-exports.startBooking = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const userId = req.user.userId || req.user.id || req.user._id;
-    if (!userId) {
-      return handleControllerError(
-        res,
-        new Error('Authentication required'),
-        'You must be logged in to start a booking.',
-        401,
-        'startBooking'
-      );
-    }
-
-    let technicianId;
-    try {
-      technicianId = await getTechnicianId(userId);
-    } catch (err) {
-      return handleControllerError(
-        res,
-        err,
-        'Technician profile not found.',
-        404,
-        'startBooking'
-      );
-    }
-
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(
-        res,
-        new Error('Booking not found'),
-        'Booking not found.',
-        404,
-        'startBooking'
-      );
-    }
-
-    if (booking.technicianId.toString() !== technicianId.toString()) {
-      return handleControllerError(
-        res,
-        new Error('Unauthorized'),
-        'You are not the technician for this booking.',
-        403,
-        'startBooking'
-      );
-    }
-
-    if (booking.status !== 'confirmed') {
-      return handleControllerError(
-        res,
-        new Error('Invalid status'),
-        'Only confirmed bookings can be started.',
-        400,
-        'startBooking'
-      );
-    }
-
-    await booking.start();
-
-    await booking.populate('clientId', 'firstName lastName email phone');
-    await booking.populate('technicianId', 'businessName mainCategory');
-
-    res.json({
-      success: true,
-      message: 'Booking started successfully.',
-      data: booking,
-    });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to start booking.', 500, 'startBooking');
-  }
-};
-
-// ============================================================
-// COMPLETE BOOKING
-// ============================================================
-
-/**
- * Mark a booking as completed (technician or client can trigger).
- * The client can also rate later via /rate endpoint.
- */
-exports.completeBooking = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const userId = req.user.userId || req.user.id || req.user._id;
-    if (!userId) {
-      return handleControllerError(
-        res,
-        new Error('Authentication required'),
-        'You must be logged in to complete a booking.',
-        401,
-        'completeBooking'
-      );
-    }
-
-    const isTechnician = req.user.role === 'technician';
-
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(
-        res,
-        new Error('Booking not found'),
-        'Booking not found.',
-        404,
-        'completeBooking'
-      );
-    }
-
-    // Permission: either client or technician can mark complete
-    if (isTechnician) {
-      let technicianId;
-      try {
-        technicianId = await getTechnicianId(userId);
-      } catch (err) {
-        return handleControllerError(
-          res,
-          err,
-          'Technician profile not found.',
-          404,
-          'completeBooking'
-        );
-      }
-      if (booking.technicianId.toString() !== technicianId.toString()) {
-        return handleControllerError(
-          res,
-          new Error('Unauthorized'),
-          'You are not the technician for this booking.',
-          403,
-          'completeBooking'
-        );
-      }
-    } else {
-      // Client
-      if (booking.clientId.toString() !== userId.toString()) {
-        return handleControllerError(
-          res,
-          new Error('Unauthorized'),
-          'You are not the client for this booking.',
-          403,
-          'completeBooking'
-        );
-      }
-    }
-
-    // ✅ NEW: Ensure payment is confirmed before allowing completion
-    if (!booking.paymentConfirmed) {
-      return handleControllerError(
-        res,
-        new Error('Payment not confirmed'),
-        'Please confirm payment before completing the booking.',
-        400,
-        'completeBooking'
-      );
-    }
-
-    if (booking.status !== 'in-progress') {
-      return handleControllerError(
-        res,
-        new Error('Invalid status'),
-        'Only in-progress bookings can be completed.',
-        400,
-        'completeBooking'
-      );
-    }
-
-    await booking.complete();
-
-    await booking.populate('clientId', 'firstName lastName email phone');
-    await booking.populate('technicianId', 'businessName mainCategory');
-
-    res.json({
-      success: true,
-      message: 'Booking completed successfully. You can now rate the technician.',
-      data: booking,
-    });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to complete booking.', 500, 'completeBooking');
-  }
-};
-
-// ============================================================
-// RATE TECHNICIAN (client only, after completion)
-// ============================================================
-
-/**
- * Rate a technician for a completed booking.
- * Updates the technician's overall rating and stores the review.
- */
-exports.rateTechnician = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const clientId = req.user.userId || req.user.id || req.user._id;
-    if (!clientId) {
-      return handleControllerError(
-        res,
-        new Error('Authentication required'),
-        'You must be logged in to rate a technician.',
-        401,
-        'rateTechnician'
-      );
-    }
-
-    const { rating, review } = req.body;
-
-    if (!rating || rating < 1 || rating > 5) {
-      return handleControllerError(
-        res,
-        new Error('Invalid rating'),
-        'Rating must be between 1 and 5.',
-        400,
-        'rateTechnician'
-      );
-    }
-
-    const booking = await Booking.findOne({ _id: bookingId, clientId: clientId, status: 'completed' });
-    if (!booking) {
-      return handleControllerError(
-        res,
-        new Error('Booking not found or not completed'),
-        'You can only rate after the booking is completed.',
-        404,
-        'rateTechnician'
-      );
-    }
-
-    if (booking.clientRating) {
-      return handleControllerError(
-        res,
-        new Error('Already rated'),
-        'You have already rated this booking.',
-        400,
-        'rateTechnician'
-      );
-    }
-
-    const technician = await Technician.findById(booking.technicianId);
-    if (!technician) {
-      return handleControllerError(
-        res,
-        new Error('Technician not found'),
-        'Technician not found.',
-        404,
-        'rateTechnician'
-      );
-    }
-
-    await technician.updateRating(rating);
-
-    booking.clientRating = rating;
-    if (review) booking.clientReview = review.trim();
-    await booking.save();
-
-    technician.reviews.push({
-      clientId: clientId,
-      bookingId: booking._id,
-      rating: rating,
-      comment: review || '',
-      createdAt: new Date(),
-    });
-    await technician.save();
-
-    res.json({
-      success: true,
-      message: 'Rating submitted successfully.',
-      data: {
-        bookingId: booking._id,
-        rating,
-        review: booking.clientReview,
-        technicianRating: {
-          average: technician.rating.average,
-          count: technician.rating.count,
-          distribution: technician.rating.distribution,
-        },
-      },
-    });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to submit rating.', 500, 'rateTechnician');
-  }
-};
-
-// ============================================================
-// CANCEL BOOKING
-// ============================================================
-
 /**
  * Cancel a booking – client or technician can cancel.
- * Only pending or confirmed bookings can be cancelled.
+ * Only pending or quoted bookings can be cancelled.
+ * POST /api/bookings/:bookingId/cancel
  */
 exports.cancelBooking = async (req, res) => {
   try {
@@ -982,12 +439,12 @@ exports.cancelBooking = async (req, res) => {
       }
     }
 
-    // Only pending/confirmed can be cancelled
-    if (!['pending', 'confirmed'].includes(booking.status)) {
+    // Only pending or quoted can be cancelled (extended from original)
+    if (!['pending', 'quoted'].includes(booking.status)) {
       return handleControllerError(
         res,
         new Error('Cannot cancel'),
-        'Only pending or confirmed bookings can be cancelled.',
+        'Only pending or quoted bookings can be cancelled.',
         400,
         'cancelBooking'
       );
@@ -1008,46 +465,392 @@ exports.cancelBooking = async (req, res) => {
   }
 };
 
+// ============================================================
+// 12‑STEP ADVANCED BOOKING FLOW
+// ============================================================
 
 /**
- * Confirm payment for a booking (technician only).
- * Sets paymentConfirmed = true, records timestamp and optional amount.
- * Only allowed when booking status is 'in-progress'.
+ * 1. Technician sends a quotation.
+ * POST /api/bookings/:bookingId/quotation
  */
-/**
- * Confirm payment for a booking (technician only).
- * Sets paymentConfirmed = true, paymentStatus = 'paid',
- * records timestamp and optional amount.
- * Only allowed when booking status is 'in-progress'.
- */
-exports.confirmPayment = async (req, res) => {
+exports.sendQuotation = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const { amountReceived, note } = req.body;
+    const { totalCost, laborCost, materialsCost } = req.body;
     const userId = req.user.userId || req.user.id || req.user._id;
 
-    if (!userId) {
+    // Validate inputs
+    if (!totalCost || totalCost <= 0) {
       return handleControllerError(
         res,
-        new Error('Authentication required'),
-        'You must be logged in to confirm payment.',
-        401,
-        'confirmPayment'
+        new Error('Total cost required'),
+        'Total cost must be > 0',
+        400,
+        'sendQuotation'
+      );
+    }
+    if (laborCost === undefined || laborCost < 0) {
+      return handleControllerError(
+        res,
+        new Error('Labor cost required'),
+        'Labor cost is required (can be 0)',
+        400,
+        'sendQuotation'
+      );
+    }
+    if (materialsCost === undefined || materialsCost < 0) {
+      return handleControllerError(
+        res,
+        new Error('Materials cost required'),
+        'Materials cost is required (can be 0)',
+        400,
+        'sendQuotation'
       );
     }
 
-    // Must be a technician
-    if (req.user.role !== 'technician') {
+    // Auth & permission
+    const technicianId = await getTechnicianId(userId);
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'sendQuotation');
+    }
+    if (booking.technicianId.toString() !== technicianId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'sendQuotation');
+    }
+    if (booking.status !== 'pending') {
       return handleControllerError(
         res,
-        new Error('Unauthorized'),
-        'Only technicians can confirm payment.',
-        403,
-        'confirmPayment'
+        new Error('Invalid status'),
+        'Booking already progressed',
+        400,
+        'sendQuotation'
       );
     }
 
-    // Get the technician's _id
+    booking.quotation = {
+      totalCost,
+      laborCost,
+      materialsCost,
+      sentAt: new Date(),
+    };
+    booking.status = 'quoted';
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({ success: true, message: 'Quotation sent', data: booking });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to send quotation', 500, 'sendQuotation');
+  }
+};
+
+/**
+ * 2. Client accepts quotation.
+ * POST /api/bookings/:bookingId/accept-quotation
+ */
+exports.acceptQuotation = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'acceptQuotation');
+    }
+    if (booking.clientId.toString() !== userId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'acceptQuotation');
+    }
+    if (booking.status !== 'quoted') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'No quotation to accept',
+        400,
+        'acceptQuotation'
+      );
+    }
+
+    booking.quotation.acceptedAt = new Date();
+    booking.status = 'agreed';
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({ success: true, message: 'Quotation accepted', data: booking });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to accept quotation', 500, 'acceptQuotation');
+  }
+};
+
+/**
+ * 3. Client rejects quotation (cancels booking).
+ * POST /api/bookings/:bookingId/reject-quotation
+ */
+exports.rejectQuotation = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { reason } = req.body;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'rejectQuotation');
+    }
+    if (booking.clientId.toString() !== userId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'rejectQuotation');
+    }
+    if (booking.status !== 'quoted') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'No quotation to reject',
+        400,
+        'rejectQuotation'
+      );
+    }
+
+    booking.quotation.rejectedAt = new Date();
+    booking.quotation.rejectionReason = reason || 'Client rejected quotation';
+    booking.status = 'cancelled';
+    booking.cancelledAt = new Date();
+    booking.cancelledBy = 'client';
+    booking.cancellationReason = reason || 'Client rejected quotation';
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({ success: true, message: 'Quotation rejected', data: booking });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to reject quotation', 500, 'rejectQuotation');
+  }
+};
+
+/**
+ * 4. Technician sets material source.
+ * POST /api/bookings/:bookingId/material-source
+ */
+exports.setMaterialSource = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { providedByClient } = req.body;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    if (typeof providedByClient !== 'boolean') {
+      return handleControllerError(
+        res,
+        new Error('Invalid value'),
+        'providedByClient must be boolean',
+        400,
+        'setMaterialSource'
+      );
+    }
+
+    const technicianId = await getTechnicianId(userId);
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'setMaterialSource');
+    }
+    if (booking.technicianId.toString() !== technicianId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'setMaterialSource');
+    }
+    if (booking.status !== 'agreed') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'Booking must be in "agreed" state',
+        400,
+        'setMaterialSource'
+      );
+    }
+
+    booking.materials.providedByClient = providedByClient;
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({ success: true, message: 'Material source set', data: booking });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to set material source', 500, 'setMaterialSource');
+  }
+};
+
+/**
+ * 5. Technician confirms money received for materials (only if tech buys).
+ * POST /api/bookings/:bookingId/materials-money-received
+ */
+exports.confirmMaterialsMoneyReceived = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    const technicianId = await getTechnicianId(userId);
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'confirmMaterialsMoneyReceived');
+    }
+    if (booking.technicianId.toString() !== technicianId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'confirmMaterialsMoneyReceived');
+    }
+    if (booking.status !== 'agreed') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'Booking must be in "agreed" state',
+        400,
+        'confirmMaterialsMoneyReceived'
+      );
+    }
+    if (booking.materials.providedByClient) {
+      return handleControllerError(
+        res,
+        new Error('Invalid action'),
+        'Client provides materials, no payment needed',
+        400,
+        'confirmMaterialsMoneyReceived'
+      );
+    }
+    if (booking.materials.moneyReceivedAt) {
+      return handleControllerError(
+        res,
+        new Error('Already confirmed'),
+        'Money already received',
+        400,
+        'confirmMaterialsMoneyReceived'
+      );
+    }
+
+    booking.materials.moneyReceivedAt = new Date();
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({ success: true, message: 'Materials money receipt confirmed', data: booking });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to confirm money receipt', 500, 'confirmMaterialsMoneyReceived');
+  }
+};
+
+/**
+ * 6. Technician confirms materials delivered.
+ * POST /api/bookings/:bookingId/materials-delivered
+ */
+exports.confirmMaterialsDelivered = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    const technicianId = await getTechnicianId(userId);
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'confirmMaterialsDelivered');
+    }
+    if (booking.technicianId.toString() !== technicianId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'confirmMaterialsDelivered');
+    }
+    if (booking.status !== 'agreed') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'Booking must be in "agreed" state',
+        400,
+        'confirmMaterialsDelivered'
+      );
+    }
+    // If tech buys, money must be received first
+    if (!booking.materials.providedByClient && !booking.materials.moneyReceivedAt) {
+      return handleControllerError(
+        res,
+        new Error('Payment required'),
+        'Please confirm money received for materials first',
+        400,
+        'confirmMaterialsDelivered'
+      );
+    }
+    if (booking.materials.deliveredAt) {
+      return handleControllerError(
+        res,
+        new Error('Already delivered'),
+        'Materials already confirmed delivered',
+        400,
+        'confirmMaterialsDelivered'
+      );
+    }
+
+    booking.materials.deliveredAt = new Date();
+    booking.status = 'materials_delivered';
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({ success: true, message: 'Materials delivered', data: booking });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to confirm delivery', 500, 'confirmMaterialsDelivered');
+  }
+};
+
+/**
+ * 7. Client confirms materials received.
+ * POST /api/bookings/:bookingId/materials-received
+ */
+exports.confirmMaterialsReceived = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'confirmMaterialsReceived');
+    }
+    if (booking.clientId.toString() !== userId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'confirmMaterialsReceived');
+    }
+    if (booking.status !== 'materials_delivered') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'Materials not delivered yet',
+        400,
+        'confirmMaterialsReceived'
+      );
+    }
+    if (booking.materials.confirmedByClientAt) {
+      return handleControllerError(
+        res,
+        new Error('Already confirmed'),
+        'Materials already confirmed by client',
+        400,
+        'confirmMaterialsReceived'
+      );
+    }
+
+    booking.materials.confirmedByClientAt = new Date();
+    booking.status = 'materials_confirmed';
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({ success: true, message: 'Materials receipt confirmed by client', data: booking });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to confirm receipt', 500, 'confirmMaterialsReceived');
+  }
+};
+
+/**
+ * 8. Technician starts work (only after materials confirmed).
+ * POST /api/bookings/:bookingId/start
+ */
+exports.startBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
     let technicianId;
     try {
       technicianId = await getTechnicianId(userId);
@@ -1057,7 +860,7 @@ exports.confirmPayment = async (req, res) => {
         err,
         'Technician profile not found.',
         404,
-        'confirmPayment'
+        'startBooking'
       );
     }
 
@@ -1068,60 +871,156 @@ exports.confirmPayment = async (req, res) => {
         new Error('Booking not found'),
         'Booking not found.',
         404,
-        'confirmPayment'
+        'startBooking'
       );
     }
 
-    // Verify this technician owns the booking
     if (booking.technicianId.toString() !== technicianId.toString()) {
       return handleControllerError(
         res,
         new Error('Unauthorized'),
         'You are not the technician for this booking.',
         403,
-        'confirmPayment'
+        'startBooking'
       );
     }
 
-    // Only allow if status is 'in-progress'
-    if (booking.status !== 'in-progress') {
+    // ✅ Allow only after materials confirmed
+    if (booking.status !== 'materials_confirmed') {
       return handleControllerError(
         res,
         new Error('Invalid status'),
-        'Payment can only be confirmed when the job is in progress.',
+        'Cannot start work. Materials must be confirmed first.',
         400,
-        'confirmPayment'
+        'startBooking'
       );
     }
 
-    // Prevent double confirmation
-    if (booking.paymentConfirmed) {
+    await booking.start(); // sets status to 'in_progress', startedAt
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({
+      success: true,
+      message: 'Work started successfully.',
+      data: booking,
+    });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to start booking.', 500, 'startBooking');
+  }
+};
+
+/**
+ * 9. Technician marks work as completed.
+ * POST /api/bookings/:bookingId/complete-work
+ */
+exports.completeWork = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    const technicianId = await getTechnicianId(userId);
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'completeWork');
+    }
+    if (booking.technicianId.toString() !== technicianId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'completeWork');
+    }
+    if (booking.status !== 'in_progress') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'Work not started',
+        400,
+        'completeWork'
+      );
+    }
+    if (booking.workCompletedAt) {
+      return handleControllerError(
+        res,
+        new Error('Already completed'),
+        'Work already marked completed',
+        400,
+        'completeWork'
+      );
+    }
+
+    booking.workCompletedAt = new Date();
+    booking.status = 'work_completed';
+    await booking.save();
+
+    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('technicianId', 'businessName mainCategory');
+
+    res.json({ success: true, message: 'Work marked as completed', data: booking });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to complete work', 500, 'completeWork');
+  }
+};
+
+/**
+ * 10. Technician confirms labor payment received – calculates 5% commission.
+ * POST /api/bookings/:bookingId/confirm-labor-payment
+ */
+exports.confirmLaborPayment = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { amount, note } = req.body;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    if (!amount || amount <= 0) {
+      return handleControllerError(
+        res,
+        new Error('Invalid amount'),
+        'Valid positive amount required',
+        400,
+        'confirmLaborPayment'
+      );
+    }
+
+    const technicianId = await getTechnicianId(userId);
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'confirmLaborPayment');
+    }
+    if (booking.technicianId.toString() !== technicianId.toString()) {
+      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'confirmLaborPayment');
+    }
+    if (booking.status !== 'work_completed') {
+      return handleControllerError(
+        res,
+        new Error('Invalid status'),
+        'Work must be completed first',
+        400,
+        'confirmLaborPayment'
+      );
+    }
+    if (booking.laborPayment.confirmedAt) {
       return handleControllerError(
         res,
         new Error('Already confirmed'),
-        'Payment has already been confirmed for this booking.',
+        'Labor payment already confirmed',
         400,
-        'confirmPayment'
+        'confirmLaborPayment'
       );
     }
 
-    // ─── UPDATE BOOKING ──────────────────────────────────────
-    booking.paymentConfirmed = true;
-    booking.paymentConfirmedAt = new Date();
-    booking.paymentConfirmedBy = userId;
+    // Calculate 5% commission on labor cost
+    const laborCost = booking.quotation.laborCost || 0;
+    const commissionAmount = laborCost * 0.05;
 
-    // ✅ Set payment status to 'paid'
-    booking.paymentStatus = 'paid';
-
-    // Store optional amount
-    if (amountReceived !== undefined && amountReceived !== null) {
-      const parsed = parseFloat(amountReceived);
-      if (!isNaN(parsed) && parsed >= 0) {
-        booking.paymentAmountReceived = parsed;
-      }
-    }
-
-    if (note) booking.paymentConfirmationNote = note.trim();
+    booking.laborPayment = {
+      confirmedAt: new Date(),
+      amount: amount,
+      notes: note || '',
+    };
+    booking.commission = {
+      amount: commissionAmount,
+      status: 'pending',
+    };
+    booking.status = 'labor_paid';
 
     await booking.save();
 
@@ -1130,10 +1029,122 @@ exports.confirmPayment = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Payment confirmed successfully.',
+      message: `Labor payment confirmed. Commission of 5% (KES ${commissionAmount.toFixed(2)}) recorded.`,
       data: booking,
     });
   } catch (error) {
-    handleControllerError(res, error, 'Failed to confirm payment.', 500, 'confirmPayment');
+    handleControllerError(res, error, 'Failed to confirm labor payment', 500, 'confirmLaborPayment');
+  }
+};
+
+/**
+ * 11. Client rates technician (only after labor paid).
+ * POST /api/bookings/:bookingId/rate
+ */
+exports.rateTechnician = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const clientId = req.user.userId || req.user.id || req.user._id;
+    if (!clientId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in to rate a technician.',
+        401,
+        'rateTechnician'
+      );
+    }
+
+    const { rating, review } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return handleControllerError(
+        res,
+        new Error('Invalid rating'),
+        'Rating must be between 1 and 5.',
+        400,
+        'rateTechnician'
+      );
+    }
+
+    // Find booking where clientId matches and status is 'labor_paid'
+    const booking = await Booking.findOne({
+      _id: bookingId,
+      clientId: clientId,
+      status: 'labor_paid'
+    });
+    if (!booking) {
+      return handleControllerError(
+        res,
+        new Error('Booking not found or not ready for rating'),
+        'You can only rate after labor payment is confirmed.',
+        404,
+        'rateTechnician'
+      );
+    }
+
+    if (booking.clientRating) {
+      return handleControllerError(
+        res,
+        new Error('Already rated'),
+        'You have already rated this booking.',
+        400,
+        'rateTechnician'
+      );
+    }
+
+    const technician = await Technician.findById(booking.technicianId);
+    if (!technician) {
+      return handleControllerError(
+        res,
+        new Error('Technician not found'),
+        'Technician not found.',
+        404,
+        'rateTechnician'
+      );
+    }
+
+    // Update technician's overall rating
+    await technician.updateRating(rating);
+
+    // Save client rating and mark booking as completed
+    booking.clientRating = rating;
+    if (review) booking.clientReview = review.trim();
+    booking.status = 'completed';
+    booking.completedAt = new Date();
+    await booking.save();
+
+    // Add review to technician's reviews array
+    technician.reviews.push({
+      clientId: clientId,
+      bookingId: booking._id,
+      rating: rating,
+      comment: review || '',
+      createdAt: new Date(),
+    });
+    await technician.save();
+
+    // Increment completed jobs for the technician (portfolio)
+    technician.statistics = technician.statistics || {};
+    technician.statistics.completedJobs = (technician.statistics.completedJobs || 0) + 1;
+    technician.statistics.totalJobs = (technician.statistics.totalJobs || 0) + 1;
+    await technician.save();
+
+    res.json({
+      success: true,
+      message: 'Rating submitted successfully. Job marked as completed.',
+      data: {
+        bookingId: booking._id,
+        rating,
+        review: booking.clientReview,
+        technicianRating: {
+          average: technician.rating.average,
+          count: technician.rating.count,
+          distribution: technician.rating.distribution,
+        },
+      },
+    });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to submit rating.', 500, 'rateTechnician');
   }
 };

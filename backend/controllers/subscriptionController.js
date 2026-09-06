@@ -1,27 +1,17 @@
 /**
  * Subscription Controller for Technicians
- * Handles subscription upgrades, trial activation, and Paystack payment integration
- * 
- * IMPORTANT: This controller now uses Paystack for real payments.
- * - upgradeSubscription initializes a Paystack transaction and returns a checkout URL.
- * - paystackWebhook handles the 'charge.success' event and updates the technician's subscription.
- * - The webhook route must be public (no authentication) and use raw body parser.
+ * Now supports Paystack (card only) and M-Pesa Daraja (STK Push)
  */
 
 const Technician = require('../models/Technician');
 const User = require('../models/User');
 const { subscriptionPlans, plansList, isPlanActive } = require('../utils/subscriptionPlans');
-
-// Initialize Paystack with secret key from environment
 const Paystack = require('paystack-api')(process.env.PAYSTACK_SECRET_KEY);
+const mpesaService = require('../services/mpesaService');
 
-/**
- * Get all available subscription plans
- * @route GET /api/subscription/plans
- */
+// ─── GET PLANS ────────────────────────────────────────────────────────────────
 exports.getPlans = async (req, res) => {
   try {
-    // Filter out 'free' and 'trial' – they are not paid upgrade options
     const paidPlans = plansList.filter(p => p.id !== 'free' && p.id !== 'trial');
     res.json({
       success: true,
@@ -35,33 +25,26 @@ exports.getPlans = async (req, res) => {
   }
 };
 
-/**
- * Get current technician's subscription
- * @route GET /api/subscription/current
- */
+// ─── GET CURRENT SUBSCRIPTION ───────────────────────────────────────────────
 exports.getCurrentSubscription = async (req, res) => {
   try {
     const technician = await Technician.findOne({ userId: req.user.userId });
-    
     if (!technician) {
       return res.status(404).json({ success: false, message: 'Technician profile not found' });
     }
 
-    // Default subscription if none exists
     const subscription = technician.subscription || {
       plan: 'free',
       isActive: true,
       visibilityRadius: 10
     };
 
-    // Use the shared isPlanActive helper from subscriptionPlans.js
     const isActive = isPlanActive(
       technician.subscription?.plan,
       technician.subscription?.endDate,
       technician.subscription?.trialEndDate
     );
 
-    // Compute days remaining
     let daysRemaining = 0;
     if (technician.subscription) {
       const end = technician.subscription.isTrial
@@ -89,19 +72,14 @@ exports.getCurrentSubscription = async (req, res) => {
   }
 };
 
-/**
- * Activate free trial
- * @route POST /api/subscription/trial
- */
+// ─── ACTIVATE TRIAL ──────────────────────────────────────────────────────────
 exports.activateTrial = async (req, res) => {
   try {
     const technician = await Technician.findOne({ userId: req.user.userId });
-    
     if (!technician) {
       return res.status(404).json({ success: false, message: 'Technician profile not found' });
     }
 
-    // Check if already used trial
     if (technician.subscription?.isTrial && technician.subscription?.trialEndDate) {
       const trialEnd = new Date(technician.subscription.trialEndDate);
       if (trialEnd > new Date()) {
@@ -112,13 +90,12 @@ exports.activateTrial = async (req, res) => {
       }
     }
 
-    // Check if already has paid subscription
     if (technician.subscription?.plan !== 'free' && technician.subscription?.endDate > new Date()) {
       return res.status(400).json({ success: false, message: 'Already on a paid subscription' });
     }
 
     const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 30); // 30-day trial
+    trialEndDate.setDate(trialEndDate.getDate() + 30);
 
     technician.subscription = {
       plan: 'trial',
@@ -147,28 +124,24 @@ exports.activateTrial = async (req, res) => {
   }
 };
 
-/**
- * Initiate Paystack payment for subscription upgrade
- * @route POST /api/subscription/upgrade
- * 
- * Accepts 'paymentMethod' from frontend: 'card', 'mpesa', or 'both' (default).
- * Currency is always KES – M-Pesa only works with KES.
- */
+// ─── UPGRADE SUBSCRIPTION ────────────────────────────────────────────────────
 exports.upgradeSubscription = async (req, res) => {
   try {
-    const { planId, autoRenew = false, paymentMethod = 'both' } = req.body;
-    
-    const technician = await Technician.findOne({ userId: req.user.userId });
-    if (!technician) {
-      return res.status(404).json({ success: false, message: 'Technician profile not found' });
+    const { planId, autoRenew = false, paymentMethod, phoneNumber } = req.body;
+
+    // Validate payment method
+    if (!paymentMethod || (paymentMethod !== 'card' && paymentMethod !== 'mpesa')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment method. Choose "card" or "mpesa".'
+      });
     }
 
+    // Validate plan
     const plan = subscriptionPlans[planId];
     if (!plan) {
       return res.status(400).json({ success: false, message: 'Invalid plan' });
     }
-
-    // 🔒 Prevent upgrading to free or trial plans (price = 0)
     if (plan.price === 0) {
       return res.status(400).json({
         success: false,
@@ -176,84 +149,128 @@ exports.upgradeSubscription = async (req, res) => {
       });
     }
 
+    const technician = await Technician.findOne({ userId: req.user.userId });
+    if (!technician) {
+      return res.status(404).json({ success: false, message: 'Technician profile not found' });
+    }
     const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Map paymentMethod to channels
-    let channels = ['card', 'mpesa'];
-    if (paymentMethod === 'card') channels = ['card'];
-    else if (paymentMethod === 'mpesa') channels = ['mpesa'];
+    // ─── CARD (Paystack) ──────────────────────────────────────────────────
+    if (paymentMethod === 'card') {
+      const metadata = {
+        technicianId: technician._id.toString(),
+        planId,
+        userId: req.user.userId,
+        autoRenew
+      };
+      const amountInKobo = plan.price * 100;
 
-    const metadata = {
-      technicianId: technician._id.toString(),
-      planId: planId,
-      userId: req.user.userId,
-      autoRenew: autoRenew
-    };
+      const response = await Paystack.transaction.initialize({
+        amount: amountInKobo,
+        email: user.email,
+        currency: 'KES',
+        channels: ['card'], // only card
+        metadata,
+        callback_url: `${process.env.FRONTEND_URL}/payment-callback`
+      });
 
-    const amountInKobo = plan.price * 100; // KES → kobo
+      technician.paymentPending = {
+        reference: response.data.reference,
+        planId,
+        amount: plan.price,
+        autoRenew,
+        initiatedAt: new Date(),
+        method: 'paystack'
+      };
+      await technician.save();
 
-    const response = await Paystack.transaction.initialize({
-      amount: amountInKobo,
-      email: user.email,
-      currency: 'KES',
-      channels: channels,
-      metadata: metadata,
-      callback_url: `${process.env.FRONTEND_URL}/payment-callback`
-    });
+      return res.json({
+        success: true,
+        message: 'Payment initiated successfully',
+        data: {
+          authorization_url: response.data.authorization_url,
+          reference: response.data.reference,
+          paymentMethod: 'card'
+        }
+      });
+    }
 
-    technician.paymentPending = {
-      reference: response.data.reference,
-      planId: planId,
-      amount: plan.price,
-      autoRenew: autoRenew,
-      initiatedAt: new Date()
-    };
-    await technician.save();
-
-    res.json({
-      success: true,
-      message: 'Payment initiated successfully',
-      data: {
-        authorization_url: response.data.authorization_url,
-        reference: response.data.reference
+    // ─── M-PESA (Daraja STK Push) ────────────────────────────────────────
+    if (paymentMethod === 'mpesa') {
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number is required for M-Pesa payment.'
+        });
       }
-    });
+
+      // Clean and validate phone (2547XXXXXXXX)
+      let cleaned = phoneNumber.replace(/\s/g, '');
+      if (cleaned.startsWith('0')) cleaned = '254' + cleaned.slice(1);
+      else if (cleaned.startsWith('+')) cleaned = cleaned.slice(1);
+      if (!/^254[17]\d{8}$/.test(cleaned)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid phone number format. Use 2547XXXXXXXX.'
+        });
+      }
+
+      const accountRef = `SUB-${Date.now()}`;
+      const stkResponse = await mpesaService.stkPush(
+        cleaned,
+        plan.price,
+        accountRef,
+        `${plan.name} subscription`
+      );
+
+      technician.paymentPending = {
+        checkoutRequestID: stkResponse.CheckoutRequestID,
+        merchantRequestID: stkResponse.MerchantRequestID,
+        planId,
+        amount: plan.price,
+        autoRenew,
+        initiatedAt: new Date(),
+        method: 'mpesa',
+        phoneNumber: cleaned
+      };
+      await technician.save();
+
+      return res.json({
+        success: true,
+        message: 'M-Pesa STK Push sent. Please check your phone to complete payment.',
+        data: {
+          checkoutRequestID: stkResponse.CheckoutRequestID,
+          merchantRequestID: stkResponse.MerchantRequestID,
+          paymentMethod: 'mpesa'
+        }
+      });
+    }
+
+    // Should never reach here
+    return res.status(400).json({ success: false, message: 'Invalid payment method' });
   } catch (error) {
-    console.error('Paystack initialization error:', error);
+    console.error('Payment initiation error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-/**
- * Paystack Webhook Handler
- * @route POST /api/subscription/webhook
- * 
- * This endpoint is called by Paystack when a transaction status changes.
- * It must be public (no auth) and use raw body parser for signature verification.
- * 
- * Security: Verifies the X-Paystack-Signature header to confirm the request is from Paystack.
- */
+// ─── PAYSTACK WEBHOOK (unchanged) ──────────────────────────────────────────
 exports.paystackWebhook = async (req, res) => {
   const crypto = require('crypto');
-
-  // 1. Extract the raw request body (Buffer) and convert to string
   const rawBody = req.body.toString('utf8');
-
-  // 2. Verify the webhook signature using the raw body string
   const hash = crypto
     .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
     .update(rawBody)
     .digest('hex');
 
   if (hash !== req.headers['x-paystack-signature']) {
-    console.error('❌ Webhook signature mismatch – possible spoofed request');
+    console.error('❌ Webhook signature mismatch');
     return res.status(401).send('Unauthorized');
   }
 
-  // 3. Parse the JSON body
   let event;
   try {
     event = JSON.parse(rawBody);
@@ -264,11 +281,9 @@ exports.paystackWebhook = async (req, res) => {
 
   console.log(`📩 Webhook received: ${event.event} (reference: ${event.data?.reference || 'unknown'})`);
 
-  // 4. Process only 'charge.success' events
   if (event.event === 'charge.success') {
     const transaction = event.data;
     const metadata = transaction.metadata || {};
-
     if (!metadata.technicianId || !metadata.planId) {
       console.error('❌ Missing metadata in webhook:', metadata);
       return res.status(400).send('Missing metadata');
@@ -280,13 +295,12 @@ exports.paystackWebhook = async (req, res) => {
     try {
       const Technician = require('../models/Technician');
       const technician = await Technician.findById(technicianId);
-
       if (!technician) {
         console.error(`❌ Technician not found: ${technicianId}`);
         return res.status(404).send('Technician not found');
       }
 
-      // Idempotency check – avoid double processing
+      // Idempotency
       const alreadyProcessed = technician.subscription?.paymentHistory?.some(
         p => p.transactionId === transaction.reference
       );
@@ -302,11 +316,9 @@ exports.paystackWebhook = async (req, res) => {
         return res.status(400).send('Invalid plan');
       }
 
-      // Calculate subscription end date (durationDays from plan)
       const endDate = new Date();
       endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
 
-      // Update the technician's subscription document
       technician.subscription = {
         plan: planId,
         planDetails: {
@@ -316,9 +328,9 @@ exports.paystackWebhook = async (req, res) => {
           features: plan.features
         },
         startDate: new Date(),
-        endDate: endDate,
+        endDate,
         isTrial: false,
-        autoRenew: autoRenew,
+        autoRenew,
         paymentMethod: transaction.channel || 'paystack',
         lastPaymentDate: new Date(),
         nextPaymentDate: endDate,
@@ -336,12 +348,8 @@ exports.paystackWebhook = async (req, res) => {
 
       technician.serviceRadius = plan.visibilityRadius;
       technician.paymentPending = undefined;
-
       await technician.save();
       console.log(`✅ Subscription upgraded successfully for technician ${technicianId} to ${planId}`);
-
-      // TODO: Send notification
-
     } catch (error) {
       console.error('❌ Error processing webhook:', error);
       return res.status(500).send('Internal Server Error');
@@ -353,10 +361,7 @@ exports.paystackWebhook = async (req, res) => {
   res.sendStatus(200);
 };
 
-/**
- * Verify Payment (optional)
- * @route GET /api/subscription/verify?reference=...
- */
+// ─── VERIFY PAYMENT (Paystack) ──────────────────────────────────────────────
 exports.verifyPayment = async (req, res) => {
   try {
     const { reference } = req.query;
@@ -376,22 +381,171 @@ exports.verifyPayment = async (req, res) => {
   }
 };
 
-/**
- * Cancel auto-renewal
- * @route PUT /api/subscription/cancel-auto-renew
- */
+// ─── M-PESA CALLBACK (public) ───────────────────────────────────────────────
+exports.mpesaCallback = async (req, res) => {
+  try {
+    const { Body } = req.body;
+    if (!Body || !Body.stkCallback) {
+      console.warn('Invalid M-Pesa callback payload:', req.body);
+      return res.status(400).send('Invalid payload');
+    }
+
+    const {
+      CheckoutRequestID,
+      ResultCode,
+      ResultDesc,
+      MerchantRequestID,
+      CallbackMetadata
+    } = Body.stkCallback;
+
+    console.log(`M-Pesa callback: ${CheckoutRequestID}, ResultCode: ${ResultCode}`);
+
+    const technician = await Technician.findOne({
+      'paymentPending.checkoutRequestID': CheckoutRequestID,
+      'paymentPending.method': 'mpesa'
+    });
+
+    if (!technician) {
+      console.error(`No pending transaction for CheckoutRequestID: ${CheckoutRequestID}`);
+      return res.status(404).send('Transaction not found');
+    }
+
+    // Idempotency
+    const alreadyProcessed = technician.subscription?.paymentHistory?.some(
+      (p) => p.transactionId === CheckoutRequestID
+    );
+    if (alreadyProcessed) {
+      console.log(`Transaction ${CheckoutRequestID} already processed.`);
+      return res.sendStatus(200);
+    }
+
+    if (ResultCode === 0) {
+      let amount = 0;
+      if (CallbackMetadata && CallbackMetadata.Item) {
+        const amountItem = CallbackMetadata.Item.find((item) => item.Name === 'Amount');
+        if (amountItem) amount = amountItem.Value;
+      }
+
+      const { planId } = technician.paymentPending;
+      const plan = subscriptionPlans[planId];
+      if (!plan) {
+        console.error(`Invalid plan ID: ${planId}`);
+        return res.status(400).send('Invalid plan');
+      }
+
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
+
+      technician.subscription = {
+        plan: planId,
+        planDetails: {
+          name: plan.name,
+          visibilityRadius: plan.visibilityRadius,
+          price: plan.price,
+          features: plan.features
+        },
+        startDate: new Date(),
+        endDate,
+        isTrial: false,
+        autoRenew: technician.paymentPending.autoRenew || false,
+        paymentMethod: 'mpesa',
+        lastPaymentDate: new Date(),
+        nextPaymentDate: endDate,
+        paymentHistory: [
+          ...(technician.subscription?.paymentHistory || []),
+          {
+            amount: amount || plan.price,
+            date: new Date(),
+            transactionId: CheckoutRequestID,
+            status: 'success',
+            plan: planId
+          }
+        ]
+      };
+
+      technician.serviceRadius = plan.visibilityRadius;
+      technician.paymentPending = undefined;
+      await technician.save();
+
+      console.log(`✅ M-Pesa subscription upgraded for ${technician._id} to ${planId}`);
+    } else {
+      technician.paymentPending = {
+        ...technician.paymentPending,
+        failureReason: ResultDesc,
+        failureCode: ResultCode
+      };
+      await technician.save();
+      console.warn(`M-Pesa payment failed: ${ResultDesc} (${ResultCode})`);
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Error processing M-Pesa callback:', error);
+    res.sendStatus(500);
+  }
+};
+
+// ─── M-PESA STATUS POLL (authenticated) ─────────────────────────────────────
+exports.mpesaStatus = async (req, res) => {
+  try {
+    const { checkoutRequestID } = req.query;
+    if (!checkoutRequestID) {
+      return res.status(400).json({ success: false, message: 'checkoutRequestID required' });
+    }
+
+    const technician = await Technician.findOne({
+      'paymentPending.checkoutRequestID': checkoutRequestID,
+      'paymentPending.method': 'mpesa',
+      userId: req.user.userId
+    });
+
+    if (!technician) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found or already completed'
+      });
+    }
+
+    const statusData = await mpesaService.queryStatus(checkoutRequestID);
+    const resultCode = statusData.ResultCode;
+
+    let status = 'pending';
+    let message = 'Payment still being processed';
+
+    if (resultCode === '0') {
+      status = 'success';
+      message = 'Payment successful';
+    } else if (resultCode === '1032') {
+      status = 'failed';
+      message = 'Transaction cancelled by user';
+    } else if (resultCode === '1037') {
+      status = 'failed';
+      message = 'Transaction timed out';
+    } else if (resultCode) {
+      status = 'failed';
+      message = statusData.ResultDesc || 'Payment failed';
+    }
+
+    return res.json({
+      success: true,
+      data: { status, message, resultCode }
+    });
+  } catch (error) {
+    console.error('Error checking M-Pesa status:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── CANCEL AUTO-RENEW ──────────────────────────────────────────────────────
 exports.cancelAutoRenew = async (req, res) => {
   try {
     const technician = await Technician.findOne({ userId: req.user.userId });
-    
     if (!technician) {
       return res.status(404).json({ success: false, message: 'Technician profile not found' });
     }
-
     if (!technician.subscription) {
       return res.status(400).json({ success: false, message: 'No active subscription' });
     }
-
     technician.subscription.autoRenew = false;
     await technician.save();
 
@@ -404,15 +558,11 @@ exports.cancelAutoRenew = async (req, res) => {
   }
 };
 
-/**
- * Get subscription history/invoices
- * @route GET /api/subscription/history
- */
+// ─── GET SUBSCRIPTION HISTORY ──────────────────────────────────────────────
 exports.getSubscriptionHistory = async (req, res) => {
   try {
     const technician = await Technician.findOne({ userId: req.user.userId })
       .select('subscriptionHistory payments');
-
     res.json({
       success: true,
       data: {
@@ -426,10 +576,7 @@ exports.getSubscriptionHistory = async (req, res) => {
   }
 };
 
-// ============================================================
-// HELPER FUNCTION (kept only for visibility radius)
-// ============================================================
-
+// ─── HELPER ──────────────────────────────────────────────────────────────────
 function getVisibilityRadius(technician) {
   const plan = technician.subscription?.plan || 'free';
   if (technician.subscription?.isTrial) return subscriptionPlans.trial.visibilityRadius;

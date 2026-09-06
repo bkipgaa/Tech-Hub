@@ -24,7 +24,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { 
   Menu, X, Search, Calendar, Home, Settings, LogIn, UserPlus, Plus, List,
   User, ChevronDown, LogOut, UserCircle, Wrench, FileText, Shield, Briefcase,
-  LayoutDashboard, CreditCard, Users, MessageSquare   // ← ADDED: MessageSquare for chat icon
+  LayoutDashboard, CreditCard, Users, MessageSquare
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getSocket } from '../services/socket';
@@ -36,18 +36,12 @@ const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
 
   // ─── AUTH CONTEXT ─────────────────────────────
-  // Single destructuring — merged the two duplicate useAuth() calls.
-  // getUnreadCount = chat REST API for total unread messages
-  // user           = current logged-in user object
-  // technicianProfile = technician's public profile (if any)
-  // logout         = clears auth state + redirects
   const { user, technicianProfile, logout, getUnreadCount } = useAuth();
   
   const navigate = useNavigate();
   const location = useLocation();
 
   // ─── CHAT UNREAD BADGE STATE ──────────────────
-  // unreadCount drives the red notification dot on the MessageSquare icon.
   const [unreadCount, setUnreadCount] = useState(0);
 
   // ===========================================
@@ -64,19 +58,9 @@ const Navbar = () => {
   // ===========================================
   // REAL-TIME UNREAD BADGE
   // ===========================================
-  /**
-   * Keeps the red message notification dot in sync.
-   * 
-   * 1. On mount (or login) → fetch total unread count via AuthContext.
-   * 2. Listen to Socket.io 'conversation_updated' → re-fetch immediately
-   *    when a new message arrives (no page refresh needed).
-   * 3. Cleanup removes ONLY our listener to avoid duplicates on re-mount.
-   */
   useEffect(() => {
-    // Guard: don't run if user is logged out.
     if (!user) return;
 
-    // ─── Initial poll ───────────────────────────
     const fetchUnread = async () => {
       try {
         const res = await getUnreadCount();
@@ -87,12 +71,10 @@ const Navbar = () => {
     };
     fetchUnread();
 
-    // ─── Real-time updates ──────────────────────
     const socket = getSocket();
     const handleConversationUpdate = () => fetchUnread();
     socket?.on('conversation_updated', handleConversationUpdate);
 
-    // Cleanup: remove this specific handler only.
     return () => {
       socket?.off('conversation_updated', handleConversationUpdate);
     };
@@ -103,13 +85,13 @@ const Navbar = () => {
   const isAdmin = user?.role === 'admin';
   const isTechnician = user?.role === 'technician';
 
-  // Navigation links visible to ALL users (public)
+  // Navigation links visible to ALL users (public) — icons removed
   const navLinks = [
-    { name: "Home", icon: Home, path: "/" },
-    { name: "Services", icon: Settings, path: "/services" },
-    { name: "Available Jobs", icon: Briefcase, path: "/available-jobs" },
-    { name: "Search", icon: Search, path: "/search", highlight: true },
-    { name: "My Bookings", icon: Calendar, path: "/bookings" },
+    { name: "Home", path: "/" },
+    { name: "Services", path: "/services" },
+    { name: "Available Jobs", path: "/available-jobs" },
+    { name: "Search", path: "/search", highlight: true },
+    { name: "My Bookings", path: "/bookings" },
   ];
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
@@ -147,12 +129,12 @@ const Navbar = () => {
             {/* ─── DESKTOP NAVIGATION ─────────────── */}
             <div className="hidden md:flex items-center space-x-1">
               
-              {/* Public nav links */}
+              {/* Public nav links — icons removed, text-xs for smaller size */}
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
                   to={link.path}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${
+                  className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
                     isActive(link.path)
                       ? "bg-green-50 text-green-700"
                       : link.highlight
@@ -160,7 +142,6 @@ const Navbar = () => {
                       : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                   }`}
                 >
-                  <link.icon className="w-4 h-4" />
                   <span>{link.name}</span>
                 </Link>
               ))}
@@ -170,19 +151,17 @@ const Navbar = () => {
                 <>
                   <Link
                     to="/post-job"
-                    className="px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 bg-green-600 text-white hover:bg-green-700"
+                    className="px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 bg-green-600 text-white hover:bg-green-700"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Post a Job</span>
+                    Post a Job
                   </Link>
                   <Link
                     to="/my-jobs"
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
                       isActive('/my-jobs') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
-                    <List className="w-4 h-4" />
-                    <span>My Jobs</span>
+                    My Jobs
                   </Link>
                 </>
               )}
@@ -191,12 +170,11 @@ const Navbar = () => {
               {user?.role === 'technician' && (
                 <Link
                   to="/my-applications"
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${
+                  className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
                     isActive('/my-applications') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100"
                   }`}
                 >
-                  <FileText className="w-4 h-4" />
-                  <span>My Applications</span>
+                  My Applications
                 </Link>
               )}
 
@@ -205,21 +183,19 @@ const Navbar = () => {
                 <>
                   <Link
                     to="/technician-dashboard"
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
                       isActive('/technician-dashboard') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                     }`}
                   >
-                    <LayoutDashboard className="w-4 h-4" />
-                    <span>Dashboard</span>
+                    Dashboard
                   </Link>
                   <Link
                     to="/subscription"
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
                       isActive('/subscription') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                     }`}
                   >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Subscription</span>
+                    Subscription
                   </Link>
                 </>
               )}
@@ -228,14 +204,13 @@ const Navbar = () => {
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${
+                  className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
                     location.pathname.startsWith('/admin')
                       ? "bg-red-50 text-red-700"
                       : "text-red-600 hover:bg-red-50 hover:text-red-700"
                   }`}
                 >
-                  <Shield className="w-4 h-4" />
-                  <span>Admin Panel</span>
+                  Admin Panel
                 </Link>
               )}
 
@@ -243,18 +218,14 @@ const Navbar = () => {
               {user ? (
                 <div className="flex items-center space-x-2 ml-2">
                   
-                  {/* ← CHAT ICON WITH UNREAD BADGE → */}
-                  {/* Placed OUTSIDE the dropdown so it's always visible
-                      and clickable without opening the profile menu. */}
+                  {/* Chat link — now text with badge, no icon */}
                   <Link 
                     to="/chat" 
-                    className="relative p-2 text-gray-600 hover:text-green-600 transition-colors rounded-full hover:bg-green-50"
+                    className="relative px-2 py-1.5 rounded-lg text-xs font-medium text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors"
                   >
-                    <MessageSquare className="w-5 h-5" />
-                    
-                    {/* Red badge — hidden when no unread messages */}
+                    Messages
                     {unreadCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
@@ -280,11 +251,10 @@ const Navbar = () => {
                       <ChevronDown className="w-4 h-4 text-gray-500" />
                     </button>
 
-                    {/* Dropdown Menu */}
+                    {/* Dropdown Menu (icons kept as they are) */}
                     {isProfileMenuOpen && (
                       <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 animate-fadeIn">
                         
-                        {/* User header */}
                         <div className="px-4 py-2 border-b border-gray-100">
                           <p className="text-sm font-semibold text-gray-800">
                             {user.fullName || `${user.firstName} ${user.lastName}`}
@@ -292,7 +262,6 @@ const Navbar = () => {
                           <p className="text-xs text-gray-500 capitalize">{user.role}</p>
                         </div>
 
-                        {/* Profile link */}
                         <Link
                           to="/profile"
                           onClick={() => setIsProfileMenuOpen(false)}
@@ -302,7 +271,6 @@ const Navbar = () => {
                           <span>View Profile</span>
                         </Link>
 
-                        {/* Messages link (also inside dropdown for convenience) */}
                         <Link
                           to="/chat"
                           onClick={() => setIsProfileMenuOpen(false)}
@@ -317,7 +285,6 @@ const Navbar = () => {
                           )}
                         </Link>
 
-                        {/* Become a Technician */}
                         {user.role === 'client' && (
                           <Link
                             to="/become-technician"
@@ -329,7 +296,6 @@ const Navbar = () => {
                           </Link>
                         )}
 
-                        {/* Create Technician Profile */}
                         {user.role === 'technician' && !hasTechnicianProfile && (
                           <Link
                             to="/create-technician-profile"
@@ -341,7 +307,6 @@ const Navbar = () => {
                           </Link>
                         )}
 
-                        {/* Technician Dashboard */}
                         {user.role === 'technician' && hasTechnicianProfile && (
                           <Link
                             to="/technician-dashboard"
@@ -353,7 +318,6 @@ const Navbar = () => {
                           </Link>
                         )}
 
-                        {/* Admin quick links */}
                         {isAdmin && (
                           <>
                             <Link
@@ -385,7 +349,6 @@ const Navbar = () => {
 
                         <div className="border-t border-gray-100 my-1"></div>
 
-                        {/* Logout */}
                         <button
                           onClick={handleLogout}
                           className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -402,13 +365,13 @@ const Navbar = () => {
                 <div className="flex items-center ml-2 space-x-2">
                   <Link
                     to="/signup"
-                    className="px-4 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
                   >
                     Sign up
                   </Link>
                   <Link
                     to="/login"
-                    className="px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                   >
                     Login
                   </Link>
@@ -430,7 +393,7 @@ const Navbar = () => {
             <div className="md:hidden py-4 border-t border-gray-200 animate-fadeIn">
               <div className="flex flex-col space-y-1">
                 
-                {/* Public links */}
+                {/* Public links — icons removed */}
                 {navLinks.map((link) => (
                   <Link
                     key={link.name}
@@ -440,7 +403,6 @@ const Navbar = () => {
                       isActive(link.path) ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
                     }`}
                   >
-                    <link.icon className="w-5 h-5" />
                     <span className="font-medium">{link.name}</span>
                   </Link>
                 ))}
@@ -454,7 +416,6 @@ const Navbar = () => {
                       isActive('/chat') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
                     }`}
                   >
-                    <MessageSquare className="w-5 h-5" />
                     <span className="font-medium">Messages</span>
                     {unreadCount > 0 && (
                       <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
@@ -474,7 +435,6 @@ const Navbar = () => {
                         isActive('/technician-dashboard') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
                       }`}
                     >
-                      <LayoutDashboard className="w-5 h-5" />
                       <span className="font-medium">Dashboard</span>
                     </Link>
                     <Link
@@ -484,7 +444,6 @@ const Navbar = () => {
                         isActive('/subscription') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
                       }`}
                     >
-                      <CreditCard className="w-5 h-5" />
                       <span className="font-medium">Subscription</span>
                     </Link>
                   </>
@@ -498,7 +457,6 @@ const Navbar = () => {
                       location.pathname.startsWith('/admin') ? "bg-red-50 text-red-700" : "text-red-600 hover:bg-red-50"
                     }`}
                   >
-                    <Shield className="w-5 h-5" />
                     <span className="font-medium">Admin Panel</span>
                   </Link>
                 )}
@@ -508,7 +466,6 @@ const Navbar = () => {
                   <>
                     <div className="border-t border-gray-200 my-2"></div>
                     
-                    {/* User info card */}
                     <div className="flex items-center space-x-3 px-3 py-2.5 bg-gray-50 rounded-lg">
                       {user.profileImage ? (
                         <img src={user.profileImage} alt="" className="w-10 h-10 rounded-full object-cover" />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, CheckCircle, AlertCircle, Crown, 
-  Shield, TrendingUp, MapPin, Calendar, Zap
+  Shield, TrendingUp, MapPin, Calendar, Zap, Phone
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -9,8 +9,8 @@ import api from '../../services/api';
  * SubscriptionManager Component
  * 
  * Displays all available subscription plans, shows the technician's current plan,
- * allows activation of a free trial, and initiates a Paystack payment for upgrades.
- * Users can choose between Card, M-Pesa, or both (default).
+ * allows activation of a free trial, and initiates payment for upgrades.
+ * Supports Card (Paystack) and M-Pesa (Daraja STK Push).
  */
 const SubscriptionManager = () => {
   // ============================================================
@@ -24,8 +24,13 @@ const SubscriptionManager = () => {
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   
-  // NEW: payment method selection state
-  const [paymentMethod, setPaymentMethod] = useState('both'); // 'both', 'card', 'mpesa'
+  // Payment method selection state – now only 'card' or 'mpesa'
+  const [paymentMethod, setPaymentMethod] = useState('card'); // default to card
+  const [phoneNumber, setPhoneNumber] = useState(''); // for M-Pesa
+
+  // M-Pesa polling state
+  const [mpesaStatus, setMpesaStatus] = useState(null); // { status, message }
+  const [pollingInterval, setPollingInterval] = useState(null);
 
   // ============================================================
   // EFFECTS
@@ -33,6 +38,10 @@ const SubscriptionManager = () => {
 
   useEffect(() => {
     fetchData();
+    // Cleanup polling on unmount
+    return () => {
+      if (pollingInterval) clearInterval(pollingInterval);
+    };
   }, []);
 
   // ============================================================
@@ -74,32 +83,106 @@ const SubscriptionManager = () => {
 
   /**
    * Upgrade to a selected paid plan.
-   * - Sends planId and paymentMethod to backend.
-   * - Backend initializes Paystack transaction with appropriate channels.
-   * - Redirects to authorization_url.
+   * - For card: sends paymentMethod: 'card' → backend returns authorization_url → redirect.
+   * - For mpesa: sends paymentMethod: 'mpesa' and phoneNumber → backend initiates STK Push → returns checkoutRequestID → start polling.
    */
   const upgradePlan = async (planId) => {
     setProcessing(true);
     try {
-      const response = await api.post('/subscription/upgrade', { 
+      const payload = {
         planId,
-        paymentMethod, // 👈 send the selected method
+        paymentMethod,
         autoRenew: currentSubscription?.autoRenew || false
-      });
-      const { authorization_url } = response.data.data;
-      
-      if (authorization_url) {
-        window.location.href = authorization_url;
-      } else {
-        setMessage({ type: 'error', text: 'No payment URL received. Please try again.' });
-        setSelectedPlan(null);
+      };
+      // If M-Pesa, include phoneNumber
+      if (paymentMethod === 'mpesa') {
+        if (!phoneNumber) {
+          setMessage({ type: 'error', text: 'Please enter your phone number for M-Pesa payment.' });
+          setProcessing(false);
+          return;
+        }
+        payload.phoneNumber = phoneNumber;
+      }
+
+      const response = await api.post('/subscription/upgrade', payload);
+      const { data } = response.data;
+
+      if (paymentMethod === 'card') {
+        // Card: redirect to Paystack
+        const { authorization_url } = data;
+        if (authorization_url) {
+          window.location.href = authorization_url;
+        } else {
+          setMessage({ type: 'error', text: 'No payment URL received. Please try again.' });
+          setSelectedPlan(null);
+          setProcessing(false);
+        }
+      } else if (paymentMethod === 'mpesa') {
+        // M-Pesa: start polling
+        const { checkoutRequestID } = data;
+        if (checkoutRequestID) {
+          setMpesaStatus({ status: 'pending', message: 'Please complete payment on your phone.' });
+          startPolling(checkoutRequestID);
+          setSelectedPlan(null); // close modal
+          setProcessing(false);
+        } else {
+          setMessage({ type: 'error', text: 'No checkout request ID received. Please try again.' });
+          setSelectedPlan(null);
+          setProcessing(false);
+        }
       }
     } catch (error) {
       setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to initiate payment' });
       setSelectedPlan(null);
-    } finally {
       setProcessing(false);
     }
+  };
+
+  const startPolling = (checkoutRequestID) => {
+    let attempts = 0;
+    const maxAttempts = 30; // 30 * 5s = 150s max
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const response = await api.get(`/subscription/mpesa-status?checkoutRequestID=${checkoutRequestID}`);
+        const { status, message } = response.data.data;
+        setMpesaStatus({ status, message });
+
+        if (status === 'success') {
+          clearInterval(interval);
+          setPollingInterval(null);
+          setMessage({ type: 'success', text: 'Payment successful! Your subscription has been updated.' });
+          await fetchData(); // refresh subscription data
+          setMpesaStatus(null);
+          setProcessing(false);
+        } else if (status === 'failed') {
+          clearInterval(interval);
+          setPollingInterval(null);
+          setMessage({ type: 'error', text: `Payment failed: ${message}` });
+          setMpesaStatus(null);
+          setProcessing(false);
+        }
+        if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          setPollingInterval(null);
+          setMessage({ type: 'error', text: 'Payment confirmation timed out. Please contact support.' });
+          setMpesaStatus(null);
+          setProcessing(false);
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        // Optionally stop polling after too many errors
+        if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          setPollingInterval(null);
+          setMessage({ type: 'error', text: 'Error checking payment status. Please contact support.' });
+          setMpesaStatus(null);
+          setProcessing(false);
+        }
+      }
+    }, 5000);
+
+    setPollingInterval(interval);
   };
 
   const cancelAutoRenew = async () => {
@@ -110,6 +193,16 @@ const SubscriptionManager = () => {
     } catch (error) {
       setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to cancel auto-renewal' });
     }
+  };
+
+  const closeModal = () => {
+    setSelectedPlan(null);
+    setMpesaStatus(null);
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+    setProcessing(false);
   };
 
   // ============================================================
@@ -186,7 +279,7 @@ const SubscriptionManager = () => {
             </div>
           </div>
 
-          {/* ====== NEW: Upgrade prompt when subscription is inactive ====== */}
+          {/* Upgrade prompt when subscription is inactive */}
           {!currentSubscription.isActive && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
@@ -214,7 +307,7 @@ const SubscriptionManager = () => {
         </div>
       )}
 
-      {/* Plans Grid - added id for scrolling */}
+      {/* Plans Grid */}
       <div id="plans-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {plans.filter(p => p.id !== 'trial').map((plan) => (
           <div key={plan.id} className="bg-white rounded-lg shadow-lg border overflow-hidden hover:shadow-xl transition-shadow">
@@ -264,22 +357,12 @@ const SubscriptionManager = () => {
               Are you sure you want to upgrade to {plans.find(p => p.id === selectedPlan)?.name} plan?
             </p>
 
-            {/* ===== Payment Method Selection ===== */}
+            {/* Payment Method Selection - only card or mpesa */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Choose Payment Method
               </label>
               <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value="both"
-                    checked={paymentMethod === 'both'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                  />
-                  Any (Card or M-Pesa)
-                </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="radio"
@@ -302,27 +385,56 @@ const SubscriptionManager = () => {
                 </label>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                {paymentMethod === 'both' && 'Paystack will show both options.'}
-                {paymentMethod === 'card' && 'You will pay with a Visa/Mastercard.'}
-                {paymentMethod === 'mpesa' && 'You will pay via M-Pesa STK push.'}
+                {paymentMethod === 'card' && 'You will be redirected to Paystack to complete payment.'}
+                {paymentMethod === 'mpesa' && 'You will receive an M-Pesa STK push on your phone.'}
               </p>
             </div>
+
+            {/* Phone number input for M-Pesa */}
+            {paymentMethod === 'mpesa' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  M-Pesa Phone Number
+                </label>
+                <div className="flex items-center border rounded-lg px-3 py-2">
+                  <Phone className="w-5 h-5 text-gray-400 mr-2" />
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="e.g., 254712345678"
+                    className="w-full outline-none"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter the phone number registered with M-Pesa (starting with 254).
+                </p>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button
                 onClick={() => upgradePlan(selectedPlan)}
-                disabled={processing}
+                disabled={processing || (paymentMethod === 'mpesa' && !phoneNumber)}
                 className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
-                {processing ? 'Redirecting...' : 'Confirm & Pay'}
+                {processing ? 'Processing...' : 'Confirm & Pay'}
               </button>
               <button
-                onClick={() => setSelectedPlan(null)}
+                onClick={closeModal}
                 className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 Cancel
               </button>
             </div>
+
+            {/* M-Pesa waiting status inside modal */}
+            {mpesaStatus && (
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm font-medium text-blue-800">{mpesaStatus.message}</p>
+                <p className="text-xs text-blue-600">Waiting for payment confirmation...</p>
+              </div>
+            )}
           </div>
         </div>
       )}

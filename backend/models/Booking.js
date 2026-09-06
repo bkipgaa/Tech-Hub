@@ -14,63 +14,39 @@ const bookingSchema = new mongoose.Schema({
   },
 
   // ── Service details ──
-  serviceCategory: {
-    type: String,
-    required: [true, 'Service category is required']
-  },
-  subService: {
-    type: String,
-    required: [true, 'Sub-service is required']
-  },
-  serviceDescription: {
-    type: String,
-    required: [true, 'Service description is required']
-  },
+  serviceCategory: { type: String, required: true },
+  subService: { type: String, required: true },
+  serviceDescription: { type: String, required: true },
 
-  // ── Pricing (hourlyRate is now optional, defaults to 0) ──
-  hourlyRate: {
-    type: Number,
-    min: 0,
-    default: 0,
-    required: false   // explicitly set to false (or omit)
-  },
-  estimatedHours: {
-    type: Number,
-    default: 1,
-    min: 0.5
-  },
-  totalAmount: {
-    type: Number,
-    required: true,
-    min: 0
-  },
+  // ── Pricing (optional) ──
+  hourlyRate: { type: Number, min: 0, default: 0 },
+  estimatedHours: { type: Number, default: 1, min: 0.5 },
+  totalAmount: { type: Number, required: true, min: 0 },
 
   // ── Scheduling ──
-  preferredDate: {
-    type: Date,
-    required: [true, 'Preferred date is required']
-  },
-  preferredTime: {
-    type: String,
-    required: [true, 'Preferred time is required']
-  },
-  duration: {
-    type: Number,
-    default: 1
-  },
+  preferredDate: { type: Date, required: true },
+  preferredTime: { type: String, required: true },
+  duration: { type: Number, default: 1 },
 
   // ── Location ──
-  location: {
-    address: {
-      type: String,
-      required: true
-    }
-  },
+  location: { address: { type: String, required: true } },
 
   // ── Status & Payment ──
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show'],
+    enum: [
+      'pending',              // initial
+      'quoted',               // technician sent quotation
+      'agreed',               // client accepted
+      'materials_delivered',  // technician delivered materials
+      'materials_confirmed',  // client confirmed materials
+      'in_progress',          // work started
+      'work_completed',       // technician finished work
+      'labor_paid',           // technician received labor payment
+      'completed',            // client rated – final
+      'cancelled',
+      'no-show'
+    ],
     default: 'pending'
   },
   paymentStatus: {
@@ -83,55 +59,73 @@ const bookingSchema = new mongoose.Schema({
     enum: ['cash', 'mpesa', 'card', 'bank-transfer'],
     default: 'cash'
   },
-  paymentReference: {
-    type: String,
-    default: ''
-  },
+  paymentReference: { type: String, default: '' },
 
   // ── Notes ──
-  clientNotes: {
-    type: String,
-    maxlength: 500
-  },
-  technicianNotes: {
-    type: String,
-    maxlength: 500
-  },
-  adminNotes: {
-    type: String,
-    maxlength: 500
-  },
+  clientNotes: { type: String, maxlength: 500 },
+  technicianNotes: { type: String, maxlength: 500 },
+  adminNotes: { type: String, maxlength: 500 },
 
   // ── Timestamps for status changes ──
   confirmedAt: Date,
   startedAt: Date,
-  completedAt: Date,
+  workCompletedAt: Date,        // NEW: technician says job done
+  completedAt: Date,            // final (after rating)
   cancelledAt: Date,
-  cancelledBy: {
-    type: String,
-    enum: ['client', 'technician', 'admin', 'system']
-  },
+  cancelledBy: { type: String, enum: ['client', 'technician', 'admin', 'system'] },
   cancellationReason: String,
 
   // ── Ratings ──
-  clientRating: {
-    type: Number,
-    min: 1,
-    max: 5
+  clientRating: { type: Number, min: 1, max: 5 },
+  clientReview: { type: String, maxlength: 500 },
+  technicianRating: { type: Number, min: 1, max: 5 },
+  technicianReview: { type: String, maxlength: 500 },
+
+  // ── Quotation ──────────────────────────────────────────────────
+  quotation: {
+    totalCost: { type: Number, min: 0, default: 0 },
+    laborCost: { type: Number, min: 0, default: 0 },
+    materialsCost: { type: Number, min: 0, default: 0 },
+    sentAt: Date,
+    acceptedAt: Date,
+    rejectedAt: Date,
+    rejectionReason: String,
   },
-  clientReview: {
-    type: String,
-    maxlength: 500
+
+  // ── Materials ──────────────────────────────────────────────────
+  materials: {
+    providedByClient: { type: Boolean, default: false },
+    moneyReceivedAt: Date,        // technician acknowledges client paid for materials
+    deliveredAt: Date,            // technician confirms materials delivered
+    confirmedByClientAt: Date,    // client confirms materials received
+    notes: String,
   },
-  technicianRating: {
-    type: Number,
-    min: 1,
-    max: 5
+
+  // ── Labor Payment ─────────────────────────────────────────────
+  laborPayment: {
+    confirmedAt: Date,
+    amount: { type: Number, min: 0, default: 0 },
+    notes: String,
   },
-  technicianReview: {
-    type: String,
-    maxlength: 500
+
+  // ── Commission (5% of labor) ─────────────────────────────────
+  commission: {
+    amount: { type: Number, min: 0, default: 0 },
+    status: {
+      type: String,
+      enum: ['pending', 'invoiced', 'paid'],
+      default: 'pending'
+    },
+    invoicedAt: Date,
+    paidAt: Date,
   },
+
+  // ── Payment confirmation (for simplified flow, kept for compatibility) ──
+  paymentConfirmed: { type: Boolean, default: false },
+  paymentConfirmedAt: Date,
+  paymentConfirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  paymentAmountReceived: { type: Number, min: 0, default: null },
+  paymentConfirmationNote: { type: String, maxlength: 200 },
 
   // ── Notifications ──
   notifications: {
@@ -140,47 +134,16 @@ const bookingSchema = new mongoose.Schema({
     lastNotificationSent: Date
   },
 
-  // In models/Booking.js – add these fields inside the schema definition
+  isActive: { type: Boolean, default: true }
+}, { timestamps: true });
 
-paymentConfirmed: {
-  type: Boolean,
-  default: false
-},
-paymentConfirmedAt: Date,
-paymentConfirmedBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'User'
-},
-paymentAmountReceived: {
-  type: Number,
-  min: 0,
-  default: null
-},
-paymentConfirmationNote: {
-  type: String,
-  maxlength: 200
-},
-
-  // ── System ──
-  isActive: {
-    type: Boolean,
-    default: true
-  }
-}, {
-  timestamps: true
-});
-
-// ============================================================
-// INDEXES
-// ============================================================
+// ─── Indexes ──────────────────────────────────────────────────
 bookingSchema.index({ clientId: 1, createdAt: -1 });
 bookingSchema.index({ technicianId: 1, createdAt: -1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ preferredDate: 1 });
 
-// ============================================================
-// VIRTUALS
-// ============================================================
+// ─── Virtuals ──────────────────────────────────────────────────
 bookingSchema.virtual('isCancellable').get(function() {
   return ['pending', 'confirmed'].includes(this.status);
 });
@@ -188,9 +151,7 @@ bookingSchema.virtual('durationMinutes').get(function() {
   return this.duration * 60;
 });
 
-// ============================================================
-// METHODS
-// ============================================================
+// ─── Methods ──────────────────────────────────────────────────
 bookingSchema.methods.confirm = async function() {
   this.status = 'confirmed';
   this.confirmedAt = new Date();
@@ -198,7 +159,7 @@ bookingSchema.methods.confirm = async function() {
 };
 
 bookingSchema.methods.start = async function() {
-  this.status = 'in-progress';
+  this.status = 'in_progress';
   this.startedAt = new Date();
   return this.save();
 };
@@ -225,9 +186,7 @@ bookingSchema.methods.markPaymentComplete = async function(reference) {
   return this.save();
 };
 
-// ============================================================
-// STATICS
-// ============================================================
+// ─── Statics ──────────────────────────────────────────────────
 bookingSchema.statics.getUpcomingForTechnician = async function(technicianId, limit = 10) {
   return this.find({
     technicianId,
@@ -246,18 +205,14 @@ bookingSchema.statics.getHistoryForClient = async function(clientId, limit = 20)
     .populate('technicianId', 'businessName');
 };
 
-// ============================================================
-// PRE‑SAVE HOOKS – FIXED (async, no next)
-// ============================================================
+// ─── Pre‑save hooks ──────────────────────────────────────────
 bookingSchema.pre('save', async function() {
-  // Calculate totalAmount if hourlyRate or estimatedHours changed
   if (this.isModified('hourlyRate') || this.isModified('estimatedHours')) {
     this.totalAmount = this.hourlyRate * this.estimatedHours;
   }
 });
 
 bookingSchema.pre('save', async function() {
-  // Validate that preferredDate is not in the past
   if (this.preferredDate && this.preferredDate < new Date()) {
     throw new Error('Preferred date cannot be in the past');
   }

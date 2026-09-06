@@ -13,11 +13,25 @@ const { auth } = require('../middleware/auth');
  * 
  * IMPORTANT: This route must be public and use raw body parser.
  * The raw body is required for signature verification.
- * 
- * The webhook is called by Paystack to notify your server about
- * successful payments, so it cannot be behind authentication.
  */
-router.post('/webhook', subscriptionController.paystackWebhook);
+router.post(
+  '/webhook',
+  express.raw({ type: 'application/json' }),
+  subscriptionController.paystackWebhook
+);
+
+/**
+ * M-Pesa Callback from Safaricom
+ * @route POST /api/subscription/mpesa-callback
+ * 
+ * This endpoint is called by Safaricom after an STK Push transaction.
+ * It must be public and expects JSON payload from Safaricom.
+ */
+router.post(
+  '/mpesa-callback',
+  express.json({ type: 'application/json' }),
+  subscriptionController.mpesaCallback
+);
 
 // ============================================================
 // PROTECTED ROUTES (require authentication)
@@ -45,8 +59,12 @@ router.get('/current', subscriptionController.getCurrentSubscription);
 router.post('/trial', subscriptionController.activateTrial);
 
 /**
- * Initiate Paystack payment for subscription upgrade
+ * Initiate payment for subscription upgrade
  * @route POST /api/subscription/upgrade
+ * 
+ * Accepts: { planId, paymentMethod: 'card' | 'mpesa', phoneNumber?, autoRenew? }
+ * - Card → Paystack (returns authorization_url)
+ * - M-Pesa → Daraja STK Push (returns checkoutRequestID)
  */
 router.post('/upgrade', subscriptionController.upgradeSubscription);
 
@@ -63,12 +81,17 @@ router.put('/cancel-auto-renew', subscriptionController.cancelAutoRenew);
 router.get('/history', subscriptionController.getSubscriptionHistory);
 
 /**
- * Verify a payment after callback (optional)
+ * Verify a Paystack payment after callback (fallback)
  * @route GET /api/subscription/verify?reference=xxx
- * 
- * Called by the frontend after the user returns from Paystack.
- * This is a fallback – the webhook is the primary source of truth.
  */
 router.get('/verify', subscriptionController.verifyPayment);
+
+/**
+ * Poll M-Pesa transaction status
+ * @route GET /api/subscription/mpesa-status?checkoutRequestID=xxx
+ * 
+ * Frontend polls this endpoint to confirm STK Push success/failure.
+ */
+router.get('/mpesa-status', subscriptionController.mpesaStatus);
 
 module.exports = router;

@@ -1,50 +1,74 @@
 const express = require('express');
 const router = express.Router();
 const { auth } = require('../middleware/auth'); // your auth middleware
-const {
-  createBooking,
-  getMyBookings,
-  getBooking,
-  updateBookingStatus,
-  confirmBooking,
-  startBooking,
-  completeBooking,
-  rateTechnician,
-  cancelBooking,
-  confirmPayment,              // ✅ NEW import
-} = require('../controllers/bookingratingController');
+const bookingController = require('../controllers/bookingController');
 
+// ──────────────────────────────────────────────────────────────
 // All booking routes require authentication
+// ──────────────────────────────────────────────────────────────
 router.use(auth);
 
-// Create booking (client)
-router.post('/', createBooking);
+// ──────────────────────────────────────────────────────────────
+// BASIC CRUD OPERATIONS (unchanged)
+// ──────────────────────────────────────────────────────────────
 
-// Get user's bookings (client or technician)
-router.get('/my-bookings', getMyBookings);
+// Create a new booking (client only)
+router.post('/', bookingController.createBooking);
 
-// Get single booking
-router.get('/:bookingId', getBooking);
+// Get logged‑in user's bookings (client or technician)
+router.get('/my-bookings', bookingController.getMyBookings);
 
-// Update status (generic – but with permission checks)
-router.patch('/:bookingId/status', updateBookingStatus);
+// Get a single booking by ID (with permission checks)
+router.get('/:bookingId', bookingController.getBooking);
 
-// Confirm booking (technician)
-router.post('/:bookingId/confirm', confirmBooking);
+// Cancel a booking (client or technician – only if pending or quoted)
+router.post('/:bookingId/cancel', bookingController.cancelBooking);
 
-// Start booking (technician)
-router.post('/:bookingId/start', startBooking);
+// ──────────────────────────────────────────────────────────────
+// 12‑STEP ADVANCED BOOKING FLOW
+// ──────────────────────────────────────────────────────────────
 
-// Complete booking (client or technician)
-router.post('/:bookingId/complete', completeBooking);
+// 1. Technician sends a quotation
+router.post('/:bookingId/quotation', bookingController.sendQuotation);
 
-// Rate technician (client only, after completion)
-router.post('/:bookingId/rate', rateTechnician);
+// 2. Client accepts quotation
+router.post('/:bookingId/accept-quotation', bookingController.acceptQuotation);
 
-// Cancel booking (client or technician)
-router.post('/:bookingId/cancel', cancelBooking);
+// 3. Client rejects quotation (cancels booking)
+router.post('/:bookingId/reject-quotation', bookingController.rejectQuotation);
 
-// ✅ NEW: Confirm payment (technician only, when job is in progress)
-router.post('/:bookingId/confirm-payment', confirmPayment);
+// 4. Technician sets material source (client provides OR technician buys)
+router.post('/:bookingId/material-source', bookingController.setMaterialSource);
+
+// 5. Technician confirms money received for materials (if technician buys)
+router.post('/:bookingId/materials-money-received', bookingController.confirmMaterialsMoneyReceived);
+
+// 6. Technician confirms materials delivered
+router.post('/:bookingId/materials-delivered', bookingController.confirmMaterialsDelivered);
+
+// 7. Client confirms materials received
+router.post('/:bookingId/materials-received', bookingController.confirmMaterialsReceived);
+
+// 8. Technician starts work (only after materials confirmed)
+router.post('/:bookingId/start', bookingController.startBooking);
+
+// 9. Technician marks work as completed
+router.post('/:bookingId/complete-work', bookingController.completeWork);
+
+// 10. Technician confirms labour payment received (calculates 5% commission)
+router.post('/:bookingId/confirm-labor-payment', bookingController.confirmLaborPayment);
+
+// 11. Client rates technician (only after labour payment confirmed)
+router.post('/:bookingId/rate', bookingController.rateTechnician);
+
+// ──────────────────────────────────────────────────────────────
+// DEPRECATED / REMOVED ENDPOINTS
+// ──────────────────────────────────────────────────────────────
+// The following endpoints are no longer used in the new flow:
+// - PATCH /:bookingId/status        (replaced by step‑specific endpoints)
+// - POST /:bookingId/confirm        (replaced by accept/reject quotation)
+// - POST /:bookingId/complete       (replaced by complete-work + confirm-labor-payment + rate)
+// - POST /:bookingId/confirm-payment (replaced by confirm-labor-payment)
+// They have been removed to avoid confusion and accidental calls.
 
 module.exports = router;
