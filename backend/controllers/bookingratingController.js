@@ -1148,3 +1148,254 @@ exports.rateTechnician = async (req, res) => {
     handleControllerError(res, error, 'Failed to submit rating.', 500, 'rateTechnician');
   }
 };
+
+/**
+ * Get pending commissions (optionally filtered by month).
+ * GET /api/bookings/commissions?month=YYYY-MM
+ */
+exports.getTechnicianCommissions = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in.',
+        401,
+        'getTechnicianCommissions'
+      );
+    }
+
+    if (req.user.role !== 'technician') {
+      return handleControllerError(
+        res,
+        new Error('Forbidden'),
+        'Only technicians can view commissions.',
+        403,
+        'getTechnicianCommissions'
+      );
+    }
+
+    const { month } = req.query; // e.g., '2026-09'
+
+    const technicianId = await getTechnicianId(userId);
+
+    // Build filter
+    let filter = {
+      technicianId: technicianId,
+      'commission.status': 'pending',
+    };
+
+    if (month) {
+      const start = new Date(month + '-01T00:00:00.000Z');
+      const end = new Date(month + '-01T23:59:59.999Z');
+      end.setMonth(end.getMonth() + 1);
+      filter.createdAt = { $gte: start, $lt: end };
+    }
+
+    const bookings = await Booking.find(filter)
+      .select('_id serviceCategory subService quotation.laborCost commission.amount commission.status createdAt')
+      .lean();
+
+    const totalPending = bookings.reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
+
+    // Group by month for dashboard summary
+    const byMonth = {};
+    bookings.forEach(b => {
+      const m = new Date(b.createdAt).toISOString().slice(0, 7);
+      if (!byMonth[m]) byMonth[m] = { count: 0, total: 0 };
+      byMonth[m].count += 1;
+      byMonth[m].total += b.commission?.amount || 0;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          totalPending,
+          count: bookings.length,
+          byMonth,
+        },
+        commissions: bookings.map(b => ({
+          bookingId: b._id,
+          service: b.serviceCategory,
+          subService: b.subService,
+          laborCost: b.quotation?.laborCost || 0,
+          commissionAmount: b.commission?.amount || 0,
+          createdAt: b.createdAt,
+        })),
+      },
+    });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to fetch commissions.', 500, 'getTechnicianCommissions');
+  }
+};
+
+/**
+ * Submit pending commissions for invoicing (technician).
+ * POST /api/bookings/commissions/submit
+ * Body: { month: 'YYYY-MM' } optional – if omitted, all pending are submitted.
+ */
+exports.submitCommissionInvoices = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in.',
+        401,
+        'submitCommissionInvoices'
+      );
+    }
+
+    if (req.user.role !== 'technician') {
+      return handleControllerError(
+        res,
+        new Error('Forbidden'),
+        'Only technicians can submit commissions.',
+        403,
+        'submitCommissionInvoices'
+      );
+    }
+
+    const { month } = req.body; // optional: 'YYYY-MM'
+
+    const technicianId = await getTechnicianId(userId);
+
+    let filter = {
+      technicianId: technicianId,
+      'commission.status': 'pending',
+    };
+
+    if (month) {
+      const start = new Date(month + '-01T00:00:00.000Z');
+      const end = new Date(month + '-01T23:59:59.999Z');
+      end.setMonth(end.getMonth() + 1);
+      filter.createdAt = { $gte: start, $lt: end };
+    }
+
+    // Check if there are any pending
+    const count = await Booking.countDocuments(filter);
+    if (count === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No pending commissions to submit.',
+      });
+    }
+
+    // Update status from 'pending' to 'invoiced'
+    const result = await Booking.updateMany(
+      filter,
+      {
+        $set: {
+          'commission.status': 'invoiced',
+          'commission.invoicedAt': new Date(),
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      message: `${result.modifiedCount} commission(s) submitted for invoicing.`,
+      data: {
+        submittedCount: result.modifiedCount,
+      },
+    });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to submit commissions.', 500, 'submitCommissionInvoices');
+  }
+};
+
+/**
+ * Get commission history (invoiced & paid) with pagination.
+ * GET /api/bookings/commissions/history?status=invoiced,paid&page=1&limit=20
+ */
+exports.getCommissionHistory = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id || req.user._id;
+    if (!userId) {
+      return handleControllerError(
+        res,
+        new Error('Authentication required'),
+        'You must be logged in.',
+        401,
+        'getCommissionHistory'
+      );
+    }
+
+    if (req.user.role !== 'technician') {
+      return handleControllerError(
+        res,
+        new Error('Forbidden'),
+        'Only technicians can view their commission history.',
+        403,
+        'getCommissionHistory'
+      );
+    }
+
+    const { status, page = 1, limit = 20 } = req.query;
+    const technicianId = await getTechnicianId(userId);
+
+    let filter = { technicianId };
+    // Commission status filter: default to invoiced and paid
+    const statuses = status ? status.split(',') : ['invoiced', 'paid'];
+    filter['commission.status'] = { $in: statuses };
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit) || 20;
+
+    const [bookings, total] = await Promise.all([
+      Booking.find(filter)
+        .select('_id serviceCategory subService quotation.laborCost commission.amount commission.status commission.invoicedAt commission.paidAt createdAt')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Booking.countDocuments(filter),
+    ]);
+
+    const summary = bookings.reduce(
+      (acc, b) => {
+        const status = b.commission?.status;
+        if (status === 'invoiced') acc.invoicedCount += 1;
+        if (status === 'paid') acc.paidCount += 1;
+        acc.totalAmount += b.commission?.amount || 0;
+        return acc;
+      },
+      { invoicedCount: 0, paidCount: 0, totalAmount: 0 }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        history: bookings.map(b => ({
+          bookingId: b._id,
+          service: b.serviceCategory,
+          subService: b.subService,
+          laborCost: b.quotation?.laborCost || 0,
+          commissionAmount: b.commission?.amount || 0,
+          status: b.commission?.status,
+          invoicedAt: b.commission?.invoicedAt,
+          paidAt: b.commission?.paidAt,
+          createdAt: b.createdAt,
+        })),
+        pagination: {
+          page: parseInt(page),
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum),
+        },
+        summary,
+      },
+    });
+  } catch (error) {
+    handleControllerError(res, error, 'Failed to fetch commission history.', 500, 'getCommissionHistory');
+  }
+};
+
+/**
+ * (Optional) Admin endpoint to mark invoiced commissions as paid.
+ * PATCH /api/bookings/commissions/:commissionId/pay
+ * This can be added later if needed.
+ */

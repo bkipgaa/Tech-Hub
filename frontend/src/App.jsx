@@ -16,6 +16,7 @@ import CreateTechnicianProfile from './pages/CreateTechnicianProfile';
 import AdminLogin from './pages/Admin/AdminLogin';
 import AdminRegister from './pages/Admin/AdminRegister';
 import TechnicianDashboard from './components/technician/TechnicianDashboard';
+import TechnicianCommission from './components/technician/TechnicianCommission';
 import SubscriptionManager from './components/technician/subscriptionManager';
 import AdminDashboard from './components/admin/adminDashboard';
 import TechnicianList from './components/admin/TechnicianList';
@@ -113,7 +114,12 @@ function App() {
               </TechnicianRoute>
             } />
 
-            
+            <Route path="commission" element={
+              <TechnicianRoute>
+                <TechnicianCommission />
+              </TechnicianRoute>
+            } />
+
 <Route path="jobs/:jobId" element={<JobDetails />} />
 <Route path="post-job" element={
   <PrivateRoute>

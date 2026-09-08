@@ -3,6 +3,7 @@ const router = express.Router();
 const { auth } = require('../middleware/auth'); // your auth middleware
 const bookingController = require('../controllers/bookingratingController');
 
+
 // ──────────────────────────────────────────────────────────────
 // All booking routes require authentication
 // ──────────────────────────────────────────────────────────────
@@ -60,6 +61,17 @@ router.post('/:bookingId/confirm-labor-payment', bookingController.confirmLaborP
 
 // 11. Client rates technician (only after labour payment confirmed)
 router.post('/:bookingId/rate', bookingController.rateTechnician);
+
+// ─── COMMISSION MANAGEMENT ────────────────────────────────────
+
+// Get pending commissions (optionally filter by month)
+router.get('/commissions', bookingController.getTechnicianCommissions);
+
+// Submit pending commissions for invoicing (technician)
+router.post('/commissions/submit', bookingController.submitCommissionInvoices);
+
+// Get commission history (invoiced & paid) with pagination
+router.get('/commissions/history', bookingController.getCommissionHistory);
 
 // ──────────────────────────────────────────────────────────────
 // DEPRECATED / REMOVED ENDPOINTS

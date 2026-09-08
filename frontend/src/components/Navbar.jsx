@@ -15,7 +15,7 @@
  * Access Control:
  * - Public links: Home, Services, Search, Book Service
  * - Authenticated users: Profile, Messages, Logout
- * - Technicians: Dashboard, Subscription
+ * - Technicians: Dashboard, Subscription, Commissions
  * - Admins: Admin Panel, View all technicians
  */
 
@@ -197,6 +197,17 @@ const Navbar = () => {
                   >
                     Subscription
                   </Link>
+                  {/* ─── NEW: COMMISSIONS LINK (TECHNICIANS ONLY) ── */}
+                  {isTechnician && (
+                    <Link
+                      to="/technician-dashboard/commissions"
+                      className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        isActive('/technician-dashboard/commissions') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      Commissions
+                    </Link>
+                  )}
                 </>
               )}
 
@@ -308,14 +319,25 @@ const Navbar = () => {
                         )}
 
                         {user.role === 'technician' && hasTechnicianProfile && (
-                          <Link
-                            to="/technician-dashboard"
-                            onClick={() => setIsProfileMenuOpen(false)}
-                            className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                          >
-                            <LayoutDashboard className="w-4 h-4 text-gray-500" />
-                            <span>Technician Dashboard</span>
-                          </Link>
+                          <>
+                            <Link
+                              to="/technician-dashboard"
+                              onClick={() => setIsProfileMenuOpen(false)}
+                              className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                            >
+                              <LayoutDashboard className="w-4 h-4 text-gray-500" />
+                              <span>Technician Dashboard</span>
+                            </Link>
+                            {/* ─── NEW: COMMISSIONS LINK IN DROPDOWN ── */}
+                            <Link
+                              to="/technician-dashboard/commissions"
+                              onClick={() => setIsProfileMenuOpen(false)}
+                              className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              <CreditCard className="w-4 h-4 text-gray-500" />
+                              <span>Commissions</span>
+                            </Link>
+                          </>
                         )}
 
                         {isAdmin && (
@@ -446,6 +468,18 @@ const Navbar = () => {
                     >
                       <span className="font-medium">Subscription</span>
                     </Link>
+                    {/* ─── NEW: COMMISSIONS LINK (TECHNICIANS ONLY) ── */}
+                    {isTechnician && (
+                      <Link
+                        to="/technician-dashboard/commissions"
+                        onClick={closeMobileMenu}
+                        className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                          isActive('/technician-dashboard/commissions') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="font-medium">Commissions</span>
+                      </Link>
+                    )}
                   </>
                 )}
 
@@ -499,6 +533,19 @@ const Navbar = () => {
                         <Wrench className="w-5 h-5 text-gray-500" />
                         <span>Create Technician Profile</span>
                       </Link>
+                    )}
+
+                    {user.role === 'technician' && hasTechnicianProfile && (
+                      <>
+                        <Link to="/technician-dashboard" onClick={closeMobileMenu} className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg">
+                          <LayoutDashboard className="w-5 h-5 text-gray-500" />
+                          <span>Dashboard</span>
+                        </Link>
+                        <Link to="/technician-dashboard/commissions" onClick={closeMobileMenu} className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg">
+                          <CreditCard className="w-5 h-5 text-gray-500" />
+                          <span>Commissions</span>
+                        </Link>
+                      </>
                     )}
 
                     <button onClick={handleLogout} className="flex items-center space-x-3 px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg">
