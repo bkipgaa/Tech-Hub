@@ -33,6 +33,9 @@ exports.getCurrentSubscription = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Technician profile not found' });
     }
 
+    // ✅ Check and downgrade if the paid plan has expired
+    await downgradeExpiredSubscription(technician);
+
     const subscription = technician.subscription || {
       plan: 'free',
       isActive: true,
@@ -46,10 +49,8 @@ exports.getCurrentSubscription = async (req, res) => {
     );
 
     let daysRemaining = 0;
-    if (technician.subscription) {
-      const end = technician.subscription.isTrial
-        ? technician.subscription.trialEndDate
-        : technician.subscription.endDate;
+    if (technician.subscription && (technician.subscription.plan !== 'free' && technician.subscription.plan !== 'trial')) {
+      const end = technician.subscription.endDate;
       if (end) {
         daysRemaining = Math.ceil((new Date(end) - new Date()) / (1000 * 60 * 60 * 24));
         if (daysRemaining < 0) daysRemaining = 0;
@@ -582,3 +583,38 @@ function getVisibilityRadius(technician) {
   if (technician.subscription?.isTrial) return subscriptionPlans.trial.visibilityRadius;
   return subscriptionPlans[plan]?.visibilityRadius || 10;
 }
+
+/**
+ * Downgrade an expired paid subscription to the free plan.
+ * Called whenever the technician's subscription is fetched.
+ * 
+ * @param {Object} technician - The Technician document
+ * @returns {Object} - The updated technician document
+ */
+const downgradeExpiredSubscription = async (technician) => {
+  if (!technician.subscription) return technician;
+
+  const { plan, endDate } = technician.subscription;
+  const isPaidPlan = plan && plan !== 'free' && plan !== 'trial';
+
+  // If it's a paid plan and the endDate is in the past, downgrade to free
+  if (isPaidPlan && endDate && new Date(endDate) < new Date()) {
+    console.log(`🔄 Downgrading technician ${technician._id} from ${plan} to free plan due to expiry.`);
+
+    technician.subscription = {
+      plan: 'free',
+      planDetails: subscriptionPlans.free,
+      startDate: new Date(),
+      endDate: null,              // no expiry
+      isTrial: false,
+      autoRenew: false,
+      // Keep payment history for records
+      paymentHistory: technician.subscription.paymentHistory || []
+    };
+
+    technician.serviceRadius = subscriptionPlans.free.visibilityRadius; // 10 km
+    await technician.save();
+  }
+
+  return technician;
+};
