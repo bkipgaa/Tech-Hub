@@ -350,28 +350,31 @@ function getVisibilityDescription(planId) {
   return `${plan.visibilityRadius}km visibility radius${context}`;
 }
 
+/**
+ * Determine if a subscription plan is active.
+ * 
+ * - free and trial: ALWAYS active (never expire)
+ * - paid plans: active only if endDate is in the future
+ * 
+ * @param {string} plan - The plan ID (e.g., 'free', 'trial', 'basic')
+ * @param {Date|null} endDate - Subscription end date for paid plans
+ * @param {Date|null} trialEndDate - (ignored for trial now, kept for compatibility)
+ * @returns {boolean} - True if the plan is active
+ */
 function isPlanActive(plan, endDate, trialEndDate) {
   const now = new Date();
 
-  // Trial: active only if trialEndDate exists and is in the future
-  if (plan === 'trial') {
-    if (trialEndDate) {
-      return now < new Date(trialEndDate);
-    }
-    return false; // no trial end date = inactive
+  // Free and trial are ALWAYS active (never expire)
+  if (plan === 'free' || plan === 'trial') {
+    return true;
   }
 
-  // Free: never active (it's a fallback/dormant state)
-  if (plan === 'free') {
-    return false;
-  }
-
-  // Paid plans: active if endDate exists and is in the future
+  // Paid plans: active only if endDate exists and is in the future
   if (endDate) {
     return now < new Date(endDate);
   }
 
-  // Any other case: inactive
+  // Any other case (shouldn't happen): inactive
   return false;
 }
 
