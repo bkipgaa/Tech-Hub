@@ -114,7 +114,7 @@ function App() {
               </TechnicianRoute>
             } />
 
-            <Route path="commission" element={
+            <Route path="technician-dashboard/commissions" element={
               <TechnicianRoute>
                 <TechnicianCommission />
               </TechnicianRoute>
