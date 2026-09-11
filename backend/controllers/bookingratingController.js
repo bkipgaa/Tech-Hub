@@ -1259,7 +1259,7 @@ exports.submitCommissionInvoices = async (req, res) => {
       );
     }
 
-    const { month } = req.body; // optional: 'YYYY-MM'
+    const { month } = req.body || {}; // optional: 'YYYY-MM'
 
     const technicianId = await getTechnicianId(userId);
 
