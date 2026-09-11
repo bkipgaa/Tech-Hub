@@ -11,7 +11,11 @@ const PaymentCallback = () => {
 
   useEffect(() => {
     const verifyPayment = async () => {
-      const reference = searchParams.get('reference');
+      // Paystack appends 'reference' (or 'trxref' on some channels).
+      // Our backend preserves the 'type' param we added to callback_url.
+      const reference =
+        searchParams.get('reference') || searchParams.get('trxref');
+      const type = searchParams.get('type'); // 'commission' | null (= subscription)
 
       if (!reference) {
         setStatus('error');
@@ -19,26 +23,57 @@ const PaymentCallback = () => {
         return;
       }
 
-      try {
-        // Call your backend verification endpoint
-        const response = await api.get(`/subscription/verify?reference=${reference}`);
-        const { data } = response.data;
+      // ── Route-specific config ─────────────────────────────────
+      const isCommission = type === 'commission';
 
-        if (data.status === 'success') {
+      const verifyUrl = isCommission
+        ? `/payments/commissions/verify?reference=${reference}`
+        : `/subscription/verify?reference=${reference}`;
+
+      const redirectTo = isCommission
+        ? '/technician/commissions' // ← adjust if your route differs
+        : '/subscription';
+
+      const redirectLabel = isCommission
+        ? 'commission dashboard'
+        : 'subscription page';
+
+      const successMessage = isCommission
+        ? 'Payment successful! Your commissions have been marked as paid.'
+        : 'Payment successful! Your subscription has been updated.';
+
+      const failureMessage = isCommission
+        ? 'Payment was not successful. Your commissions remain unpaid.'
+        : 'Payment was not successful. Please try again.';
+
+      try {
+        const response = await api.get(verifyUrl);
+        const payload = response.data;
+
+        // Your subscription endpoint returns { success, data: { status } },
+        // commission endpoint returns { success, data }.
+        // Normalize both.
+        const isSuccess = isCommission
+          ? payload.success === true
+          : payload.data?.status === 'success';
+
+        if (isSuccess) {
           setStatus('success');
-          setMessage('Payment successful! Your subscription has been updated.');
-          // Redirect to subscription page after 2 seconds
-          setTimeout(() => navigate('/subscription'), 2000);
+          setMessage(successMessage);
+          setTimeout(() => navigate(redirectTo), 2000);
         } else {
           setStatus('error');
-          setMessage('Payment was not successful. Please try again.');
-          setTimeout(() => navigate('/subscription'), 3000);
+          setMessage(payload.message || failureMessage);
+          setTimeout(() => navigate(redirectTo), 3000);
         }
       } catch (error) {
         console.error('Verification error:', error);
         setStatus('error');
-        setMessage('Could not verify payment. Please check your subscription status.');
-        setTimeout(() => navigate('/subscription'), 3000);
+        setMessage(
+          error.response?.data?.message ||
+            'Could not verify payment. Please check your account status.'
+        );
+        setTimeout(() => navigate(redirectTo), 3000);
       }
     };
 
@@ -51,26 +86,38 @@ const PaymentCallback = () => {
         {status === 'loading' && (
           <>
             <Loader2 className="w-16 h-16 mx-auto text-blue-600 animate-spin" />
-            <h2 className="text-xl font-semibold mt-4">Verifying your payment...</h2>
-            <p className="text-gray-500 mt-2">Please wait while we confirm your transaction.</p>
+            <h2 className="text-xl font-semibold mt-4">
+              Verifying your payment...
+            </h2>
+            <p className="text-gray-500 mt-2">
+              Please wait while we confirm your transaction.
+            </p>
           </>
         )}
 
         {status === 'success' && (
           <>
             <CheckCircle className="w-16 h-16 mx-auto text-green-600" />
-            <h2 className="text-xl font-semibold mt-4 text-green-700">Payment Successful!</h2>
+            <h2 className="text-xl font-semibold mt-4 text-green-700">
+              Payment Successful!
+            </h2>
             <p className="text-gray-600 mt-2">{message}</p>
-            <p className="text-sm text-gray-400 mt-4">Redirecting to subscription page...</p>
+            <p className="text-sm text-gray-400 mt-4">
+              Redirecting...
+            </p>
           </>
         )}
 
         {status === 'error' && (
           <>
             <AlertCircle className="w-16 h-16 mx-auto text-red-600" />
-            <h2 className="text-xl font-semibold mt-4 text-red-700">Payment Verification Failed</h2>
+            <h2 className="text-xl font-semibold mt-4 text-red-700">
+              Payment Verification Failed
+            </h2>
             <p className="text-gray-600 mt-2">{message}</p>
-            <p className="text-sm text-gray-400 mt-4">Redirecting to subscription page...</p>
+            <p className="text-sm text-gray-400 mt-4">
+              Redirecting...
+            </p>
           </>
         )}
       </div>

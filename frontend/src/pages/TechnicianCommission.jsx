@@ -1,30 +1,29 @@
 /**
  * TechnicianCommission.jsx
  * =========================
- * Page for technicians to view and submit pending commissions for invoicing.
- * 
- * Features:
- * - Shows total pending commission amount and count.
- * - Lists all bookings with commission details.
- * - "Submit for Payment" button to mark all pending commissions as "invoiced".
- * - Confirmation modal before submission.
- * - Responsive design with error handling.
- * 
- * @version 2.0.0 – Updated to match new API design
+ * Page for technicians to view and pay pending commissions via Paystack.
+ *
+ * Flow:
+ *   1. Load pending commissions (GET /api/bookings/commissions)
+ *   2. Technician clicks "Pay with Card"
+ *   3. POST /api/payments/commissions/initialize → returns authorization_url
+ *   4. Redirect to Paystack hosted checkout
+ *   5. Paystack redirects back to /payment-callback?type=commission&reference=...
+ *   6. Callback page verifies via GET /api/payments/commissions/verify
+ *   7. Webhook also fires (idempotent) and marks bookings paid
+ *
+ * @version 3.0.0 – Paystack payment flow
  */
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
-  DollarSign,
-  Calendar,
-  Briefcase,
   AlertCircle,
-  CheckCircle,
   Loader2,
   CreditCard,
   ArrowLeft,
+  ShieldCheck,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -40,12 +39,10 @@ const TechnicianCommission = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // ─── FETCH COMMISSIONS ──────────────────────────────────────
-
   const fetchCommissions = async () => {
     setLoading(true);
     setError('');
     try {
-      // GET /api/bookings/commissions
       const response = await api.get('/bookings/commissions');
       if (response.data.success) {
         setCommissionsData(response.data.data);
@@ -54,14 +51,16 @@ const TechnicianCommission = () => {
       }
     } catch (err) {
       console.error('Fetch commissions error:', err);
-      setError('Could not load commissions. Please try again.');
+      setError(
+        err.response?.data?.message ||
+          'Could not load commissions. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Redirect if not technician
     if (user && user.role !== 'technician') {
       navigate('/');
       return;
@@ -70,33 +69,39 @@ const TechnicianCommission = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── SUBMIT COMMISSIONS FOR INVOICING ─────────────────────
-
-  const handleSubmitForPayment = async () => {
+  // ─── INITIATE PAYSTACK PAYMENT ─────────────────────────────
+  const handlePayWithCard = async () => {
     setSubmitting(true);
     setError('');
     try {
-      // POST /api/bookings/commissions/submit
-      const response = await api.post('/bookings/commissions/submit', {});
-      if (response.data.success) {
-        // Refresh after success
-        await fetchCommissions();
-        setShowConfirmModal(false);
-        // Show success message (using alert for simplicity; you can replace with a toast)
-        alert('Commissions submitted for invoicing successfully!');
-      } else {
-        setError(response.data.message || 'Submission failed.');
+      // 1. Ask backend to create a Paystack transaction for the batch
+      const response = await api.post('/payments/commissions/initialize', {});
+      const payload = response.data;
+
+      if (!payload?.success || !payload?.data?.authorization_url) {
+        throw new Error(
+          payload?.message || 'Could not start payment. Please try again.'
+        );
       }
+
+      // 2. Redirect to Paystack's hosted checkout page.
+      //    Paystack will redirect back to FRONTEND_URL/payment-callback
+      //    with ?reference=...&trxref=... appended by Paystack.
+      window.location.href = payload.data.authorization_url;
     } catch (err) {
-      console.error('Submission error:', err);
-      setError('Could not submit commissions. Please try again.');
-    } finally {
+      console.error('Payment init error:', err);
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          'Could not start payment. Please try again.'
+      );
       setSubmitting(false);
     }
+    // Note: on success we redirect, so no setSubmitting(false) needed here —
+    // the component unmounts. This avoids a flash of the modal.
   };
 
-  // ─── RENDER ──────────────────────────────────────────────────
-
+  // ─── RENDER: LOADING ───────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -108,7 +113,8 @@ const TechnicianCommission = () => {
     );
   }
 
-  if (error) {
+  // ─── RENDER: ERROR ─────────────────────────────────────────
+  if (error && !commissionsData) {
     return (
       <div className="min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-4xl mx-auto">
@@ -128,7 +134,6 @@ const TechnicianCommission = () => {
     );
   }
 
-  // Destructure from new response shape
   const { summary, commissions = [] } = commissionsData || {};
   const totalPending = summary?.totalPending || 0;
   const count = summary?.count || 0;
@@ -145,16 +150,24 @@ const TechnicianCommission = () => {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Commission Dashboard</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
+            Commission Dashboard
+          </h1>
         </div>
 
         {/* ─── SUMMARY CARD ───────────────────────────────────── */}
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6 mb-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm text-green-700 font-medium">Total Pending Commission</p>
-              <p className="text-3xl font-bold text-green-800">KES {totalPending.toLocaleString()}</p>
-              <p className="text-sm text-green-600 mt-1">{count} booking{count !== 1 ? 's' : ''} with pending commission</p>
+              <p className="text-sm text-green-700 font-medium">
+                Total Pending Commission
+              </p>
+              <p className="text-3xl font-bold text-green-800">
+                KES {totalPending.toLocaleString()}
+              </p>
+              <p className="text-sm text-green-600 mt-1">
+                {count} booking{count !== 1 ? 's' : ''} with pending commission
+              </p>
             </div>
             <button
               onClick={() => setShowConfirmModal(true)}
@@ -166,16 +179,20 @@ const TechnicianCommission = () => {
               }`}
             >
               <CreditCard className="w-5 h-5" />
-              Submit for Payment
+              Pay with Card
             </button>
           </div>
         </div>
 
         {/* ─── BOOKINGS LIST ──────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Pending Commission Details</h2>
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            Pending Commission Details
+          </h2>
           {commissions.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No pending commissions. Great job!</p>
+            <p className="text-gray-500 text-center py-8">
+              No pending commissions. Great job!
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -195,24 +212,38 @@ const TechnicianCommission = () => {
                         #{booking.bookingId.slice(-8).toUpperCase()}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {booking.service} <span className="text-xs text-gray-400">({booking.subService})</span>
+                        {booking.service}{' '}
+                        <span className="text-xs text-gray-400">
+                          ({booking.subService})
+                        </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">KES {booking.laborCost.toLocaleString()}</td>
-                      <td className="px-4 py-3 font-medium text-green-700">KES {booking.commissionAmount.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        KES {booking.laborCost.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-green-700">
+                        KES {booking.commissionAmount.toLocaleString()}
+                      </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
-                        {new Date(booking.createdAt).toLocaleDateString('en-KE', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
+                        {new Date(booking.createdAt).toLocaleDateString(
+                          'en-KE',
+                          {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          }
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-gray-50 font-semibold">
                   <tr>
-                    <td colSpan="3" className="px-4 py-3 text-right">Total:</td>
-                    <td className="px-4 py-3 text-green-800">KES {totalPending.toLocaleString()}</td>
+                    <td colSpan="3" className="px-4 py-3 text-right">
+                      Total:
+                    </td>
+                    <td className="px-4 py-3 text-green-800">
+                      KES {totalPending.toLocaleString()}
+                    </td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -226,44 +257,58 @@ const TechnicianCommission = () => {
       {showConfirmModal && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowConfirmModal(false)}
+          onClick={() => !submitting && setShowConfirmModal(false)}
         >
           <div
             className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Submit for Invoicing</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-4">
+              Pay Pending Commissions
+            </h3>
             <p className="text-gray-600 mb-4">
-              You are about to submit <strong>KES {totalPending.toLocaleString()}</strong> in pending commissions for invoicing.
-              This will mark them as <strong>invoiced</strong>. Once submitted, they will be processed by our team.
-              Are you sure?
+              You are about to pay{' '}
+              <strong>KES {totalPending.toLocaleString()}</strong> for{' '}
+              {count} pending commission{count !== 1 ? 's' : ''} using your
+              card via Paystack. You'll be redirected to a secure checkout
+              page to complete the payment.
             </p>
+
+            <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-800 rounded-lg text-xs mb-4">
+              <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>
+                Payment is processed securely by Paystack. We never see or
+                store your card details.
+              </span>
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                 disabled={submitting}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSubmitForPayment}
+                onClick={handlePayWithCard}
                 disabled={submitting}
                 className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Submitting...
+                    Redirecting...
                   </>
                 ) : (
                   <>
                     <CreditCard className="w-4 h-4" />
-                    Confirm & Submit
+                    Continue to Payment
                   </>
                 )}
               </button>
             </div>
+
             {error && (
               <div className="mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
