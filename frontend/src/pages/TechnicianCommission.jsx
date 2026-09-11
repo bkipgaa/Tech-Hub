@@ -77,7 +77,7 @@ const TechnicianCommission = () => {
     setError('');
     try {
       // POST /api/bookings/commissions/submit
-      const response = await api.post('/bookings/commissions/submit');
+      const response = await api.post('/bookings/commissions/submit , {}');
       if (response.data.success) {
         // Refresh after success
         await fetchCommissions();
