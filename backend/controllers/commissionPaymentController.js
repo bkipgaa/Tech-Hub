@@ -2,7 +2,7 @@
 const Booking = require('../models/Booking');
 const Technician = require('../models/Technician');
 const Paystack = require('../config/paystack'); // your existing file: module.exports = Paystack;
-const { convertToSmallestUnit } = require('../utils/currency');
+const { convertToSmallestUnit } = require('../utils/helper');
 const crypto = require('crypto');
 
 const getTechnicianId = async (userId) => {
