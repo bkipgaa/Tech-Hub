@@ -163,7 +163,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // Admin routes
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin/auth', adminRoutes);
 
 // Subscription routes (includes webhook - now raw parser is applied above)
 app.use('/api/subscription', subscriptionRoutes);
