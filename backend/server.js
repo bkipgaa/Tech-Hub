@@ -28,7 +28,7 @@ const uploads = require('./routes/upload');
 const chatRoutes = require('./routes/chatRoutes');  // ← Chat REST routes
 const bookingRoutes = require('./routes/bookingRoutes');
 const commissionPaymentRoutes = require('./routes/commissionPaymentRoutes');  // ← Commission payment routes
-const adminRoutes = require('./routes/admin');
+const adminRoutes = require('./routes/admin/index');
 // Import Socket.io chat handler
 const chatSocket = require('./socket/chatSocket');  // ← Real-time chat socket
 // Job and Application routes
@@ -163,7 +163,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // Admin routes
-app.use('/api/admin/auth', adminRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Subscription routes (includes webhook - now raw parser is applied above)
 app.use('/api/subscription', subscriptionRoutes);
