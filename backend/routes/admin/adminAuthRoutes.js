@@ -7,7 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { adminAuth } = require('../../middleware/adminAuth');
+const { adminAuth } = require('../../middleware/AdminAuth');
 const adminAuthController = require('../../controllers/admin/adminAuthController');
 
 // ── Public ──────────────────────────────────────────────────
