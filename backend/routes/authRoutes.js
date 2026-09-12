@@ -2,53 +2,63 @@
  * Authentication Routes
  * =====================
  * 
- * Public Routes:
- * - POST /register - Register as client/technician
- * - POST /register-admin - Register as admin (requires secret key)
- * - POST /login - Login for all roles
+ * User-facing authentication endpoints only (clients & technicians).
  * 
- * Private Routes (require authentication):
- * - GET /profile - Get current user profile
- * - PUT /profile - Update user profile
- * - PUT /become-technician - Upgrade to technician role
+ * Admin authentication has moved to the isolated admin panel:
+ *   → /api/admin/auth/login       (login)
+ *   → /api/admin/auth/me          (profile)
+ *   → /api/admin/auth/logout      (logout)
+ *   → /api/admin/auth/change-password
  * 
- * Admin Routes (require admin role):
- * - GET /users - Get all users
- * - PUT /users/:userId/role - Update user role
+ * Admin users live in a separate collection (AdminUser), so nothing
+ * admin-related should flow through this router.
+ * 
+ * ─────────────────────────────────────────────────────────────
+ * PUBLIC ROUTES
+ *   POST   /register
+ *   POST   /login
+ *   POST   /forgot-password
+ *   POST   /reset-password/:token
+ * 
+ * PROTECTED (any authenticated user)
+ *   GET    /profile
+ *   PUT    /profile
+ *   PUT    /become-technician
+ * ─────────────────────────────────────────────────────────────
  */
 
 const express = require('express');
 const router = express.Router();
-const { 
-  register, 
-  registerAdmin,
-  login, 
+
+const {
+  register,
+  login,
   getProfile,
-  becomeTechnician, 
+  becomeTechnician,
   updateProfile,
-  getAllUsers,
-  updateUserRole,
   forgotPassword,
-  resetPassword
+  resetPassword,
 } = require('../controllers/authcontroller');
+
 const { validateRegistration, validateLogin } = require('../middleware/validation');
-const {auth} = require('../middleware/auth');
-const adminAuth = require('../middleware/AdminAuth');
+const { auth } = require('../middleware/auth');
 
 // ==================== PUBLIC ROUTES ====================
 router.post('/register', validateRegistration, register);
-router.post('/register-admin', registerAdmin); // Secure admin registration
 router.post('/login', validateLogin, login);
 router.post('/forgot-password', forgotPassword);
-router.post('/reset-password/:token',resetPassword);
+router.post('/reset-password/:token', resetPassword);
 
-// ==================== PROTECTED ROUTES (Any authenticated user) ====================
+// ============ PROTECTED ROUTES (any authenticated user) ============
 router.get('/profile', auth, getProfile);
 router.put('/profile', auth, updateProfile);
 router.put('/become-technician', auth, becomeTechnician);
 
-// ==================== ADMIN ONLY ROUTES ====================
-router.get('/users', auth, adminAuth, getAllUsers);
-router.put('/users/:userId/role', auth, adminAuth, updateUserRole);
+// ============================================================
+// REMOVED (now handled by the separate admin panel):
+//   POST /register-admin              → use /api/admin/auth/*
+//   GET  /users                       → use /api/admin/users/*
+//   PUT  /users/:userId/role          → use /api/admin/users/*
+// ============================================================
 
 module.exports = router;
