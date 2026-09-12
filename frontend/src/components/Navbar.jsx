@@ -10,21 +10,25 @@
  * - User profile dropdown
  * - Active route highlighting
  * - Smooth scroll effects
- * - Real-time chat unread badge (red dot on message icon)
+ * - Real-time chat unread badge
  * 
  * Access Control:
  * - Public links: Home, Services, Search, Book Service
  * - Authenticated users: Profile, Messages, Logout
  * - Technicians: Dashboard, Subscription, Commissions
- * - Admins: Admin Panel, View all technicians
+ * 
+ * NOTE: Admin panel access has been moved to a separate
+ * isolated system at /admin/* with its own auth context.
+ * It is NOT linked from the user navbar.
+ * 
+ * @version 3.0.0 – Removed admin panel references
  */
 
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { 
-  Menu, X, Search, Calendar, Home, Settings, LogIn, UserPlus, Plus, List,
-  User, ChevronDown, LogOut, UserCircle, Wrench, FileText, Shield, Briefcase,
-  LayoutDashboard, CreditCard, Users, MessageSquare
+import {
+  Menu, X, User, ChevronDown, LogOut, UserCircle, Wrench,
+  LayoutDashboard, CreditCard, MessageSquare
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getSocket } from '../services/socket';
@@ -37,7 +41,7 @@ const Navbar = () => {
 
   // ─── AUTH CONTEXT ─────────────────────────────
   const { user, technicianProfile, logout, getUnreadCount } = useAuth();
-  
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -82,10 +86,9 @@ const Navbar = () => {
 
   // ─── DERIVED FLAGS ────────────────────────────
   const hasTechnicianProfile = user?.role === 'technician' && technicianProfile;
-  const isAdmin = user?.role === 'admin';
   const isTechnician = user?.role === 'technician';
 
-  // Navigation links visible to ALL users (public) — icons removed
+  // Navigation links visible to ALL users
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "Services", path: "/services" },
@@ -108,11 +111,13 @@ const Navbar = () => {
   return (
     <>
       <nav className={`sticky top-0 z-50 transition-all duration-300 ${
-        scrolled ? "bg-white shadow-lg border-b border-gray-100" : "bg-white/95 backdrop-blur-sm border-b border-gray-200"
+        scrolled
+          ? "bg-white shadow-lg border-b border-gray-100"
+          : "bg-white/95 backdrop-blur-sm border-b border-gray-200"
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            
+
             {/* ─── LOGO ───────────────────────────── */}
             <Link to="/" className="flex items-center space-x-2 group" onClick={closeMobileMenu}>
               <div className="relative">
@@ -128,8 +133,8 @@ const Navbar = () => {
 
             {/* ─── DESKTOP NAVIGATION ─────────────── */}
             <div className="hidden md:flex items-center space-x-1">
-              
-              {/* Public nav links — icons removed, text-xs for smaller size */}
+
+              {/* Public nav links */}
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
@@ -158,7 +163,9 @@ const Navbar = () => {
                   <Link
                     to="/my-jobs"
                     className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      isActive('/my-jobs') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100"
+                      isActive('/my-jobs')
+                        ? "bg-green-50 text-green-700"
+                        : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
                     My Jobs
@@ -167,71 +174,61 @@ const Navbar = () => {
               )}
 
               {/* ─── TECHNICIAN-SPECIFIC LINKS ────── */}
-              {user?.role === 'technician' && (
-                <Link
-                  to="/my-applications"
-                  className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    isActive('/my-applications') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  My Applications
-                </Link>
-              )}
-
-              {/* ─── TECHNICIAN / ADMIN SHARED ────── */}
-              {(isTechnician || isAdmin) && (
+              {isTechnician && (
                 <>
+                  <Link
+                    to="/my-applications"
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      isActive('/my-applications')
+                        ? "bg-green-50 text-green-700"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    My Applications
+                  </Link>
+
                   <Link
                     to="/technician-dashboard"
                     className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      isActive('/technician-dashboard') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      isActive('/technician-dashboard')
+                        ? "bg-green-50 text-green-700"
+                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                     }`}
                   >
                     Dashboard
                   </Link>
+
                   <Link
                     to="/subscription"
                     className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      isActive('/subscription') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      isActive('/subscription')
+                        ? "bg-green-50 text-green-700"
+                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                     }`}
                   >
                     Subscription
                   </Link>
-                  {/* ─── NEW: COMMISSIONS LINK (TECHNICIANS ONLY) ── */}
-                  {isTechnician && (
-                    <Link
-                      to="/technician-dashboard/commissions"
-                      className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                        isActive('/technician-dashboard/commissions') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                      }`}
-                    >
-                      Commissions
-                    </Link>
-                  )}
-                </>
-              )}
 
-              {/* ─── ADMIN ONLY ───────────────────── */}
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    location.pathname.startsWith('/admin')
-                      ? "bg-red-50 text-red-700"
-                      : "text-red-600 hover:bg-red-50 hover:text-red-700"
-                  }`}
-                >
-                  Admin Panel
-                </Link>
+                  <Link
+                    to="/technician-dashboard/commissions"
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      isActive('/technician-dashboard/commissions')
+                        ? "bg-green-50 text-green-700"
+                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                  >
+                    Commissions
+                  </Link>
+                </>
               )}
 
               {/* ─── AUTHENTICATED USER SECTION ───── */}
               {user ? (
                 <div className="flex items-center space-x-2 ml-2">
-                  
-                  {/* Chat link — now text with badge, no icon */}
-                  <Link 
-                    to="/chat" 
+
+                  {/* Chat link with badge */}
+                  <Link
+                    to="/chat"
                     className="relative px-2 py-1.5 rounded-lg text-xs font-medium text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors"
                   >
                     Messages
@@ -249,8 +246,8 @@ const Navbar = () => {
                       className="flex items-center space-x-2 pl-2 pr-3 py-1.5 rounded-full hover:bg-gray-100 transition-all"
                     >
                       {user.profileImage ? (
-                        <img 
-                          src={user.profileImage} 
+                        <img
+                          src={user.profileImage}
                           alt={user.fullName}
                           className="w-8 h-8 rounded-full object-cover"
                         />
@@ -262,10 +259,10 @@ const Navbar = () => {
                       <ChevronDown className="w-4 h-4 text-gray-500" />
                     </button>
 
-                    {/* Dropdown Menu (icons kept as they are) */}
+                    {/* Dropdown Menu */}
                     {isProfileMenuOpen && (
                       <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 animate-fadeIn">
-                        
+
                         <div className="px-4 py-2 border-b border-gray-100">
                           <p className="text-sm font-semibold text-gray-800">
                             {user.fullName || `${user.firstName} ${user.lastName}`}
@@ -307,7 +304,7 @@ const Navbar = () => {
                           </Link>
                         )}
 
-                        {user.role === 'technician' && !hasTechnicianProfile && (
+                        {isTechnician && !hasTechnicianProfile && (
                           <Link
                             to="/create-technician-profile"
                             onClick={() => setIsProfileMenuOpen(false)}
@@ -318,7 +315,7 @@ const Navbar = () => {
                           </Link>
                         )}
 
-                        {user.role === 'technician' && hasTechnicianProfile && (
+                        {isTechnician && hasTechnicianProfile && (
                           <>
                             <Link
                               to="/technician-dashboard"
@@ -328,7 +325,6 @@ const Navbar = () => {
                               <LayoutDashboard className="w-4 h-4 text-gray-500" />
                               <span>Technician Dashboard</span>
                             </Link>
-                            {/* ─── NEW: COMMISSIONS LINK IN DROPDOWN ── */}
                             <Link
                               to="/technician-dashboard/commissions"
                               onClick={() => setIsProfileMenuOpen(false)}
@@ -336,35 +332,6 @@ const Navbar = () => {
                             >
                               <CreditCard className="w-4 h-4 text-gray-500" />
                               <span>Commissions</span>
-                            </Link>
-                          </>
-                        )}
-
-                        {isAdmin && (
-                          <>
-                            <Link
-                              to="/technician-dashboard"
-                              onClick={() => setIsProfileMenuOpen(false)}
-                              className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                            >
-                              <LayoutDashboard className="w-4 h-4 text-gray-500" />
-                              <span>My Dashboard</span>
-                            </Link>
-                            <Link
-                              to="/admin/technicians"
-                              onClick={() => setIsProfileMenuOpen(false)}
-                              className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                              <Users className="w-4 h-4 text-gray-500" />
-                              <span>Manage Technicians</span>
-                            </Link>
-                            <Link
-                              to="/admin/verification"
-                              onClick={() => setIsProfileMenuOpen(false)}
-                              className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                              <Shield className="w-4 h-4 text-gray-500" />
-                              <span>Verification Requests</span>
                             </Link>
                           </>
                         )}
@@ -414,15 +381,17 @@ const Navbar = () => {
           {isMobileMenuOpen && (
             <div className="md:hidden py-4 border-t border-gray-200 animate-fadeIn">
               <div className="flex flex-col space-y-1">
-                
-                {/* Public links — icons removed */}
+
+                {/* Public links */}
                 {navLinks.map((link) => (
                   <Link
                     key={link.name}
                     to={link.path}
                     onClick={closeMobileMenu}
                     className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
-                      isActive(link.path) ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
+                      isActive(link.path)
+                        ? "bg-green-50 text-green-700"
+                        : "text-gray-700 hover:bg-gray-50"
                     }`}
                   >
                     <span className="font-medium">{link.name}</span>
@@ -435,7 +404,9 @@ const Navbar = () => {
                     to="/chat"
                     onClick={closeMobileMenu}
                     className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
-                      isActive('/chat') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
+                      isActive('/chat')
+                        ? "bg-green-50 text-green-700"
+                        : "text-gray-700 hover:bg-gray-50"
                     }`}
                   >
                     <span className="font-medium">Messages</span>
@@ -447,62 +418,71 @@ const Navbar = () => {
                   </Link>
                 )}
 
-                {/* Technician / Admin mobile links */}
-                {(isTechnician || isAdmin) && (
+                {/* Technician mobile links */}
+                {isTechnician && (
                   <>
+                    <Link
+                      to="/my-applications"
+                      onClick={closeMobileMenu}
+                      className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                        isActive('/my-applications')
+                          ? "bg-green-50 text-green-700"
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="font-medium">My Applications</span>
+                    </Link>
+
                     <Link
                       to="/technician-dashboard"
                       onClick={closeMobileMenu}
                       className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
-                        isActive('/technician-dashboard') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
+                        isActive('/technician-dashboard')
+                          ? "bg-green-50 text-green-700"
+                          : "text-gray-700 hover:bg-gray-50"
                       }`}
                     >
                       <span className="font-medium">Dashboard</span>
                     </Link>
+
                     <Link
                       to="/subscription"
                       onClick={closeMobileMenu}
                       className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
-                        isActive('/subscription') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
+                        isActive('/subscription')
+                          ? "bg-green-50 text-green-700"
+                          : "text-gray-700 hover:bg-gray-50"
                       }`}
                     >
                       <span className="font-medium">Subscription</span>
                     </Link>
-                    {/* ─── NEW: COMMISSIONS LINK (TECHNICIANS ONLY) ── */}
-                    {isTechnician && (
-                      <Link
-                        to="/technician-dashboard/commissions"
-                        onClick={closeMobileMenu}
-                        className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
-                          isActive('/technician-dashboard/commissions') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
-                        }`}
-                      >
-                        <span className="font-medium">Commissions</span>
-                      </Link>
-                    )}
-                  </>
-                )}
 
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    onClick={closeMobileMenu}
-                    className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
-                      location.pathname.startsWith('/admin') ? "bg-red-50 text-red-700" : "text-red-600 hover:bg-red-50"
-                    }`}
-                  >
-                    <span className="font-medium">Admin Panel</span>
-                  </Link>
+                    <Link
+                      to="/technician-dashboard/commissions"
+                      onClick={closeMobileMenu}
+                      className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                        isActive('/technician-dashboard/commissions')
+                          ? "bg-green-50 text-green-700"
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="font-medium">Commissions</span>
+                    </Link>
+                  </>
                 )}
 
                 {/* Mobile auth section */}
                 {user ? (
                   <>
                     <div className="border-t border-gray-200 my-2"></div>
-                    
+
                     <div className="flex items-center space-x-3 px-3 py-2.5 bg-gray-50 rounded-lg">
                       {user.profileImage ? (
-                        <img src={user.profileImage} alt="" className="w-10 h-10 rounded-full object-cover" />
+                        <img
+                          src={user.profileImage}
+                          alt=""
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold">
                           {user.firstName?.[0]}{user.lastName?.[0]}
@@ -516,49 +496,80 @@ const Navbar = () => {
                       </div>
                     </div>
 
-                    <Link to="/profile" onClick={closeMobileMenu} className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg">
+                    <Link
+                      to="/profile"
+                      onClick={closeMobileMenu}
+                      className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
+                    >
                       <User className="w-5 h-5 text-gray-500" />
                       <span>View Profile</span>
                     </Link>
 
                     {user.role === 'client' && (
-                      <Link to="/become-technician" onClick={closeMobileMenu} className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg">
+                      <Link
+                        to="/become-technician"
+                        onClick={closeMobileMenu}
+                        className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
+                      >
                         <Wrench className="w-5 h-5 text-gray-500" />
                         <span>Become a Technician</span>
                       </Link>
                     )}
 
-                    {user.role === 'technician' && !hasTechnicianProfile && (
-                      <Link to="/create-technician-profile" onClick={closeMobileMenu} className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg">
+                    {isTechnician && !hasTechnicianProfile && (
+                      <Link
+                        to="/create-technician-profile"
+                        onClick={closeMobileMenu}
+                        className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
+                      >
                         <Wrench className="w-5 h-5 text-gray-500" />
                         <span>Create Technician Profile</span>
                       </Link>
                     )}
 
-                    {user.role === 'technician' && hasTechnicianProfile && (
+                    {isTechnician && hasTechnicianProfile && (
                       <>
-                        <Link to="/technician-dashboard" onClick={closeMobileMenu} className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <Link
+                          to="/technician-dashboard"
+                          onClick={closeMobileMenu}
+                          className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
+                        >
                           <LayoutDashboard className="w-5 h-5 text-gray-500" />
                           <span>Dashboard</span>
                         </Link>
-                        <Link to="/technician-dashboard/commissions" onClick={closeMobileMenu} className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <Link
+                          to="/technician-dashboard/commissions"
+                          onClick={closeMobileMenu}
+                          className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
+                        >
                           <CreditCard className="w-5 h-5 text-gray-500" />
                           <span>Commissions</span>
                         </Link>
                       </>
                     )}
 
-                    <button onClick={handleLogout} className="flex items-center space-x-3 px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg">
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center space-x-3 px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg"
+                    >
                       <LogOut className="w-5 h-5" />
                       <span>Logout</span>
                     </button>
                   </>
                 ) : (
                   <div className="flex flex-col space-y-2 pt-2">
-                    <Link to="/signup" onClick={closeMobileMenu} className="bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium text-center hover:bg-green-700">
+                    <Link
+                      to="/signup"
+                      onClick={closeMobileMenu}
+                      className="bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium text-center hover:bg-green-700"
+                    >
                       Sign up
                     </Link>
-                    <Link to="/login" onClick={closeMobileMenu} className="border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium text-center hover:bg-gray-50">
+                    <Link
+                      to="/login"
+                      onClick={closeMobileMenu}
+                      className="border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium text-center hover:bg-gray-50"
+                    >
                       Login
                     </Link>
                   </div>

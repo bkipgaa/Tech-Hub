@@ -21,14 +21,14 @@ const authRoutes = require('./routes/authRoutes');
 const technicianProfileRoutes = require('./routes/technicianProfileRoutes');
 const serviceCatalogRoutes = require('./routes/serviceCatalogRoutes');
 const searchRoutes = require('./routes/searchRoutes');
-const adminRoutes = require('./routes/adminRoutes');
+// const adminRoutes = require('./routes/admin/adminRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const technicianRoutes = require('./routes/technicianRoutes');
 const uploads = require('./routes/upload');
 const chatRoutes = require('./routes/chatRoutes');  // ← Chat REST routes
 const bookingRoutes = require('./routes/bookingRoutes');
 const commissionPaymentRoutes = require('./routes/commissionPaymentRoutes');  // ← Commission payment routes
-
+const adminRoutes = require('./routes/admin');
 // Import Socket.io chat handler
 const chatSocket = require('./socket/chatSocket');  // ← Real-time chat socket
 // Job and Application routes
