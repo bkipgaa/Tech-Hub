@@ -32,6 +32,8 @@ import ProtectedAdminRoute from '../components/admin/ProtectedAdminRoute';
 import AdminLogin from '../pages/Admin/AdminLogin';
 import Roles from '../pages/Admin/Roles';
 import Dashboard from '../pages/Admin/Dashboard';
+import Technicians from '../pages/Admin/Technicians';
+import TechnicianDetail from '../pages/Admin/TechnicianDetail';
 
 // ─── Placeholders for pages not yet built ────────────────────
 // Replace each placeholder as you build the real page.
@@ -49,9 +51,25 @@ const Placeholder = ({ title }) => (
       <Dashboard />
     </ProtectedAdminRoute>
   }
+/>;
+
+<Route
+  path="technicians"
+  element={
+    <ProtectedAdminRoute permission="technicians.view">
+      <Technicians />
+    </ProtectedAdminRoute>
+  }
+/>;
+<Route
+  path="technicians/:id"
+  element={
+    <ProtectedAdminRoute permission="technicians.view_details">
+      <TechnicianDetail />
+    </ProtectedAdminRoute>
+  }
 />
-const TechniciansPage     = () => <Placeholder title="Technicians" />;
-const TechnicianDetailPage = () => <Placeholder title="Technician Detail" />;
+
 const VerificationsPage   = () => <Placeholder title="Verifications" />;
 const SubscriptionsPage   = () => <Placeholder title="Subscriptions" />;
 const BookingsPage        = () => <Placeholder title="Bookings" />;
@@ -108,7 +126,7 @@ const AdminRoutes = () => {
           path="technicians"
           element={
             <ProtectedAdminRoute permission="technicians.view">
-              <TechniciansPage />
+              <Technicians />
             </ProtectedAdminRoute>
           }
         />
@@ -116,7 +134,7 @@ const AdminRoutes = () => {
           path="technicians/:id"
           element={
             <ProtectedAdminRoute permission="technicians.view_details">
-              <TechnicianDetailPage />
+              <TechnicianDetail />
             </ProtectedAdminRoute>
           }
         />

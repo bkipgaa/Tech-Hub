@@ -13,7 +13,7 @@ router.use('/auth', require('./adminAuthRoutes'));
 
 // Everything else will be added as we build it:
 router.use('/dashboard',     require('./dashboardRoutes'));
-// router.use('/technicians',   require('./technicianAdminRoutes'));
+router.use('/technicians',   require('./technicianAdminRoutes'));
 // router.use('/subscriptions', require('./subscriptionAdminRoutes'));
 // router.use('/bookings',      require('./bookingAdminRoutes'));
 // router.use('/jobs',          require('./jobAdminRoutes'));
