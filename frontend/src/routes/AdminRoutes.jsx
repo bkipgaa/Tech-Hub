@@ -31,6 +31,7 @@ import ProtectedAdminRoute from '../components/admin/ProtectedAdminRoute';
 // ─── Pages (built so far) ────────────────────────────────────
 import AdminLogin from '../pages/Admin/AdminLogin';
 import Roles from '../pages/Admin/Roles';
+import Dashboard from '../pages/Admin/Dashboard';
 
 // ─── Placeholders for pages not yet built ────────────────────
 // Replace each placeholder as you build the real page.
@@ -41,7 +42,14 @@ const Placeholder = ({ title }) => (
   </div>
 );
 
-const DashboardPage       = () => <Placeholder title="Dashboard" />;
+<Route
+  path="dashboard"
+  element={
+    <ProtectedAdminRoute permission="dashboard.view">
+      <Dashboard />
+    </ProtectedAdminRoute>
+  }
+/>
 const TechniciansPage     = () => <Placeholder title="Technicians" />;
 const TechnicianDetailPage = () => <Placeholder title="Technician Detail" />;
 const VerificationsPage   = () => <Placeholder title="Verifications" />;

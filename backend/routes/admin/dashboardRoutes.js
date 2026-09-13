@@ -1,11 +1,20 @@
 /**
  * dashboardRoutes.js
- * Auto-generated admin route placeholder.
+ * ==================
+ * Admin dashboard routes.
+ * Mounted at /api/admin/dashboard
  */
 
 const express = require('express');
 const router = express.Router();
+const { adminAuth, requirePermission } = require('../../middleware/adminAuth');
+const dashboardController = require('../../controllers/admin/dashboardController');
 
-// Add your routes here
+router.use(adminAuth);
+
+router.get('/stats',                  requirePermission('dashboard.view'), dashboardController.getStats);
+router.get('/revenue-timeline',       requirePermission('revenue.view'),   dashboardController.getRevenueTimeline);
+router.get('/subscription-breakdown', requirePermission('subscriptions.view'), dashboardController.getSubscriptionBreakdown);
+router.get('/recent-activity',        requirePermission('activity.view'),  dashboardController.getRecentActivity);
 
 module.exports = router;
