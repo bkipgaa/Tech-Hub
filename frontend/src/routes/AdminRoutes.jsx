@@ -98,7 +98,7 @@ const AdminRoutes = () => {
           path="dashboard"
           element={
             <ProtectedAdminRoute permission="dashboard.view">
-              <DashboardPage />
+              <Dashboard/>
             </ProtectedAdminRoute>
           }
         />
