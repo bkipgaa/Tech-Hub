@@ -34,6 +34,7 @@ import Roles from '../pages/Admin/Roles';
 import Dashboard from '../pages/Admin/Dashboard';
 import Technicians from '../pages/Admin/Technicians';
 import TechnicianDetail from '../pages/Admin/TechnicianDetail';
+import Subscriptions from '../pages/Admin/Subscriptions';
 
 // ─── Placeholders for pages not yet built ────────────────────
 // Replace each placeholder as you build the real page.
@@ -68,10 +69,19 @@ const Placeholder = ({ title }) => (
       <TechnicianDetail />
     </ProtectedAdminRoute>
   }
+/>;
+
+<Route
+  path="subscriptions"
+  element={
+    <ProtectedAdminRoute permission="subscriptions.view">
+      <Subscriptions />
+    </ProtectedAdminRoute>
+  }
 />
 
 const VerificationsPage   = () => <Placeholder title="Verifications" />;
-const SubscriptionsPage   = () => <Placeholder title="Subscriptions" />;
+
 const BookingsPage        = () => <Placeholder title="Bookings" />;
 const BookingDetailPage   = () => <Placeholder title="Booking Detail" />;
 const JobsPage            = () => <Placeholder title="Jobs" />;
