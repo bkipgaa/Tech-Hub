@@ -90,8 +90,39 @@ const Placeholder = ({ title }) => (
   }
 />;
 
-const BookingsPage        = () => <Placeholder title="Bookings" />;
-const BookingDetailPage   = () => <Placeholder title="Booking Detail" />;
+<Route
+  path="bookings"
+  element={
+    <ProtectedAdminRoute permission="bookings.view">
+      <Bookings />
+    </ProtectedAdminRoute>
+  }
+/>;
+<Route
+  path="bookings/:id"
+  element={
+    <ProtectedAdminRoute permission="bookings.view_details">
+      <BookingDetail />
+    </ProtectedAdminRoute>
+  }
+/>;
+<Route
+  path="bookings"
+  element={
+    <ProtectedAdminRoute permission="bookings.view">
+      <Bookings />
+    </ProtectedAdminRoute>
+  }
+/>;
+<Route
+  path="bookings/:id"
+  element={
+    <ProtectedAdminRoute permission="bookings.view_details">
+      <BookingDetail />
+    </ProtectedAdminRoute>
+  }
+/>
+
 const JobsPage            = () => <Placeholder title="Jobs" />;
 const ServiceCatalogPage  = () => <Placeholder title="Service Catalog" />;
 const RevenuePage         = () => <Placeholder title="Revenue" />;
@@ -182,7 +213,7 @@ const AdminRoutes = () => {
           path="bookings"
           element={
             <ProtectedAdminRoute permission="bookings.view">
-              <BookingsPage />
+              <Bookings />
             </ProtectedAdminRoute>
           }
         />
@@ -190,7 +221,7 @@ const AdminRoutes = () => {
           path="bookings/:id"
           element={
             <ProtectedAdminRoute permission="bookings.view_details">
-              <BookingDetailPage />
+              <BookingDetail />
             </ProtectedAdminRoute>
           }
         />

@@ -16,7 +16,7 @@ router.use('/dashboard',     require('./dashboardRoutes'));
 router.use('/technicians',   require('./technicianAdminRoutes'));
 router.use('/subscriptions', require('./subscriptionAdminRoutes'));
 router.use('/verifications', require('./verificationAdminRoutes'));
-// router.use('/bookings',      require('./bookingAdminRoutes'));
+router.use('/bookings',      require('./bookingAdminRoutes'));
 // router.use('/jobs',          require('./jobAdminRoutes'));
 // router.use('/revenue',       require('./revenueAdminRoutes'));
 // router.use('/commissions',   require('./commissionAdminRoutes'));
