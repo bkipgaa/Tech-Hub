@@ -36,7 +36,8 @@ import Technicians from '../pages/Admin/Technicians';
 import TechnicianDetail from '../pages/Admin/TechnicianDetail';
 import Subscriptions from '../pages/Admin/Subscriptions';
 import Verifications from '../pages/Admin/Verifications';
-
+import Bookings from '../pages/Admin/Bookings';
+import BookingDetail from '../pages/Admin/BookingDetail';
 // ─── Placeholders for pages not yet built ────────────────────
 // Replace each placeholder as you build the real page.
 const Placeholder = ({ title }) => (
