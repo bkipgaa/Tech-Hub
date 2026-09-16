@@ -22,7 +22,7 @@ router.use('/bookings',      require('./bookingAdminRoutes'));
 // router.use('/commissions',   require('./commissionAdminRoutes'));
 // router.use('/users',         require('./userAdminRoutes'));
 // router.use('/admin-users',   require('./adminUserRoutes'));
-// router.use('/roles',         require('./roleRoutes'));
+router.use('/roles',         require('./roleRoutes'));
 // router.use('/activity',      require('./activityLogRoutes'));
 // router.use('/settings',      require('./settingsRoutes'));
 

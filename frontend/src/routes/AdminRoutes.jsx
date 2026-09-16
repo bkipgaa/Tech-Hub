@@ -107,22 +107,15 @@ const Placeholder = ({ title }) => (
     </ProtectedAdminRoute>
   }
 />;
-<Route
-  path="bookings"
-  element={
-    <ProtectedAdminRoute permission="bookings.view">
-      <Bookings />
-    </ProtectedAdminRoute>
-  }
-/>;
-<Route
-  path="bookings/:id"
-  element={
-    <ProtectedAdminRoute permission="bookings.view_details">
-      <BookingDetail />
-    </ProtectedAdminRoute>
-  }
-/>
+ {/* ── Roles & Permissions ───────────────────── */}
+        <Route
+          path="roles"
+          element={
+            <ProtectedAdminRoute permission="roles.view">
+              <Roles />
+            </ProtectedAdminRoute>
+          }
+        />
 
 const JobsPage            = () => <Placeholder title="Jobs" />;
 const ServiceCatalogPage  = () => <Placeholder title="Service Catalog" />;

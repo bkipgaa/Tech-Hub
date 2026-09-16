@@ -1,11 +1,25 @@
 /**
  * roleRoutes.js
- * Auto-generated admin route placeholder.
+ * =============
+ * Admin role & permission management routes.
+ * Mounted at /api/admin/roles
  */
 
 const express = require('express');
 const router = express.Router();
+const { adminAuth, requirePermission, requireRole } = require('../../middleware/AdminAuth');
+const ctrl = require('../../controllers/admin/roleController');
 
-// Add your routes here
+router.use(adminAuth);
+
+// List & read
+router.get('/',             requirePermission('roles.view'),        ctrl.listRoles);
+router.get('/permissions',  requirePermission('roles.view'),        ctrl.listPermissions);
+router.get('/:id',          requirePermission('roles.view'),        ctrl.getRole);
+
+// Mutations (super admin only, except edit which admins can do)
+router.post('/',       requireRole('super_admin'), requirePermission('roles.create'), ctrl.createRole);
+router.patch('/:id',   requireRole('super_admin'), requirePermission('roles.edit'),   ctrl.updateRole);
+router.delete('/:id',  requireRole('super_admin'), requirePermission('roles.delete'), ctrl.deleteRole);
 
 module.exports = router;
