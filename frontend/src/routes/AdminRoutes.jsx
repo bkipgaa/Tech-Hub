@@ -38,6 +38,7 @@ import Subscriptions from '../pages/Admin/Subscriptions';
 import Verifications from '../pages/Admin/Verifications';
 import Bookings from '../pages/Admin/Bookings';
 import BookingDetail from '../pages/Admin/BookingDetail';
+import ServiceCatalog from '../pages/Admin/ServiceCatalog';
 // ─── Placeholders for pages not yet built ────────────────────
 // Replace each placeholder as you build the real page.
 const Placeholder = ({ title }) => (
@@ -115,7 +116,15 @@ const Placeholder = ({ title }) => (
               <Roles />
             </ProtectedAdminRoute>
           }
-        />
+        />;
+        <Route
+  path="catalog"
+  element={
+    <ProtectedAdminRoute permission="catalog.view">
+      <ServiceCatalog />
+    </ProtectedAdminRoute>
+  }
+/>
 
 const JobsPage            = () => <Placeholder title="Jobs" />;
 const ServiceCatalogPage  = () => <Placeholder title="Service Catalog" />;
@@ -235,7 +244,7 @@ const AdminRoutes = () => {
           path="catalog"
           element={
             <ProtectedAdminRoute permission="catalog.view">
-              <ServiceCatalogPage />
+              <ServiceCatalog/>
             </ProtectedAdminRoute>
           }
         />
