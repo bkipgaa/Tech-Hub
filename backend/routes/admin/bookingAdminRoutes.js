@@ -7,7 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { adminAuth, requirePermission } = require('../../middleware/adminAuth');
+const { adminAuth, requirePermission } = require('../../middleware/AdminAuth');
 const ctrl = require('../../controllers/admin/bookingAdminController');
 
 router.use(adminAuth);
