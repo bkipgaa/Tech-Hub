@@ -8,6 +8,9 @@ const User = require('../models/User');
 const { subscriptionPlans, plansList, isPlanActive } = require('../utils/subscriptionPlans');
 const Paystack = require('paystack-api')(process.env.PAYSTACK_SECRET_KEY);
 const mpesaService = require('../services/mpesaService');
+const notify = require('../services/notificationService');
+// ...
+
 
 // ─── GET PLANS ────────────────────────────────────────────────────────────────
 exports.getPlans = async (req, res) => {
@@ -372,6 +375,30 @@ exports.paystackWebhook = async (req, res) => {
       technician.paymentPending = undefined;
       await technician.save();
       console.log(`✅ Subscription upgraded successfully for technician ${technicianId} to ${planId}`);
+
+// ─── Send renewal notification (non-blocking) ───
+      try {
+        const techUser = await User.findById(technician.userId).select('email firstName lastName');
+        if (techUser?.email) {
+          await notify.technicianSubscriptionRenewed({
+            technicianEmail: techUser.email,
+            technicianName: `${techUser.firstName} ${techUser.lastName}`.trim(),
+            planName: plan.name,
+            amount: transaction.amount / 100, // Paystack amount is in kobo
+            endDate: endDate.toLocaleDateString('en-KE', {
+              day: 'numeric', month: 'long', year: 'numeric',
+            }),
+            visibilityRadius: plan.visibilityRadius,
+          });
+          console.log(`📧 Renewal email sent to ${techUser.email}`);
+        }
+      } catch (notifyErr) {
+        console.error('Renewal notification failed:', notifyErr.message);
+      }
+
+   
+
+
     } catch (error) {
       console.error('❌ Error processing webhook:', error);
       return res.status(500).send('Internal Server Error');
@@ -490,6 +517,27 @@ exports.mpesaCallback = async (req, res) => {
       await technician.save();
 
       console.log(`✅ M-Pesa subscription upgraded for ${technician._id} to ${planId}`);
+
+      // ─── Send renewal notification (non-blocking) ───
+      try {
+        const techUser = await User.findById(technician.userId).select('email firstName lastName');
+        if (techUser?.email) {
+          await notify.technicianSubscriptionRenewed({
+            technicianEmail: techUser.email,
+            technicianName: `${techUser.firstName} ${techUser.lastName}`.trim(),
+            planName: plan.name,
+            amount: amount || plan.price,
+            endDate: endDate.toLocaleDateString('en-KE', {
+              day: 'numeric', month: 'long', year: 'numeric',
+            }),
+            visibilityRadius: plan.visibilityRadius,
+          });
+          console.log(`📧 Renewal email sent to ${techUser.email}`);
+        }
+      } catch (notifyErr) {
+        console.error('Renewal notification failed:', notifyErr.message);
+      }
+
     } else {
       technician.paymentPending = {
         ...technician.paymentPending,

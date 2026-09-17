@@ -205,6 +205,26 @@ exports.createBooking = async (req, res) => {
     await booking.save();
     await booking.populate('clientId', 'firstName lastName email phone');
     await booking.populate('technicianId', 'businessName mainCategory');
+    await technician.populate('userId', 'email firstName lastName');
+
+    // ─── Send notification to technician (non-blocking) ───
+try {
+  const techUser = technician.userId || {};
+  await notify.technicianNewBooking({
+    technicianEmail: techUser.email,
+    technicianName: `${techUser.firstName} ${techUser.lastName}`.trim() || 'Technician',
+    clientName: `${user.firstName} ${user.lastName}`.trim() || 'A client',
+    serviceCategory,
+    subService,
+    preferredDate: new Date(preferredDate).toLocaleDateString('en-KE', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    }),
+    preferredTime,
+    address: location?.address,
+  });
+} catch (notifyErr) {
+  console.error('Booking notification failed:', notifyErr.message);
+}
 
     res.status(201).json({
       success: true,
@@ -1040,6 +1060,8 @@ exports.confirmLaborPayment = async (req, res) => {
 /**
  * 11. Client rates technician (only after labor paid).
  * POST /api/bookings/:bookingId/rate
+ * 
+ * Sends a notification email to the technician after rating.
  */
 exports.rateTechnician = async (req, res) => {
   try {
@@ -1071,7 +1093,7 @@ exports.rateTechnician = async (req, res) => {
     const booking = await Booking.findOne({
       _id: bookingId,
       clientId: clientId,
-      status: 'labor_paid'
+      status: 'labor_paid',
     });
     if (!booking) {
       return handleControllerError(
@@ -1130,6 +1152,27 @@ exports.rateTechnician = async (req, res) => {
     technician.statistics.totalJobs = (technician.statistics.totalJobs || 0) + 1;
     await technician.save();
 
+    // ────────────────────────────────────────────────────────
+    // Send notification email to technician (non-blocking)
+    // ────────────────────────────────────────────────────────
+    try {
+      const techUser = await User.findById(technician.userId).select('email firstName lastName');
+      const clientUser = await User.findById(clientId).select('firstName lastName');
+
+      if (techUser?.email) {
+        await notify.technicianClientRated({
+          technicianEmail: techUser.email,
+          technicianName: `${techUser.firstName} ${techUser.lastName}`.trim(),
+          clientName: `${clientUser?.firstName || 'A client'} ${clientUser?.lastName || ''}`.trim(),
+          rating,
+          review: review || '',
+        });
+        console.log(`📧 Rating notification sent to ${techUser.email}`);
+      }
+    } catch (notifyErr) {
+      console.error('Rating notification failed:', notifyErr.message);
+    }
+
     res.json({
       success: true,
       message: 'Rating submitted successfully. Job marked as completed.',
@@ -1148,7 +1191,6 @@ exports.rateTechnician = async (req, res) => {
     handleControllerError(res, error, 'Failed to submit rating.', 500, 'rateTechnician');
   }
 };
-
 /**
  * Get pending commissions (optionally filtered by month).
  * GET /api/bookings/commissions?month=YYYY-MM

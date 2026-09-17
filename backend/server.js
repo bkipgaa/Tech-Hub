@@ -16,6 +16,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const http = require('http');              // ← Required for Socket.io
 
+
+const cron = require('node-cron');
+const { sendExpiryReminders } = require('./jobs/subscriptionReminders');
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const technicianProfileRoutes = require('./routes/technicianProfileRoutes');
@@ -440,6 +443,16 @@ process.on('SIGINT', gracefulShutdown);
 startServer().catch(error => {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
+}
+
+);
+// ─── Cron jobs ─────────────────────────────────────────────
+// Run daily at 09:00 AM (Kenya time is UTC+3, so 06:00 UTC)
+cron.schedule('0 6 * * *', () => {
+  console.log('⏰ Running daily subscription reminders...');
+  sendExpiryReminders();
+}, {
+  timezone: 'Africa/Nairobi'
 });
 
 // Export app for testing

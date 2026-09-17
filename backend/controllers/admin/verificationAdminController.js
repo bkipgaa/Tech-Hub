@@ -12,11 +12,12 @@
  *   PATCH /api/admin/verifications/:id/request-more   → request additional docs
  *   PATCH /api/admin/verifications/:id/documents/:docId → approve/reject a single doc
  * 
- * @version 1.0.0
+ * @version 1.1.0 – Added email notifications on approve/reject
  */
 
 const Technician = require('../../models/Technician');
 const User = require('../../models/User');
+const notify = require('../../services/notificationService');
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -32,9 +33,6 @@ const handleError = (res, error, message, status = 500, code = 'SERVER_ERROR') =
   });
 };
 
-/**
- * Compute summary info for a verification request.
- */
 const decorateVerification = (tech) => {
   if (!tech) return tech;
 
@@ -44,7 +42,6 @@ const decorateVerification = (tech) => {
   const verifiedDocs = docs.filter((d) => d.status === 'verified').length;
   const rejectedDocs = docs.filter((d) => d.status === 'rejected').length;
 
-  // Determine "what's needed" — quick hint for the admin
   const missingBasics = [];
   if (!tech.address?.city) missingBasics.push('Address');
   if (!tech.profileHeadline) missingBasics.push('Profile headline');
@@ -74,7 +71,7 @@ exports.listVerifications = async (req, res) => {
     const {
       page = 1,
       limit = 20,
-      status = 'pending', // 'pending' | 'verified' | 'rejected' | 'all'
+      status = 'pending',
       search,
       sortBy = 'createdAt',
       sortOrder = 'desc',
@@ -140,7 +137,6 @@ exports.getStats = async (req, res) => {
       Technician.countDocuments(),
     ]);
 
-    // Count how many pending have documents uploaded (ready to review)
     const pendingWithDocs = await Technician.countDocuments({
       verificationStatus: 'pending',
       'verifiedDocuments.0': { $exists: true },
@@ -185,7 +181,7 @@ exports.getVerification = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// APPROVE (entire verification)
+// APPROVE (entire verification)  ← WITH NOTIFICATION
 // ─────────────────────────────────────────────────────────────
 exports.approveVerification = async (req, res) => {
   try {
@@ -204,10 +200,8 @@ exports.approveVerification = async (req, res) => {
       });
     }
 
-    // Mark technician verified
     tech.verificationStatus = 'verified';
 
-    // Verify all pending documents
     if (tech.verifiedDocuments?.length) {
       tech.verifiedDocuments.forEach((doc) => {
         if (doc.status === 'pending' || doc.status === 'rejected') {
@@ -219,6 +213,21 @@ exports.approveVerification = async (req, res) => {
     }
 
     await tech.save();
+
+    // ─── Send approval email (non-blocking) ────────────────
+    try {
+      const techUser = await User.findById(tech.userId).select('email firstName lastName');
+      if (techUser?.email) {
+        await notify.technicianVerificationApproved({
+          technicianEmail: techUser.email,
+          technicianName: `${techUser.firstName} ${techUser.lastName}`.trim(),
+          notes: notes || '',
+        });
+        console.log(`📧 Verification approval email sent to ${techUser.email}`);
+      }
+    } catch (notifyErr) {
+      console.error('Verification approval notification failed:', notifyErr.message);
+    }
 
     res.json({
       success: true,
@@ -234,7 +243,7 @@ exports.approveVerification = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// REJECT
+// REJECT  ← WITH NOTIFICATION
 // ─────────────────────────────────────────────────────────────
 exports.rejectVerification = async (req, res) => {
   try {
@@ -265,6 +274,21 @@ exports.rejectVerification = async (req, res) => {
 
     await tech.save();
 
+    // ─── Send rejection email (non-blocking) ───────────────
+    try {
+      const techUser = await User.findById(tech.userId).select('email firstName lastName');
+      if (techUser?.email) {
+        await notify.technicianVerificationRejected({
+          technicianEmail: techUser.email,
+          technicianName: `${techUser.firstName} ${techUser.lastName}`.trim(),
+          reason: reason.trim(),
+        });
+        console.log(`📧 Verification rejection email sent to ${techUser.email}`);
+      }
+    } catch (notifyErr) {
+      console.error('Verification rejection notification failed:', notifyErr.message);
+    }
+
     res.json({
       success: true,
       message: 'Verification rejected.',
@@ -294,10 +318,7 @@ exports.requestMoreInfo = async (req, res) => {
       return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Technician not found.' });
     }
 
-    // Keep status as pending, but store the request message
-    // We use `adminNotes` on the technician for this (or add a new field if needed)
     tech.adminNotes = `[${new Date().toISOString()}] ${message.trim()}`;
-
     await tech.save();
 
     res.json({
