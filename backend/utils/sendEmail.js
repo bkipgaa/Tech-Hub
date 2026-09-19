@@ -1,56 +1,87 @@
-const nodemailer = require('nodemailer');
-const dns = require('dns');
+/**
+ * sendEmail.js
+ * ============
+ * Sends transactional emails via Brevo's HTTP API.
+ * 
+ * Why HTTP API instead of SMTP?
+ *   - Render's free tier blocks outbound SMTP ports (25/465/587)
+ *   - Brevo's HTTP API runs over HTTPS (port 443), which is never blocked
+ *   - Faster than SMTP: no handshake, no connection keep-alive needed
+ * 
+ * Used by services/notificationService.js
+ * 
+ * @version 2.0.0 – Switched from Nodemailer/SMTP to Brevo HTTP API
+ */
 
+const axios = require('axios');
+
+/**
+ * Send an email via Brevo.
+ * 
+ * @param {Object} options
+ * @param {string} options.email    - Recipient email address
+ * @param {string} options.subject  - Email subject
+ * @param {string} options.html     - HTML content
+ * @param {string} [options.text]   - Optional plain-text fallback
+ * @param {string} [options.from]   - Override sender email
+ * @param {string} [options.fromName] - Override sender name
+ * @returns {Promise<Object>} Brevo API response
+ */
 const sendEmail = async (options) => {
-  console.log('📧 Sending email via Brevo:');
-  console.log('  Host:', process.env.SMTP_HOST);
-  console.log('  Port:', process.env.SMTP_PORT);
-  console.log('  User:', process.env.SMTP_USER);
-  console.log('  To:', options.email);
-
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
-      secure: process.env.SMTP_PORT == 465,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      // ✅ Force IPv4 lookup
-      lookup: (hostname, callback) => {
-        dns.lookup(hostname, { family: 4 }, (err, address) => {
-          if (err) {
-            console.error('❌ DNS lookup failed:', err);
-            return callback(err);
-          }
-          console.log(`✅ Resolved ${hostname} -> IPv4: ${address}`);
-          callback(null, address, 4);
-        });
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-      connectionTimeout: 30000,
-      socketTimeout: 30000,
-    });
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      throw new Error('BREVO_API_KEY is missing in environment variables');
+    }
 
-    await transporter.verify();
-    console.log('✅ SMTP connection verified successfully.');
+    if (!options?.email) {
+      throw new Error('Recipient email (options.email) is required');
+    }
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: options.email,
+    const senderEmail = options.from || process.env.SMTP_FROM || 'webathub@gmail.com';
+    const senderName  = options.fromName || 'WeBA-Hub';
+
+    console.log('📧 Sending email via Brevo HTTP API:');
+    console.log('  From:', `${senderName} <${senderEmail}>`);
+    console.log('  To:  ', options.email);
+    console.log('  Subj:', options.subject);
+
+    const payload = {
+      sender: { name: senderName, email: senderEmail },
+      to: [{ email: options.email }],
       subject: options.subject,
-      html: options.html,
+      htmlContent: options.html,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email sent successfully:', info.messageId);
-    return info;
+    // Optional plain-text fallback
+    if (options.text) payload.textContent = options.text;
+
+    const response = await axios.post(
+      'https://api.brevo.com/v3/smtp/email',
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': apiKey,
+        },
+        timeout: 30000,
+      }
+    );
+
+    console.log('✅ Email sent successfully via Brevo API:', response.data.messageId);
+    return response.data;
   } catch (error) {
-    console.error('❌ NODEMAILER ERROR:', error);
-    throw error;
+    // Brevo returns detailed error info in response.data — log it all
+    const brevoError = error.response?.data;
+    console.error('❌ Brevo API Error:', brevoError || error.message);
+
+    // Re-throw with useful context so the caller (notificationService) can log it
+    const err = new Error(
+      brevoError?.message || error.message || 'Failed to send email'
+    );
+    err.code = brevoError?.code || error.code;
+    err.brevoResponse = brevoError;
+    throw err;
   }
 };
 
