@@ -145,7 +145,8 @@ const Verifications = () => {
     setActionLoading(true);
     setActionError('');
     try {
-      await adminApi.patch(`/verifications/${selected._id}/approve`);
+      // ✅ Send empty body `{}` so backend doesn't get `undefined`
+      await adminApi.patch(`/verifications/${selected._id}/approve`, {});
       await fetchRequests(pagination.page);
       fetchStats();
       setSelected(null);

@@ -980,12 +980,12 @@ exports.getTechnicianCommissions = async (req, res) => {
     }
 
     const { month } = req.query;
-
     const technicianId = await getTechnicianId(userId);
 
+    // ✅ Include BOTH pending and invoiced (both are still owed)
     let filter = {
       technicianId: technicianId,
-      'commission.status': 'pending',
+      'commission.status': { $in: ['pending', 'invoiced'] },
     };
 
     if (month) {
@@ -999,7 +999,16 @@ exports.getTechnicianCommissions = async (req, res) => {
       .select('_id serviceCategory subService quotation.laborCost commission.amount commission.status createdAt')
       .lean();
 
-    const totalPending = bookings.reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
+    const totalDue = bookings.reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
+
+    // Split totals by status for transparency
+    const totalPending = bookings
+      .filter(b => b.commission?.status === 'pending')
+      .reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
+
+    const totalInvoiced = bookings
+      .filter(b => b.commission?.status === 'invoiced')
+      .reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
 
     const byMonth = {};
     bookings.forEach(b => {
@@ -1013,7 +1022,9 @@ exports.getTechnicianCommissions = async (req, res) => {
       success: true,
       data: {
         summary: {
-          totalPending,
+          totalDue,          // ← the amount that will be charged
+          totalPending,      // breakdown
+          totalInvoiced,     // breakdown
           count: bookings.length,
           byMonth,
         },
@@ -1023,6 +1034,7 @@ exports.getTechnicianCommissions = async (req, res) => {
           subService: b.subService,
           laborCost: b.quotation?.laborCost || 0,
           commissionAmount: b.commission?.amount || 0,
+          status: b.commission?.status,   // ← now visible per row
           createdAt: b.createdAt,
         })),
       },
@@ -1031,7 +1043,6 @@ exports.getTechnicianCommissions = async (req, res) => {
     handleControllerError(res, error, 'Failed to fetch commissions.', 500, 'getTechnicianCommissions');
   }
 };
-
 /**
  * Submit pending commissions for invoicing (technician).
  * POST /api/bookings/commissions/submit

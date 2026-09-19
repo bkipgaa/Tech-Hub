@@ -12,7 +12,7 @@
  *   PATCH /api/admin/verifications/:id/request-more   → request additional docs
  *   PATCH /api/admin/verifications/:id/documents/:docId → approve/reject a single doc
  * 
- * @version 1.1.0 – Added email notifications on approve/reject
+ * @version 1.2.0 – Fixed req.body undefined on PATCH requests
  */
 
 const Technician = require('../../models/Technician');
@@ -185,7 +185,7 @@ exports.getVerification = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 exports.approveVerification = async (req, res) => {
   try {
-    const { notes } = req.body;
+    const { notes } = req.body || {};
 
     const tech = await Technician.findById(req.params.id);
     if (!tech) {
@@ -247,7 +247,8 @@ exports.approveVerification = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 exports.rejectVerification = async (req, res) => {
   try {
-    const { reason } = req.body;
+    const { reason } = req.body || {};
+
     if (!reason || !reason.trim()) {
       return res.status(400).json({
         success: false,
@@ -304,7 +305,8 @@ exports.rejectVerification = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 exports.requestMoreInfo = async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message } = req.body || {};
+
     if (!message || !message.trim()) {
       return res.status(400).json({
         success: false,
@@ -337,7 +339,7 @@ exports.requestMoreInfo = async (req, res) => {
 exports.updateDocument = async (req, res) => {
   try {
     const { id, docId } = req.params;
-    const { status, remarks } = req.body;
+    const { status, remarks } = req.body || {};
 
     if (!['verified', 'rejected'].includes(status)) {
       return res.status(400).json({

@@ -1,10 +1,10 @@
 /**
  * TechnicianCommission.jsx
  * =========================
- * Page for technicians to view and pay pending commissions via Paystack.
+ * Page for technicians to view and pay pending/invoiced commissions via Paystack.
  *
  * Flow:
- *   1. Load pending commissions (GET /api/bookings/commissions)
+ *   1. Load commissions (GET /api/bookings/commissions) — includes pending + invoiced
  *   2. Technician clicks "Pay with Card"
  *   3. POST /api/payments/commissions/initialize → returns authorization_url
  *   4. Redirect to Paystack hosted checkout
@@ -12,7 +12,7 @@
  *   6. Callback page verifies via GET /api/payments/commissions/verify
  *   7. Webhook also fires (idempotent) and marks bookings paid
  *
- * @version 3.0.0 – Paystack payment flow
+ * @version 3.1.0 – Shows pending + invoiced with breakdown
  */
 
 import React, { useState, useEffect } from 'react';
@@ -26,6 +26,30 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import api from '../services/api';
+
+// ─── STATUS BADGE COMPONENT ─────────────────────────────────
+const StatusBadge = ({ status }) => {
+  const config = {
+    pending: {
+      label: 'Pending',
+      className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    },
+    invoiced: {
+      label: 'Invoiced',
+      className: 'bg-blue-100 text-blue-800 border-blue-200',
+    },
+    paid: {
+      label: 'Paid',
+      className: 'bg-green-100 text-green-800 border-green-200',
+    },
+  };
+  const { label, className } = config[status] || config.pending;
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium border ${className}`}>
+      {label}
+    </span>
+  );
+};
 
 const TechnicianCommission = () => {
   const { user } = useAuth();
@@ -74,7 +98,6 @@ const TechnicianCommission = () => {
     setSubmitting(true);
     setError('');
     try {
-      // 1. Ask backend to create a Paystack transaction for the batch
       const response = await api.post('/payments/commissions/initialize', {});
       const payload = response.data;
 
@@ -84,9 +107,6 @@ const TechnicianCommission = () => {
         );
       }
 
-      // 2. Redirect to Paystack's hosted checkout page.
-      //    Paystack will redirect back to FRONTEND_URL/payment-callback
-      //    with ?reference=...&trxref=... appended by Paystack.
       window.location.href = payload.data.authorization_url;
     } catch (err) {
       console.error('Payment init error:', err);
@@ -97,8 +117,6 @@ const TechnicianCommission = () => {
       );
       setSubmitting(false);
     }
-    // Note: on success we redirect, so no setSubmitting(false) needed here —
-    // the component unmounts. This avoids a flash of the modal.
   };
 
   // ─── RENDER: LOADING ───────────────────────────────────────
@@ -134,9 +152,17 @@ const TechnicianCommission = () => {
     );
   }
 
+  // ─── DERIVED VALUES ────────────────────────────────────────
   const { summary, commissions = [] } = commissionsData || {};
-  const totalPending = summary?.totalPending || 0;
-  const count = summary?.count || 0;
+
+  // New shape (post-update): totalDue / totalPending / totalInvoiced
+  // Fallback to old shape (totalPending) for backward compatibility
+  const totalDue      = summary?.totalDue      ?? summary?.totalPending ?? 0;
+  const totalPending  = summary?.totalPending  ?? summary?.totalPending ?? 0;
+  const totalInvoiced = summary?.totalInvoiced ?? 0;
+  const count         = summary?.count         || 0;
+
+  const hasInvoiced = totalInvoiced > 0;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -158,22 +184,31 @@ const TechnicianCommission = () => {
         {/* ─── SUMMARY CARD ───────────────────────────────────── */}
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6 mb-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-green-700 font-medium">
-                Total Pending Commission
+                Total Amount Due
               </p>
               <p className="text-3xl font-bold text-green-800">
-                KES {totalPending.toLocaleString()}
+                KES {totalDue.toLocaleString()}
               </p>
               <p className="text-sm text-green-600 mt-1">
-                {count} booking{count !== 1 ? 's' : ''} with pending commission
+                {count} booking{count !== 1 ? 's' : ''}
+                {hasInvoiced && (
+                  <>
+                    {' '}·{' '}
+                    <span className="text-blue-700">
+                      KES {totalInvoiced.toLocaleString()} previously invoiced
+                    </span>
+                  </>
+                )}
               </p>
             </div>
+
             <button
               onClick={() => setShowConfirmModal(true)}
-              disabled={count === 0}
+              disabled={count === 0 || totalDue === 0}
               className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors ${
-                count === 0
+                count === 0 || totalDue === 0
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-600 text-white hover:bg-green-700'
               }`}
@@ -182,12 +217,34 @@ const TechnicianCommission = () => {
               Pay with Card
             </button>
           </div>
+
+          {/* ─── BREAKDOWN ROW (only if invoiced exists) ────── */}
+          {hasInvoiced && (
+            <div className="mt-4 pt-4 border-t border-green-200 grid grid-cols-2 gap-3">
+              <div className="bg-white/60 rounded-lg p-3">
+                <p className="text-[10px] uppercase tracking-wider text-yellow-700 font-semibold">
+                  Pending
+                </p>
+                <p className="text-lg font-bold text-yellow-800">
+                  KES {totalPending.toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-white/60 rounded-lg p-3">
+                <p className="text-[10px] uppercase tracking-wider text-blue-700 font-semibold">
+                  Invoiced (submitted)
+                </p>
+                <p className="text-lg font-bold text-blue-800">
+                  KES {totalInvoiced.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ─── BOOKINGS LIST ──────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
-            Pending Commission Details
+            Commission Details
           </h2>
           {commissions.length === 0 ? (
             <p className="text-gray-500 text-center py-8">
@@ -202,6 +259,7 @@ const TechnicianCommission = () => {
                     <th className="px-4 py-3 text-left">Service</th>
                     <th className="px-4 py-3 text-left">Labor Cost</th>
                     <th className="px-4 py-3 text-left">Commission (5%)</th>
+                    <th className="px-4 py-3 text-left">Status</th>
                     <th className="px-4 py-3 text-left">Date</th>
                   </tr>
                 </thead>
@@ -223,6 +281,9 @@ const TechnicianCommission = () => {
                       <td className="px-4 py-3 font-medium text-green-700">
                         KES {booking.commissionAmount.toLocaleString()}
                       </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={booking.status} />
+                      </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
                         {new Date(booking.createdAt).toLocaleDateString(
                           'en-KE',
@@ -239,12 +300,12 @@ const TechnicianCommission = () => {
                 <tfoot className="bg-gray-50 font-semibold">
                   <tr>
                     <td colSpan="3" className="px-4 py-3 text-right">
-                      Total:
+                      Total Due:
                     </td>
                     <td className="px-4 py-3 text-green-800">
-                      KES {totalPending.toLocaleString()}
+                      KES {totalDue.toLocaleString()}
                     </td>
-                    <td></td>
+                    <td colSpan="2"></td>
                   </tr>
                 </tfoot>
               </table>
@@ -264,15 +325,39 @@ const TechnicianCommission = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-xl font-bold text-gray-800 mb-4">
-              Pay Pending Commissions
+              Pay Commissions
             </h3>
+
             <p className="text-gray-600 mb-4">
               You are about to pay{' '}
-              <strong>KES {totalPending.toLocaleString()}</strong> for{' '}
-              {count} pending commission{count !== 1 ? 's' : ''} using your
-              card via Paystack. You'll be redirected to a secure checkout
-              page to complete the payment.
+              <strong>KES {totalDue.toLocaleString()}</strong> for{' '}
+              {count} commission{count !== 1 ? 's' : ''} using your card via
+              Paystack.
             </p>
+
+            {/* Breakdown inside modal when invoiced exists */}
+            {hasInvoiced && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Pending:</span>
+                  <span className="font-medium text-yellow-800">
+                    KES {totalPending.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Previously invoiced:</span>
+                  <span className="font-medium text-blue-800">
+                    KES {totalInvoiced.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-gray-200 mt-1">
+                  <span className="text-gray-800 font-semibold">Total:</span>
+                  <span className="font-bold text-green-700">
+                    KES {totalDue.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-800 rounded-lg text-xs mb-4">
               <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -303,7 +388,7 @@ const TechnicianCommission = () => {
                 ) : (
                   <>
                     <CreditCard className="w-4 h-4" />
-                    Continue to Payment
+                    Pay KES {totalDue.toLocaleString()}
                   </>
                 )}
               </button>
