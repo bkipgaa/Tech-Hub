@@ -1,5 +1,5 @@
 /**
- * CreateTechnicianProfile.js
+ * CreateTechnicianProfile.jsx
  * ===========================
  * Technician profile creation form
  * Fully integrated with backend API
@@ -8,18 +8,18 @@
  * Level 2: serviceCategories (from /api/service-catalog/:mainCategory/service-categories)
  * Level 3: subServices (from /api/service-catalog/:mainCategory/:serviceCategory/sub-services)
  * 
- * @version 3.1.0
+ * @version 3.2.0 – Added portfolio upload widget
  */
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Wrench, MapPin, Briefcase, Clock, Award, 
+import {
+  Wrench, MapPin, Briefcase, Award,
   Languages, Plus, Trash2, CheckCircle, AlertCircle,
   User, DollarSign, BadgeCheck as Certificate, Calendar, Globe, Settings,
-  BookOpen, Image, Video, Star, Facebook, Twitter, Linkedin, Instagram, Youtube, 
-  ChevronDown, ChevronUp, Loader2
+  BookOpen, Image, Video, Star, Facebook, Twitter, Linkedin, Instagram, Youtube,
+  ChevronDown, ChevronUp, Loader2, Camera, FileText,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -58,7 +58,7 @@ const CreateTechnicianProfile = () => {
       fixedPrice: 0,
       consultationFee: 0,
       currency: 'KES',
-      paymentMethods: ['Cash', 'M-Pesa']
+      paymentMethods: ['Cash', 'M-Pesa'],
     },
     education: [],
     certifications: [],
@@ -70,12 +70,12 @@ const CreateTechnicianProfile = () => {
       city: '',
       state: '',
       zipCode: '',
-      country: 'Kenya'
+      country: 'Kenya',
     },
     location: {
       coordinates: [36.8219, -1.2921],
       formattedAddress: '',
-      placeId: ''
+      placeId: '',
     },
     serviceRadius: 10,
     languages: [{ name: 'English', proficiency: 'Fluent' }],
@@ -86,7 +86,7 @@ const CreateTechnicianProfile = () => {
       thursday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
       friday: { enabled: true, hours: [{ start: '09:00', end: '17:00' }] },
       saturday: { enabled: false, hours: [] },
-      sunday: { enabled: false, hours: [] }
+      sunday: { enabled: false, hours: [] },
     },
     emergencyAvailable: false,
     remoteServiceAvailable: false,
@@ -99,7 +99,7 @@ const CreateTechnicianProfile = () => {
       twitter: '',
       linkedin: '',
       instagram: '',
-      youtube: ''
+      youtube: '',
     },
     settings: {
       showEmail: false,
@@ -111,17 +111,17 @@ const CreateTechnicianProfile = () => {
       notifications: {
         email: true,
         sms: true,
-        push: true
-      }
+        push: true,
+      },
     },
-    isAvailable: true
+    isAvailable: true,
   });
 
   // Dynamic input states
-  const [newSkill, setNewSkill] = useState({ 
-    name: '', 
-    level: 'Intermediate', 
-    yearsOfExperience: 0
+  const [newSkill, setNewSkill] = useState({
+    name: '',
+    level: 'Intermediate',
+    yearsOfExperience: 0,
   });
   const [newLanguage, setNewLanguage] = useState({ name: '', proficiency: 'Fluent' });
   const [newEducation, setNewEducation] = useState({
@@ -132,7 +132,7 @@ const CreateTechnicianProfile = () => {
     endDate: '',
     isCurrent: false,
     description: '',
-    grade: ''
+    grade: '',
   });
   const [newCertification, setNewCertification] = useState({
     name: '',
@@ -141,7 +141,7 @@ const CreateTechnicianProfile = () => {
     expiryDate: '',
     credentialId: '',
     credentialUrl: '',
-    doesNotExpire: false
+    doesNotExpire: false,
   });
   const [newExperience, setNewExperience] = useState({
     title: '',
@@ -151,7 +151,7 @@ const CreateTechnicianProfile = () => {
     endDate: '',
     isCurrent: false,
     description: '',
-    achievements: []
+    achievements: [],
   });
   const [newPortfolio, setNewPortfolio] = useState({
     title: '',
@@ -159,16 +159,21 @@ const CreateTechnicianProfile = () => {
     category: '',
     mediaType: 'image',
     mediaUrl: '',
+    publicId: '',
     thumbnailUrl: '',
     clientName: '',
     completionDate: '',
     tags: [],
-    isFeatured: false
+    isFeatured: false,
   });
   const [newAchievement, setNewAchievement] = useState('');
   const [newTag, setNewTag] = useState('');
   const [newPaymentMethod, setNewPaymentMethod] = useState('');
-  
+
+  // Portfolio upload state
+  const [portfolioUploading, setPortfolioUploading] = useState(false);
+  const [portfolioUploadError, setPortfolioUploadError] = useState('');
+
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
     services: true,
@@ -182,43 +187,35 @@ const CreateTechnicianProfile = () => {
     pricing: false,
     availability: false,
     social: false,
-    settings: false
+    settings: false,
   });
 
-  // Fetch catalog data
-  // Fetch catalog data — ONE API CALL instead of 100+
+  // ─── FETCH CATALOG ──────────────────────────────────────
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
         setCatalogLoading(true);
-        
         const response = await api.get('/service-catalog/complete');
-        
+
         if (response.data.success) {
           const catalogData = response.data.data;
           const mainCats = Object.keys(catalogData);
-          
+
           setMainCategories(mainCats);
-          
+
           const servicesMap = {};
           const subsMap = {};
-          
-          mainCats.forEach(mainCat => {
+
+          mainCats.forEach((mainCat) => {
             const categories = catalogData[mainCat] || [];
-            servicesMap[mainCat] = categories.map(c => c.name);
-            categories.forEach(c => {
+            servicesMap[mainCat] = categories.map((c) => c.name);
+            categories.forEach((c) => {
               subsMap[c.name] = c.subServices || [];
             });
           });
-          
+
           setServiceCategoriesMap(servicesMap);
           setSubServicesMap(subsMap);
-          
-          console.log('✅ Catalog loaded in 1 request:', {
-            mainCategories: mainCats.length,
-            serviceCategories: Object.keys(servicesMap).length,
-            subServices: Object.keys(subsMap).length
-          });
         } else {
           useDefaultCategories();
         }
@@ -230,36 +227,36 @@ const CreateTechnicianProfile = () => {
         setCatalogLoading(false);
       }
     };
-    
+
     fetchCatalog();
   }, []);
-  // Default categories (fallback)
+
   const useDefaultCategories = () => {
     const fallbackCategories = [
       'IT & Networking',
       'Electrical Services',
       'Plumbing',
       'Mechanical Services',
-      'Cleaning Services'
+      'Cleaning Services',
     ];
     setMainCategories(fallbackCategories);
     setServiceCategoriesMap({
       'IT & Networking': ['Internet Services', 'CCTV & Security Systems', 'Computer Repair & Maintenance'],
       'Electrical Services': ['Residential Electrical', 'Commercial Electrical'],
-      'Plumbing': ['General Plumbing', 'Drainage & Sewer'],
+      Plumbing: ['General Plumbing', 'Drainage & Sewer'],
       'Mechanical Services': ['HVAC Services', 'General Mechanical'],
-      'Cleaning Services': ['Residential Cleaning', 'Commercial Cleaning']
+      'Cleaning Services': ['Residential Cleaning', 'Commercial Cleaning'],
     });
     setSubServicesMap({
       'Internet Services': ['WiFi Setup & Configuration', 'Network Troubleshooting', 'Fiber Optic Installation'],
       'Residential Electrical': ['House Wiring & Rewiring', 'Lighting Installation', 'Ceiling Fan Installation'],
       'General Plumbing': ['Leak Detection & Repair', 'Faucet Installation & Repair', 'Toilet Repair & Installation'],
       'CCTV & Security Systems': ['CCTV Camera Installation', 'Security System Maintenance'],
-      'Computer Repair & Maintenance': ['Hardware Repair', 'Virus & Malware Removal', 'Data Recovery']
+      'Computer Repair & Maintenance': ['Hardware Repair', 'Virus & Malware Removal', 'Data Recovery'],
     });
   };
 
-  // Update available service categories when main category changes
+  // ─── EFFECTS ────────────────────────────────────────────
   useEffect(() => {
     if (formData.mainCategory) {
       const services = serviceCategoriesMap[formData.mainCategory] || [];
@@ -275,7 +272,6 @@ const CreateTechnicianProfile = () => {
     }
   }, [formData.mainCategory, serviceCategoriesMap]);
 
-  // Update available sub-services when temp service category changes
   useEffect(() => {
     if (tempServiceCategory) {
       const subs = subServicesMap[tempServiceCategory] || [];
@@ -287,84 +283,84 @@ const CreateTechnicianProfile = () => {
     }
   }, [tempServiceCategory, subServicesMap]);
 
-  // Handle form input changes
+  // ─── INPUT HANDLERS ─────────────────────────────────────
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     if (name.includes('.')) {
       const parts = name.split('.');
       if (parts.length === 2) {
         const [parent, child] = parts;
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
           [parent]: {
             ...prev[parent],
-            [child]: type === 'checkbox' ? checked : value
-          }
+            [child]: type === 'checkbox' ? checked : value,
+          },
         }));
       } else if (parts.length === 3) {
         const [parent, child, grandChild] = parts;
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
           [parent]: {
             ...prev[parent],
             [child]: {
               ...prev[parent]?.[child],
-              [grandChild]: type === 'checkbox' ? checked : value
-            }
-          }
+              [grandChild]: type === 'checkbox' ? checked : value,
+            },
+          },
         }));
       }
     } else {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        [name]: type === 'checkbox' ? checked : value
+        [name]: type === 'checkbox' ? checked : value,
       }));
     }
   };
 
-  // Skills management
+  // ─── SKILLS ─────────────────────────────────────────────
   const addSkill = () => {
     if (newSkill.name) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        skills: [...prev.skills, { ...newSkill }]
+        skills: [...prev.skills, { ...newSkill }],
       }));
       setNewSkill({ name: '', level: 'Intermediate', yearsOfExperience: 0 });
     }
   };
-  
+
   const removeSkill = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      skills: prev.skills.filter((_, i) => i !== index)
+      skills: prev.skills.filter((_, i) => i !== index),
     }));
   };
 
-  // Languages management
+  // ─── LANGUAGES ──────────────────────────────────────────
   const addLanguage = () => {
     if (newLanguage.name) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        languages: [...prev.languages, { ...newLanguage }]
+        languages: [...prev.languages, { ...newLanguage }],
       }));
       setNewLanguage({ name: '', proficiency: 'Fluent' });
     }
   };
-  
+
   const removeLanguage = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      languages: prev.languages.filter((_, i) => i !== index)
+      languages: prev.languages.filter((_, i) => i !== index),
     }));
   };
 
-  // Education management
+  // ─── EDUCATION ──────────────────────────────────────────
   const addEducation = () => {
     if (newEducation.institution && newEducation.degree) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        education: [...prev.education, { ...newEducation }]
+        education: [...prev.education, { ...newEducation }],
       }));
       setNewEducation({
         institution: '',
@@ -374,24 +370,24 @@ const CreateTechnicianProfile = () => {
         endDate: '',
         isCurrent: false,
         description: '',
-        grade: ''
+        grade: '',
       });
     }
   };
-  
+
   const removeEducation = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      education: prev.education.filter((_, i) => i !== index)
+      education: prev.education.filter((_, i) => i !== index),
     }));
   };
 
-  // Certifications management
+  // ─── CERTIFICATIONS ─────────────────────────────────────
   const addCertification = () => {
     if (newCertification.name && newCertification.issuingOrganization) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        certifications: [...prev.certifications, { ...newCertification }]
+        certifications: [...prev.certifications, { ...newCertification }],
       }));
       setNewCertification({
         name: '',
@@ -400,41 +396,41 @@ const CreateTechnicianProfile = () => {
         expiryDate: '',
         credentialId: '',
         credentialUrl: '',
-        doesNotExpire: false
+        doesNotExpire: false,
       });
     }
   };
-  
+
   const removeCertification = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      certifications: prev.certifications.filter((_, i) => i !== index)
+      certifications: prev.certifications.filter((_, i) => i !== index),
     }));
   };
 
-  // Experience management
+  // ─── EXPERIENCE ─────────────────────────────────────────
   const addAchievement = () => {
     if (newAchievement) {
-      setNewExperience(prev => ({
+      setNewExperience((prev) => ({
         ...prev,
-        achievements: [...prev.achievements, newAchievement]
+        achievements: [...prev.achievements, newAchievement],
       }));
       setNewAchievement('');
     }
   };
-  
+
   const removeAchievement = (index) => {
-    setNewExperience(prev => ({
+    setNewExperience((prev) => ({
       ...prev,
-      achievements: prev.achievements.filter((_, i) => i !== index)
+      achievements: prev.achievements.filter((_, i) => i !== index),
     }));
   };
-  
+
   const addExperience = () => {
     if (newExperience.title && newExperience.company) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        experience: [...prev.experience, { ...newExperience }]
+        experience: [...prev.experience, { ...newExperience }],
       }));
       setNewExperience({
         title: '',
@@ -444,41 +440,83 @@ const CreateTechnicianProfile = () => {
         endDate: '',
         isCurrent: false,
         description: '',
-        achievements: []
+        achievements: [],
       });
     }
   };
-  
+
   const removeExperience = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      experience: prev.experience.filter((_, i) => i !== index)
+      experience: prev.experience.filter((_, i) => i !== index),
     }));
   };
 
-  // Portfolio management
+  // ─── PORTFOLIO ──────────────────────────────────────────
   const addTag = () => {
     if (newTag) {
-      setNewPortfolio(prev => ({
+      setNewPortfolio((prev) => ({
         ...prev,
-        tags: [...prev.tags, newTag]
+        tags: [...prev.tags, newTag],
       }));
       setNewTag('');
     }
   };
-  
+
   const removeTag = (index) => {
-    setNewPortfolio(prev => ({
+    setNewPortfolio((prev) => ({
       ...prev,
-      tags: prev.tags.filter((_, i) => i !== index)
+      tags: prev.tags.filter((_, i) => i !== index),
     }));
   };
-  
+
+  const handlePortfolioMediaUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setPortfolioUploadError('File size must be less than 10MB');
+      return;
+    }
+
+    setPortfolioUploading(true);
+    setPortfolioUploadError('');
+
+    const formPayload = new FormData();
+    formPayload.append('media', file);
+
+    try {
+      // ✅ DO NOT set Content-Type manually — Axios adds the boundary
+      const res = await api.post('/upload/portfolio', formPayload);
+
+      console.log('📤 Portfolio upload success:', res.data);
+
+      if (res.data.success) {
+        setNewPortfolio((prev) => ({
+          ...prev,
+          mediaUrl: res.data.mediaUrl,
+          publicId: res.data.publicId,
+          thumbnailUrl: res.data.mediaUrl,
+          mediaType: res.data.mediaType,
+        }));
+      } else {
+        setPortfolioUploadError(res.data.message || 'Upload failed');
+      }
+    } catch (err) {
+      console.error('❌ Portfolio upload error:', err);
+      setPortfolioUploadError(
+        err.response?.data?.message || err.message || 'Upload failed'
+      );
+    } finally {
+      setPortfolioUploading(false);
+    }
+  };
+
   const addPortfolio = () => {
     if (newPortfolio.title && newPortfolio.mediaUrl) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        portfolio: [...prev.portfolio, { ...newPortfolio }]
+        portfolio: [...prev.portfolio, { ...newPortfolio }],
       }));
       setNewPortfolio({
         title: '',
@@ -486,47 +524,51 @@ const CreateTechnicianProfile = () => {
         category: '',
         mediaType: 'image',
         mediaUrl: '',
+        publicId: '',
         thumbnailUrl: '',
         clientName: '',
         completionDate: '',
         tags: [],
-        isFeatured: false
+        isFeatured: false,
       });
+      setNewTag('');
+      setPortfolioUploadError('');
+      setPortfolioUploading(false);
     }
   };
-  
+
   const removePortfolio = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      portfolio: prev.portfolio.filter((_, i) => i !== index)
+      portfolio: prev.portfolio.filter((_, i) => i !== index),
     }));
   };
 
-  // Payment methods
+  // ─── PAYMENT METHODS ────────────────────────────────────
   const addPaymentMethod = () => {
     if (newPaymentMethod && !formData.pricing.paymentMethods.includes(newPaymentMethod)) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         pricing: {
           ...prev.pricing,
-          paymentMethods: [...prev.pricing.paymentMethods, newPaymentMethod]
-        }
+          paymentMethods: [...prev.pricing.paymentMethods, newPaymentMethod],
+        },
       }));
       setNewPaymentMethod('');
     }
   };
-  
+
   const removePaymentMethod = (method) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       pricing: {
         ...prev.pricing,
-        paymentMethods: prev.pricing.paymentMethods.filter(m => m !== method)
-      }
+        paymentMethods: prev.pricing.paymentMethods.filter((m) => m !== method),
+      },
     }));
   };
 
-  // Service categories management
+  // ─── SERVICE CATEGORIES ─────────────────────────────────
   const addServiceCategory = () => {
     if (!tempServiceCategory) {
       setError('Please select a service category');
@@ -536,20 +578,20 @@ const CreateTechnicianProfile = () => {
       setError('Please select at least one sub-service for this category');
       return;
     }
-    if (formData.serviceCategories.some(sc => sc.categoryName === tempServiceCategory)) {
+    if (formData.serviceCategories.some((sc) => sc.categoryName === tempServiceCategory)) {
       setError('This service category is already added');
       return;
     }
-    
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
       serviceCategories: [
         ...prev.serviceCategories,
-        { 
-          categoryName: tempServiceCategory, 
-          subServices: [...tempSubServices]
-        }
-      ]
+        {
+          categoryName: tempServiceCategory,
+          subServices: [...tempSubServices],
+        },
+      ],
     }));
     setTempServiceCategory('');
     setTempSubServices([]);
@@ -557,77 +599,72 @@ const CreateTechnicianProfile = () => {
   };
 
   const removeServiceCategory = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      serviceCategories: prev.serviceCategories.filter((_, i) => i !== index)
+      serviceCategories: prev.serviceCategories.filter((_, i) => i !== index),
     }));
   };
 
   const toggleSubService = (subName) => {
-    setTempSubServices(prev =>
-      prev.includes(subName) ? prev.filter(s => s !== subName) : [...prev, subName]
+    setTempSubServices((prev) =>
+      prev.includes(subName)
+        ? prev.filter((s) => s !== subName)
+        : [...prev, subName]
     );
   };
 
-  // Toggle section expansion
   const toggleSection = (section) => {
-    setExpandedSections(prev => ({
+    setExpandedSections((prev) => ({
       ...prev,
-      [section]: !prev[section]
+      [section]: !prev[section],
     }));
   };
 
-  // Submit handler
+  // ─── SUBMIT ─────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Validate Level 1: mainCategory
     if (!formData.mainCategory) {
       setError('Please select a main category');
       setLoading(false);
       return;
     }
-    
-    // Validate Level 2 & 3: serviceCategories with subServices
+
     if (formData.serviceCategories.length === 0) {
       setError('Please add at least one service category with sub-services');
       setLoading(false);
       return;
     }
-    
+
     if (!formData.address.city || !formData.address.state) {
       setError('City and state are required');
       setLoading(false);
       return;
     }
 
-    // Format data for backend
     const submitData = {
       ...formData,
       yearsOfExperience: Number(formData.yearsOfExperience),
-      serviceCategories: formData.serviceCategories.map(sc => ({
+      serviceCategories: formData.serviceCategories.map((sc) => ({
         categoryName: sc.categoryName,
-        subServices: sc.subServices
-      }))
+        subServices: sc.subServices,
+      })),
     };
-
-    console.log('📦 Submitting profile data:', submitData);
 
     const result = await createTechnicianProfile(submitData);
     setLoading(false);
-    
+
     if (result.success) {
       setSuccess(true);
-      // ✅ UPDATED: Redirect to home page instead of technician dashboard
       setTimeout(() => navigate('/'), 2000);
     } else {
       setError(result.error || 'Failed to create profile');
     }
   };
 
-  // Loading state
+  // ─── LOADING ────────────────────────────────────────────
   if (catalogLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -639,6 +676,9 @@ const CreateTechnicianProfile = () => {
     );
   }
 
+  // ═════════════════════════════════════════════════════════
+  // RENDER
+  // ═════════════════════════════════════════════════════════
   return (
     <div className="max-w-6xl mx-auto py-8 px-4">
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -647,8 +687,12 @@ const CreateTechnicianProfile = () => {
           <div className="flex items-center space-x-4">
             <Wrench className="w-12 h-12 text-white" />
             <div>
-              <h1 className="text-3xl font-bold text-white">Create Technician Profile</h1>
-              <p className="text-green-100">Complete your profile to start offering services</p>
+              <h1 className="text-3xl font-bold text-white">
+                Create Technician Profile
+              </h1>
+              <p className="text-green-100">
+                Complete your profile to start offering services
+              </p>
             </div>
           </div>
         </div>
@@ -661,7 +705,7 @@ const CreateTechnicianProfile = () => {
               <span>{error}</span>
             </div>
           )}
-          
+
           {success && (
             <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded flex items-center">
               <CheckCircle className="w-5 h-5 mr-2 flex-shrink-0" />
@@ -670,7 +714,7 @@ const CreateTechnicianProfile = () => {
           )}
 
           <div className="space-y-4">
-            {/* BASIC INFO */}
+            {/* ═══ BASIC INFO ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -681,12 +725,18 @@ const CreateTechnicianProfile = () => {
                   <User className="w-5 h-5 mr-2 text-green-600" />
                   Basic Information
                 </h2>
-                {expandedSections.basic ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.basic ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.basic && (
                 <div className="p-6 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Profile Headline</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Profile Headline
+                    </label>
                     <input
                       type="text"
                       name="profileHeadline"
@@ -697,7 +747,9 @@ const CreateTechnicianProfile = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">About Me</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      About Me
+                    </label>
                     <textarea
                       name="aboutMe"
                       value={formData.aboutMe}
@@ -708,7 +760,9 @@ const CreateTechnicianProfile = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Business Name</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Business Name
+                    </label>
                     <input
                       type="text"
                       name="businessName"
@@ -719,7 +773,9 @@ const CreateTechnicianProfile = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Business Registration Number (Optional)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Business Registration Number (Optional)
+                    </label>
                     <input
                       type="text"
                       name="businessRegistrationNumber"
@@ -733,7 +789,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* SERVICES OFFERED */}
+            {/* ═══ SERVICES OFFERED ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -744,11 +800,14 @@ const CreateTechnicianProfile = () => {
                   <Wrench className="w-5 h-5 mr-2 text-green-600" />
                   Services Offered <span className="text-red-500 ml-1">*</span>
                 </h2>
-                {expandedSections.services ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.services ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.services && (
                 <div className="p-6 space-y-4">
-                  {/* Level 1: Main Category */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Main Category <span className="text-red-500">*</span>
@@ -761,8 +820,10 @@ const CreateTechnicianProfile = () => {
                       className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                     >
                       <option value="">Select a main category</option>
-                      {mainCategories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      {mainCategories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
                       ))}
                     </select>
                     <p className="text-xs text-gray-500 mt-1">
@@ -770,14 +831,12 @@ const CreateTechnicianProfile = () => {
                     </p>
                   </div>
 
-                  {/* Level 2 & 3 */}
                   {formData.mainCategory && (
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Add Service Category & Sub-Services
                       </label>
                       <div className="space-y-3">
-                        {/* Level 2 */}
                         <select
                           value={tempServiceCategory}
                           onChange={(e) => {
@@ -787,23 +846,28 @@ const CreateTechnicianProfile = () => {
                           className="w-full p-3 border border-gray-300 rounded-lg"
                         >
                           <option value="">Select a service category</option>
-                          {availableServiceCategories.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
+                          {availableServiceCategories.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
                           ))}
                         </select>
                         <p className="text-xs text-gray-500">
                           Level 2: Select a specific service category
                         </p>
 
-                        {/* Level 3 */}
                         {tempServiceCategory && availableSubServices.length > 0 && (
                           <div className="mt-3">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Select Sub-Services you offer <span className="text-red-500">*</span>
+                              Select Sub-Services you offer{' '}
+                              <span className="text-red-500">*</span>
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2 border border-gray-200 rounded-lg bg-white">
-                              {availableSubServices.map(sub => (
-                                <label key={sub} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                              {availableSubServices.map((sub) => (
+                                <label
+                                  key={sub}
+                                  className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                                >
                                   <input
                                     type="checkbox"
                                     checked={tempSubServices.includes(sub)}
@@ -833,7 +897,6 @@ const CreateTechnicianProfile = () => {
                     </div>
                   )}
 
-                  {/* Display added service categories */}
                   {formData.serviceCategories.length > 0 && (
                     <div className="mt-4">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -841,12 +904,20 @@ const CreateTechnicianProfile = () => {
                       </label>
                       <div className="space-y-2">
                         {formData.serviceCategories.map((sc, idx) => (
-                          <div key={idx} className="bg-green-50 p-3 rounded-lg flex justify-between items-start border border-green-200">
+                          <div
+                            key={idx}
+                            className="bg-green-50 p-3 rounded-lg flex justify-between items-start border border-green-200"
+                          >
                             <div>
-                              <p className="font-semibold text-green-800">{sc.categoryName}</p>
+                              <p className="font-semibold text-green-800">
+                                {sc.categoryName}
+                              </p>
                               <div className="flex flex-wrap gap-1 mt-1">
-                                {sc.subServices.map(sub => (
-                                  <span key={sub} className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">
+                                {sc.subServices.map((sub) => (
+                                  <span
+                                    key={sub}
+                                    className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full"
+                                  >
                                     {sub}
                                   </span>
                                 ))}
@@ -868,7 +939,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* SKILLS */}
+            {/* ═══ SKILLS ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -879,7 +950,11 @@ const CreateTechnicianProfile = () => {
                   <Award className="w-5 h-5 mr-2 text-green-600" />
                   Skills
                 </h2>
-                {expandedSections.skills ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.skills ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.skills && (
                 <div className="p-6">
@@ -888,40 +963,66 @@ const CreateTechnicianProfile = () => {
                       <input
                         type="text"
                         value={newSkill.name}
-                        onChange={(e) => setNewSkill({...newSkill, name: e.target.value})}
+                        onChange={(e) =>
+                          setNewSkill({ ...newSkill, name: e.target.value })
+                        }
                         placeholder="Skill name"
                         className="p-3 border border-gray-300 rounded-lg"
                       />
                       <select
                         value={newSkill.level}
-                        onChange={(e) => setNewSkill({...newSkill, level: e.target.value})}
+                        onChange={(e) =>
+                          setNewSkill({ ...newSkill, level: e.target.value })
+                        }
                         className="p-3 border border-gray-300 rounded-lg"
                       >
-                        {skillLevels.map(level => (
-                          <option key={level} value={level}>{level}</option>
+                        {skillLevels.map((level) => (
+                          <option key={level} value={level}>
+                            {level}
+                          </option>
                         ))}
                       </select>
                       <input
                         type="number"
                         value={newSkill.yearsOfExperience}
-                        onChange={(e) => setNewSkill({...newSkill, yearsOfExperience: parseInt(e.target.value) || 0})}
+                        onChange={(e) =>
+                          setNewSkill({
+                            ...newSkill,
+                            yearsOfExperience: parseInt(e.target.value) || 0,
+                          })
+                        }
                         placeholder="Years of experience"
                         className="p-3 border border-gray-300 rounded-lg"
                       />
-                      <button type="button" onClick={addSkill} className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700">
+                      <button
+                        type="button"
+                        onClick={addSkill}
+                        className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700"
+                      >
                         Add Skill
                       </button>
                     </div>
                   </div>
                   <div className="space-y-2">
                     {formData.skills.map((skill, index) => (
-                      <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                      <div
+                        key={index}
+                        className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
+                      >
                         <div>
                           <span className="font-medium">{skill.name}</span>
-                          <span className="ml-2 text-sm text-gray-600">({skill.level})</span>
-                          <span className="ml-2 text-sm text-gray-500">{skill.yearsOfExperience} years</span>
+                          <span className="ml-2 text-sm text-gray-600">
+                            ({skill.level})
+                          </span>
+                          <span className="ml-2 text-sm text-gray-500">
+                            {skill.yearsOfExperience} years
+                          </span>
                         </div>
-                        <button type="button" onClick={() => removeSkill(index)} className="text-red-500 hover:text-red-700">
+                        <button
+                          type="button"
+                          onClick={() => removeSkill(index)}
+                          className="text-red-500 hover:text-red-700"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -931,7 +1032,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* EXPERIENCE */}
+            {/* ═══ EXPERIENCE ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -942,12 +1043,19 @@ const CreateTechnicianProfile = () => {
                   <Briefcase className="w-5 h-5 mr-2 text-green-600" />
                   Experience
                 </h2>
-                {expandedSections.experience ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.experience ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.experience && (
                 <div className="p-6">
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Total Years of Experience <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Total Years of Experience{' '}
+                      <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="number"
                       name="yearsOfExperience"
@@ -959,26 +1067,43 @@ const CreateTechnicianProfile = () => {
                     />
                   </div>
                   <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                    <h3 className="font-semibold text-gray-800 mb-4">Add Work Experience</h3>
+                    <h3 className="font-semibold text-gray-800 mb-4">
+                      Add Work Experience
+                    </h3>
                     <div className="space-y-4">
                       <input
                         type="text"
                         value={newExperience.title}
-                        onChange={(e) => setNewExperience({...newExperience, title: e.target.value})}
+                        onChange={(e) =>
+                          setNewExperience({
+                            ...newExperience,
+                            title: e.target.value,
+                          })
+                        }
                         placeholder="Job Title"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newExperience.company}
-                        onChange={(e) => setNewExperience({...newExperience, company: e.target.value})}
+                        onChange={(e) =>
+                          setNewExperience({
+                            ...newExperience,
+                            company: e.target.value,
+                          })
+                        }
                         placeholder="Company"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newExperience.location}
-                        onChange={(e) => setNewExperience({...newExperience, location: e.target.value})}
+                        onChange={(e) =>
+                          setNewExperience({
+                            ...newExperience,
+                            location: e.target.value,
+                          })
+                        }
                         placeholder="Location"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
@@ -986,13 +1111,23 @@ const CreateTechnicianProfile = () => {
                         <input
                           type="date"
                           value={newExperience.startDate}
-                          onChange={(e) => setNewExperience({...newExperience, startDate: e.target.value})}
+                          onChange={(e) =>
+                            setNewExperience({
+                              ...newExperience,
+                              startDate: e.target.value,
+                            })
+                          }
                           className="p-3 border border-gray-300 rounded-lg"
                         />
                         <input
                           type="date"
                           value={newExperience.endDate}
-                          onChange={(e) => setNewExperience({...newExperience, endDate: e.target.value})}
+                          onChange={(e) =>
+                            setNewExperience({
+                              ...newExperience,
+                              endDate: e.target.value,
+                            })
+                          }
                           disabled={newExperience.isCurrent}
                           className="p-3 border border-gray-300 rounded-lg"
                         />
@@ -1001,20 +1136,34 @@ const CreateTechnicianProfile = () => {
                         <input
                           type="checkbox"
                           checked={newExperience.isCurrent}
-                          onChange={(e) => setNewExperience({...newExperience, isCurrent: e.target.checked})}
+                          onChange={(e) =>
+                            setNewExperience({
+                              ...newExperience,
+                              isCurrent: e.target.checked,
+                            })
+                          }
                           className="h-4 w-4 text-green-600 rounded"
                         />
-                        <label className="ml-2 text-sm text-gray-700">I currently work here</label>
+                        <label className="ml-2 text-sm text-gray-700">
+                          I currently work here
+                        </label>
                       </div>
                       <textarea
                         value={newExperience.description}
-                        onChange={(e) => setNewExperience({...newExperience, description: e.target.value})}
+                        onChange={(e) =>
+                          setNewExperience({
+                            ...newExperience,
+                            description: e.target.value,
+                          })
+                        }
                         placeholder="Job Description"
                         rows="3"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Achievements</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Achievements
+                        </label>
                         <div className="flex gap-2 mb-2">
                           <input
                             type="text"
@@ -1023,38 +1172,69 @@ const CreateTechnicianProfile = () => {
                             placeholder="Add achievement"
                             className="flex-1 p-2 border border-gray-300 rounded-lg"
                           />
-                          <button type="button" onClick={addAchievement} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                          <button
+                            type="button"
+                            onClick={addAchievement}
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                          >
                             <Plus className="w-4 h-4" />
                           </button>
                         </div>
                         <div className="space-y-1">
                           {newExperience.achievements.map((ach, idx) => (
-                            <div key={idx} className="flex items-center justify-between bg-gray-100 p-2 rounded">
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between bg-gray-100 p-2 rounded"
+                            >
                               <span className="text-sm">{ach}</span>
-                              <button type="button" onClick={() => removeAchievement(idx)} className="text-red-500 hover:text-red-700">
+                              <button
+                                type="button"
+                                onClick={() => removeAchievement(idx)}
+                                className="text-red-500 hover:text-red-700"
+                              >
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
                           ))}
                         </div>
                       </div>
-                      <button type="button" onClick={addExperience} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                      <button
+                        type="button"
+                        onClick={addExperience}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                      >
                         Add Experience
                       </button>
                     </div>
                   </div>
                   {formData.experience.map((exp, index) => (
-                    <div key={index} className="bg-gray-50 p-4 rounded-lg mb-3">
+                    <div
+                      key={index}
+                      className="bg-gray-50 p-4 rounded-lg mb-3"
+                    >
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-semibold">{exp.title}</h4>
-                          <p className="text-gray-600">{exp.company} • {exp.location}</p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(exp.startDate).toLocaleDateString()} - {exp.isCurrent ? 'Present' : new Date(exp.endDate).toLocaleDateString()}
+                          <p className="text-gray-600">
+                            {exp.company} • {exp.location}
                           </p>
-                          {exp.description && <p className="mt-2 text-gray-700">{exp.description}</p>}
+                          <p className="text-sm text-gray-500">
+                            {new Date(exp.startDate).toLocaleDateString()} -{' '}
+                            {exp.isCurrent
+                              ? 'Present'
+                              : new Date(exp.endDate).toLocaleDateString()}
+                          </p>
+                          {exp.description && (
+                            <p className="mt-2 text-gray-700">
+                              {exp.description}
+                            </p>
+                          )}
                         </div>
-                        <button type="button" onClick={() => removeExperience(index)} className="text-red-500 hover:text-red-700">
+                        <button
+                          type="button"
+                          onClick={() => removeExperience(index)}
+                          className="text-red-500 hover:text-red-700"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -1064,7 +1244,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* EDUCATION */}
+            {/* ═══ EDUCATION ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1075,7 +1255,11 @@ const CreateTechnicianProfile = () => {
                   <BookOpen className="w-5 h-5 mr-2 text-green-600" />
                   Education
                 </h2>
-                {expandedSections.education ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.education ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.education && (
                 <div className="p-6">
@@ -1084,21 +1268,36 @@ const CreateTechnicianProfile = () => {
                       <input
                         type="text"
                         value={newEducation.institution}
-                        onChange={(e) => setNewEducation({...newEducation, institution: e.target.value})}
+                        onChange={(e) =>
+                          setNewEducation({
+                            ...newEducation,
+                            institution: e.target.value,
+                          })
+                        }
                         placeholder="Institution"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newEducation.degree}
-                        onChange={(e) => setNewEducation({...newEducation, degree: e.target.value})}
+                        onChange={(e) =>
+                          setNewEducation({
+                            ...newEducation,
+                            degree: e.target.value,
+                          })
+                        }
                         placeholder="Degree"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newEducation.fieldOfStudy}
-                        onChange={(e) => setNewEducation({...newEducation, fieldOfStudy: e.target.value})}
+                        onChange={(e) =>
+                          setNewEducation({
+                            ...newEducation,
+                            fieldOfStudy: e.target.value,
+                          })
+                        }
                         placeholder="Field of Study"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
@@ -1106,13 +1305,23 @@ const CreateTechnicianProfile = () => {
                         <input
                           type="date"
                           value={newEducation.startDate}
-                          onChange={(e) => setNewEducation({...newEducation, startDate: e.target.value})}
+                          onChange={(e) =>
+                            setNewEducation({
+                              ...newEducation,
+                              startDate: e.target.value,
+                            })
+                          }
                           className="p-3 border border-gray-300 rounded-lg"
                         />
                         <input
                           type="date"
                           value={newEducation.endDate}
-                          onChange={(e) => setNewEducation({...newEducation, endDate: e.target.value})}
+                          onChange={(e) =>
+                            setNewEducation({
+                              ...newEducation,
+                              endDate: e.target.value,
+                            })
+                          }
                           disabled={newEducation.isCurrent}
                           className="p-3 border border-gray-300 rounded-lg"
                         />
@@ -1121,14 +1330,26 @@ const CreateTechnicianProfile = () => {
                         <input
                           type="checkbox"
                           checked={newEducation.isCurrent}
-                          onChange={(e) => setNewEducation({...newEducation, isCurrent: e.target.checked})}
+                          onChange={(e) =>
+                            setNewEducation({
+                              ...newEducation,
+                              isCurrent: e.target.checked,
+                            })
+                          }
                           className="h-4 w-4 text-green-600 rounded"
                         />
-                        <label className="ml-2 text-sm text-gray-700">Currently studying</label>
+                        <label className="ml-2 text-sm text-gray-700">
+                          Currently studying
+                        </label>
                       </div>
                       <textarea
                         value={newEducation.description}
-                        onChange={(e) => setNewEducation({...newEducation, description: e.target.value})}
+                        onChange={(e) =>
+                          setNewEducation({
+                            ...newEducation,
+                            description: e.target.value,
+                          })
+                        }
                         placeholder="Description"
                         rows="3"
                         className="w-full p-3 border border-gray-300 rounded-lg"
@@ -1136,11 +1357,20 @@ const CreateTechnicianProfile = () => {
                       <input
                         type="text"
                         value={newEducation.grade}
-                        onChange={(e) => setNewEducation({...newEducation, grade: e.target.value})}
+                        onChange={(e) =>
+                          setNewEducation({
+                            ...newEducation,
+                            grade: e.target.value,
+                          })
+                        }
                         placeholder="Grade (optional)"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
-                      <button type="button" onClick={addEducation} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                      <button
+                        type="button"
+                        onClick={addEducation}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                      >
                         Add Education
                       </button>
                     </div>
@@ -1149,13 +1379,22 @@ const CreateTechnicianProfile = () => {
                     <div key={index} className="bg-gray-50 p-4 rounded-lg mb-3">
                       <div className="flex justify-between">
                         <div>
-                          <h4 className="font-semibold">{edu.degree} in {edu.fieldOfStudy}</h4>
+                          <h4 className="font-semibold">
+                            {edu.degree} in {edu.fieldOfStudy}
+                          </h4>
                           <p className="text-gray-600">{edu.institution}</p>
                           <p className="text-sm text-gray-500">
-                            {new Date(edu.startDate).toLocaleDateString()} - {edu.isCurrent ? 'Present' : new Date(edu.endDate).toLocaleDateString()}
+                            {new Date(edu.startDate).toLocaleDateString()} -{' '}
+                            {edu.isCurrent
+                              ? 'Present'
+                              : new Date(edu.endDate).toLocaleDateString()}
                           </p>
                         </div>
-                        <button type="button" onClick={() => removeEducation(index)} className="text-red-500 hover:text-red-700">
+                        <button
+                          type="button"
+                          onClick={() => removeEducation(index)}
+                          className="text-red-500 hover:text-red-700"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -1165,7 +1404,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* CERTIFICATIONS */}
+            {/* ═══ CERTIFICATIONS ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1176,7 +1415,11 @@ const CreateTechnicianProfile = () => {
                   <Certificate className="w-5 h-5 mr-2 text-green-600" />
                   Certifications
                 </h2>
-                {expandedSections.certifications ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.certifications ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.certifications && (
                 <div className="p-6">
@@ -1185,14 +1428,24 @@ const CreateTechnicianProfile = () => {
                       <input
                         type="text"
                         value={newCertification.name}
-                        onChange={(e) => setNewCertification({...newCertification, name: e.target.value})}
+                        onChange={(e) =>
+                          setNewCertification({
+                            ...newCertification,
+                            name: e.target.value,
+                          })
+                        }
                         placeholder="Certification Name"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="text"
                         value={newCertification.issuingOrganization}
-                        onChange={(e) => setNewCertification({...newCertification, issuingOrganization: e.target.value})}
+                        onChange={(e) =>
+                          setNewCertification({
+                            ...newCertification,
+                            issuingOrganization: e.target.value,
+                          })
+                        }
                         placeholder="Issuing Organization"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
@@ -1200,13 +1453,23 @@ const CreateTechnicianProfile = () => {
                         <input
                           type="date"
                           value={newCertification.issueDate}
-                          onChange={(e) => setNewCertification({...newCertification, issueDate: e.target.value})}
+                          onChange={(e) =>
+                            setNewCertification({
+                              ...newCertification,
+                              issueDate: e.target.value,
+                            })
+                          }
                           className="p-3 border border-gray-300 rounded-lg"
                         />
                         <input
                           type="date"
                           value={newCertification.expiryDate}
-                          onChange={(e) => setNewCertification({...newCertification, expiryDate: e.target.value})}
+                          onChange={(e) =>
+                            setNewCertification({
+                              ...newCertification,
+                              expiryDate: e.target.value,
+                            })
+                          }
                           disabled={newCertification.doesNotExpire}
                           className="p-3 border border-gray-300 rounded-lg"
                         />
@@ -1215,26 +1478,47 @@ const CreateTechnicianProfile = () => {
                         <input
                           type="checkbox"
                           checked={newCertification.doesNotExpire}
-                          onChange={(e) => setNewCertification({...newCertification, doesNotExpire: e.target.checked})}
+                          onChange={(e) =>
+                            setNewCertification({
+                              ...newCertification,
+                              doesNotExpire: e.target.checked,
+                            })
+                          }
                           className="h-4 w-4 text-green-600 rounded"
                         />
-                        <label className="ml-2 text-sm text-gray-700">This certification does not expire</label>
+                        <label className="ml-2 text-sm text-gray-700">
+                          This certification does not expire
+                        </label>
                       </div>
                       <input
                         type="text"
                         value={newCertification.credentialId}
-                        onChange={(e) => setNewCertification({...newCertification, credentialId: e.target.value})}
+                        onChange={(e) =>
+                          setNewCertification({
+                            ...newCertification,
+                            credentialId: e.target.value,
+                          })
+                        }
                         placeholder="Credential ID"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="url"
                         value={newCertification.credentialUrl}
-                        onChange={(e) => setNewCertification({...newCertification, credentialUrl: e.target.value})}
+                        onChange={(e) =>
+                          setNewCertification({
+                            ...newCertification,
+                            credentialUrl: e.target.value,
+                          })
+                        }
                         placeholder="Credential URL"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
-                      <button type="button" onClick={addCertification} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                      <button
+                        type="button"
+                        onClick={addCertification}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                      >
                         Add Certification
                       </button>
                     </div>
@@ -1244,14 +1528,29 @@ const CreateTechnicianProfile = () => {
                       <div className="flex justify-between">
                         <div>
                           <h4 className="font-semibold">{cert.name}</h4>
-                          <p className="text-gray-600">{cert.issuingOrganization}</p>
-                          <p className="text-sm text-gray-500">
-                            Issued: {new Date(cert.issueDate).toLocaleDateString()}
-                            {!cert.doesNotExpire && cert.expiryDate && ` • Expires: ${new Date(cert.expiryDate).toLocaleDateString()}`}
+                          <p className="text-gray-600">
+                            {cert.issuingOrganization}
                           </p>
-                          {cert.credentialId && <p className="text-sm text-gray-500">ID: {cert.credentialId}</p>}
+                          <p className="text-sm text-gray-500">
+                            Issued:{' '}
+                            {new Date(cert.issueDate).toLocaleDateString()}
+                            {!cert.doesNotExpire &&
+                              cert.expiryDate &&
+                              ` • Expires: ${new Date(
+                                cert.expiryDate
+                              ).toLocaleDateString()}`}
+                          </p>
+                          {cert.credentialId && (
+                            <p className="text-sm text-gray-500">
+                              ID: {cert.credentialId}
+                            </p>
+                          )}
                         </div>
-                        <button type="button" onClick={() => removeCertification(index)} className="text-red-500 hover:text-red-700">
+                        <button
+                          type="button"
+                          onClick={() => removeCertification(index)}
+                          className="text-red-500 hover:text-red-700"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -1261,7 +1560,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* PORTFOLIO */}
+            {/* ═══ PORTFOLIO (with upload) ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1272,7 +1571,11 @@ const CreateTechnicianProfile = () => {
                   <Image className="w-5 h-5 mr-2 text-green-600" />
                   Portfolio
                 </h2>
-                {expandedSections.portfolio ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.portfolio ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.portfolio && (
                 <div className="p-6">
@@ -1281,13 +1584,23 @@ const CreateTechnicianProfile = () => {
                       <input
                         type="text"
                         value={newPortfolio.title}
-                        onChange={(e) => setNewPortfolio({...newPortfolio, title: e.target.value})}
+                        onChange={(e) =>
+                          setNewPortfolio({
+                            ...newPortfolio,
+                            title: e.target.value,
+                          })
+                        }
                         placeholder="Project Title"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <textarea
                         value={newPortfolio.description}
-                        onChange={(e) => setNewPortfolio({...newPortfolio, description: e.target.value})}
+                        onChange={(e) =>
+                          setNewPortfolio({
+                            ...newPortfolio,
+                            description: e.target.value,
+                          })
+                        }
                         placeholder="Project Description"
                         rows="3"
                         className="w-full p-3 border border-gray-300 rounded-lg"
@@ -1295,7 +1608,12 @@ const CreateTechnicianProfile = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <select
                           value={newPortfolio.mediaType}
-                          onChange={(e) => setNewPortfolio({...newPortfolio, mediaType: e.target.value})}
+                          onChange={(e) =>
+                            setNewPortfolio({
+                              ...newPortfolio,
+                              mediaType: e.target.value,
+                            })
+                          }
                           className="p-3 border border-gray-300 rounded-lg"
                         >
                           <option value="image">Image</option>
@@ -1305,40 +1623,118 @@ const CreateTechnicianProfile = () => {
                         <input
                           type="text"
                           value={newPortfolio.category}
-                          onChange={(e) => setNewPortfolio({...newPortfolio, category: e.target.value})}
+                          onChange={(e) =>
+                            setNewPortfolio({
+                              ...newPortfolio,
+                              category: e.target.value,
+                            })
+                          }
                           placeholder="Category"
                           className="p-3 border border-gray-300 rounded-lg"
                         />
                       </div>
-                      <input
-                        type="url"
-                        value={newPortfolio.mediaUrl}
-                        onChange={(e) => setNewPortfolio({...newPortfolio, mediaUrl: e.target.value})}
-                        placeholder="Media URL"
-                        className="w-full p-3 border border-gray-300 rounded-lg"
-                      />
-                      <input
-                        type="url"
-                        value={newPortfolio.thumbnailUrl}
-                        onChange={(e) => setNewPortfolio({...newPortfolio, thumbnailUrl: e.target.value})}
-                        placeholder="Thumbnail URL (optional)"
-                        className="w-full p-3 border border-gray-300 rounded-lg"
-                      />
+
+                      {/* ═══ UPLOAD WIDGET ═══ */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Upload Media <span className="text-red-500">*</span>
+                        </label>
+
+                        <div className="flex items-center gap-3">
+                          <label
+                            className={`cursor-pointer bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 inline-flex items-center gap-2 transition-colors ${
+                              portfolioUploading ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          >
+                            {portfolioUploading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Uploading…
+                              </>
+                            ) : (
+                              <>
+                                <Camera className="w-4 h-4" />
+                                Choose File
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*,video/*,.pdf"
+                              onChange={handlePortfolioMediaUpload}
+                              disabled={portfolioUploading}
+                              className="hidden"
+                            />
+                          </label>
+
+                          {newPortfolio.mediaUrl && !portfolioUploading && (
+                            <span className="text-sm text-green-600 font-medium flex items-center gap-1">
+                              <CheckCircle className="w-4 h-4" />
+                              Uploaded
+                            </span>
+                          )}
+                        </div>
+
+                        {portfolioUploadError && (
+                          <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            {portfolioUploadError}
+                          </p>
+                        )}
+
+                        {/* Preview */}
+                        {newPortfolio.mediaUrl && (
+                          <div className="mt-3 p-2 bg-white rounded-lg border border-green-200">
+                            {newPortfolio.mediaType === 'image' && (
+                              <img
+                                src={newPortfolio.mediaUrl}
+                                alt="Preview"
+                                className="h-40 rounded object-cover"
+                              />
+                            )}
+                            {newPortfolio.mediaType === 'video' && (
+                              <video
+                                src={newPortfolio.mediaUrl}
+                                className="h-40 rounded"
+                                controls
+                              />
+                            )}
+                            {newPortfolio.mediaType === 'document' && (
+                              <div className="h-40 flex items-center justify-center bg-gray-50 rounded">
+                                <FileText className="w-10 h-10 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ═══ Remaining fields ═══ */}
                       <input
                         type="text"
                         value={newPortfolio.clientName}
-                        onChange={(e) => setNewPortfolio({...newPortfolio, clientName: e.target.value})}
+                        onChange={(e) =>
+                          setNewPortfolio({
+                            ...newPortfolio,
+                            clientName: e.target.value,
+                          })
+                        }
                         placeholder="Client Name"
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <input
                         type="date"
                         value={newPortfolio.completionDate}
-                        onChange={(e) => setNewPortfolio({...newPortfolio, completionDate: e.target.value})}
+                        onChange={(e) =>
+                          setNewPortfolio({
+                            ...newPortfolio,
+                            completionDate: e.target.value,
+                          })
+                        }
                         className="w-full p-3 border border-gray-300 rounded-lg"
                       />
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Tags
+                        </label>
                         <div className="flex gap-2 mb-2">
                           <input
                             type="text"
@@ -1347,15 +1743,26 @@ const CreateTechnicianProfile = () => {
                             placeholder="Add tag"
                             className="flex-1 p-2 border border-gray-300 rounded-lg"
                           />
-                          <button type="button" onClick={addTag} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                          <button
+                            type="button"
+                            onClick={addTag}
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                          >
                             <Plus className="w-4 h-4" />
                           </button>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {newPortfolio.tags.map((tag, idx) => (
-                            <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm flex items-center">
+                            <span
+                              key={idx}
+                              className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm flex items-center"
+                            >
                               {tag}
-                              <button type="button" onClick={() => removeTag(idx)} className="ml-1 text-blue-500 hover:text-blue-700">
+                              <button
+                                type="button"
+                                onClick={() => removeTag(idx)}
+                                className="ml-1 text-blue-500 hover:text-blue-700"
+                              >
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </span>
@@ -1366,28 +1773,70 @@ const CreateTechnicianProfile = () => {
                         <input
                           type="checkbox"
                           checked={newPortfolio.isFeatured}
-                          onChange={(e) => setNewPortfolio({...newPortfolio, isFeatured: e.target.checked})}
+                          onChange={(e) =>
+                            setNewPortfolio({
+                              ...newPortfolio,
+                              isFeatured: e.target.checked,
+                            })
+                          }
                           className="h-4 w-4 text-green-600 rounded"
                         />
-                        <label className="ml-2 text-sm text-gray-700">Feature this item</label>
+                        <label className="ml-2 text-sm text-gray-700">
+                          Feature this item
+                        </label>
                       </div>
-                      <button type="button" onClick={addPortfolio} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                      <button
+                        type="button"
+                        onClick={addPortfolio}
+                        disabled={
+                          !newPortfolio.title ||
+                          !newPortfolio.mediaUrl ||
+                          portfolioUploading
+                        }
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
                         Add to Portfolio
                       </button>
                     </div>
                   </div>
+
+                  {/* Existing items grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {formData.portfolio.map((item, index) => (
-                      <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                      <div
+                        key={index}
+                        className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                      >
                         <div className="flex justify-between items-start">
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
+                            {item.mediaUrl && item.mediaType === 'image' && (
+                              <img
+                                src={item.mediaUrl}
+                                alt={item.title}
+                                className="w-full h-32 object-cover rounded mb-2"
+                              />
+                            )}
+                            {item.mediaUrl && item.mediaType === 'video' && (
+                              <video
+                                src={item.mediaUrl}
+                                className="w-full h-32 rounded mb-2"
+                                controls
+                              />
+                            )}
                             <h4 className="font-semibold">{item.title}</h4>
-                            <p className="text-sm text-gray-600">{item.category}</p>
-                            {item.mediaType === 'image' && <Image className="w-4 h-4 text-gray-500 mt-1" />}
-                            {item.mediaType === 'video' && <Video className="w-4 h-4 text-gray-500 mt-1" />}
-                            {item.isFeatured && <Star className="w-4 h-4 text-yellow-500 mt-1" />}
+                            <p className="text-sm text-gray-600">
+                              {item.category}
+                            </p>
+                            {item.isFeatured && (
+                              <Star className="w-4 h-4 text-yellow-500 mt-1" />
+                            )}
                           </div>
-                          <button type="button" onClick={() => removePortfolio(index)} className="text-red-500 hover:text-red-700">
+                          <button
+                            type="button"
+                            onClick={() => removePortfolio(index)}
+                            className="text-red-500 hover:text-red-700 flex-shrink-0"
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -1398,7 +1847,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* LANGUAGES */}
+            {/* ═══ LANGUAGES ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1409,7 +1858,11 @@ const CreateTechnicianProfile = () => {
                   <Languages className="w-5 h-5 mr-2 text-green-600" />
                   Languages
                 </h2>
-                {expandedSections.languages ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.languages ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.languages && (
                 <div className="p-6">
@@ -1418,29 +1871,52 @@ const CreateTechnicianProfile = () => {
                       <input
                         type="text"
                         value={newLanguage.name}
-                        onChange={(e) => setNewLanguage({...newLanguage, name: e.target.value})}
+                        onChange={(e) =>
+                          setNewLanguage({
+                            ...newLanguage,
+                            name: e.target.value,
+                          })
+                        }
                         placeholder="Language"
                         className="p-3 border border-gray-300 rounded-lg"
                       />
                       <select
                         value={newLanguage.proficiency}
-                        onChange={(e) => setNewLanguage({...newLanguage, proficiency: e.target.value})}
+                        onChange={(e) =>
+                          setNewLanguage({
+                            ...newLanguage,
+                            proficiency: e.target.value,
+                          })
+                        }
                         className="p-3 border border-gray-300 rounded-lg"
                       >
-                        {proficiencyLevels.map(level => (
-                          <option key={level} value={level}>{level}</option>
+                        {proficiencyLevels.map((level) => (
+                          <option key={level} value={level}>
+                            {level}
+                          </option>
                         ))}
                       </select>
-                      <button type="button" onClick={addLanguage} className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700">
+                      <button
+                        type="button"
+                        onClick={addLanguage}
+                        className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700"
+                      >
                         Add Language
                       </button>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {formData.languages.map((lang, index) => (
-                      <span key={index} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center">
+                      <span
+                        key={index}
+                        className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
+                      >
                         {lang.name} ({lang.proficiency})
-                        <button type="button" onClick={() => removeLanguage(index)} className="ml-2 text-red-500 hover:text-red-700">
+                        <button
+                          type="button"
+                          onClick={() => removeLanguage(index)}
+                          className="ml-2 text-red-500 hover:text-red-700"
+                        >
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </span>
@@ -1450,7 +1926,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* LOCATION */}
+            {/* ═══ LOCATION ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1461,13 +1937,19 @@ const CreateTechnicianProfile = () => {
                   <MapPin className="w-5 h-5 mr-2 text-green-600" />
                   Location
                 </h2>
-                {expandedSections.location ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.location ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.location && (
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Street Address
+                      </label>
                       <input
                         type="text"
                         name="address.street"
@@ -1478,7 +1960,9 @@ const CreateTechnicianProfile = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        City <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         name="address.city"
@@ -1490,7 +1974,9 @@ const CreateTechnicianProfile = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        State <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         name="address.state"
@@ -1502,7 +1988,9 @@ const CreateTechnicianProfile = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        ZIP Code
+                      </label>
                       <input
                         type="text"
                         name="address.zipCode"
@@ -1513,7 +2001,9 @@ const CreateTechnicianProfile = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Country
+                      </label>
                       <input
                         type="text"
                         name="address.country"
@@ -1524,7 +2014,9 @@ const CreateTechnicianProfile = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Service Radius (km)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Service Radius (km)
+                      </label>
                       <input
                         type="number"
                         name="serviceRadius"
@@ -1540,7 +2032,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* PRICING */}
+            {/* ═══ PRICING ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1551,13 +2043,19 @@ const CreateTechnicianProfile = () => {
                   <DollarSign className="w-5 h-5 mr-2 text-green-600" />
                   Pricing
                 </h2>
-                {expandedSections.pricing ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.pricing ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.pricing && (
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Hourly Rate (KES)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Hourly Rate (KES)
+                      </label>
                       <input
                         type="number"
                         name="pricing.hourlyRate"
@@ -1569,7 +2067,9 @@ const CreateTechnicianProfile = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Fixed Price (KES)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Fixed Price (KES)
+                      </label>
                       <input
                         type="number"
                         name="pricing.fixedPrice"
@@ -1581,7 +2081,9 @@ const CreateTechnicianProfile = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Consultation Fee (KES)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Consultation Fee (KES)
+                      </label>
                       <input
                         type="number"
                         name="pricing.consultationFee"
@@ -1594,7 +2096,9 @@ const CreateTechnicianProfile = () => {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Payment Methods</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Payment Methods
+                    </label>
                     <div className="flex gap-2 mb-3">
                       <input
                         type="text"
@@ -1603,15 +2107,26 @@ const CreateTechnicianProfile = () => {
                         placeholder="Add payment method"
                         className="flex-1 p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
                       />
-                      <button type="button" onClick={addPaymentMethod} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700">
+                      <button
+                        type="button"
+                        onClick={addPaymentMethod}
+                        className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
+                      >
                         <Plus className="w-5 h-5" />
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {formData.pricing.paymentMethods.map((method, index) => (
-                        <span key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
+                        <span
+                          key={index}
+                          className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center"
+                        >
                           {method}
-                          <button type="button" onClick={() => removePaymentMethod(method)} className="ml-2 text-red-500 hover:text-red-700">
+                          <button
+                            type="button"
+                            onClick={() => removePaymentMethod(method)}
+                            className="ml-2 text-red-500 hover:text-red-700"
+                          >
                             <Trash2 className="w-3 h-3" />
                           </button>
                         </span>
@@ -1622,7 +2137,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* AVAILABILITY */}
+            {/* ═══ AVAILABILITY ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1633,29 +2148,37 @@ const CreateTechnicianProfile = () => {
                   <Calendar className="w-5 h-5 mr-2 text-green-600" />
                   Availability
                 </h2>
-                {expandedSections.availability ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.availability ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.availability && (
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
                       <div key={day} className="bg-gray-50 p-4 rounded-lg">
                         <div className="flex items-center justify-between mb-3">
-                          <label className="font-medium text-gray-700 capitalize">{day}</label>
+                          <label className="font-medium text-gray-700 capitalize">
+                            {day}
+                          </label>
                           <input
                             type="checkbox"
                             checked={formData.availability[day].enabled}
                             onChange={(e) => {
-                              setFormData(prev => ({
+                              setFormData((prev) => ({
                                 ...prev,
                                 availability: {
                                   ...prev.availability,
                                   [day]: {
                                     ...prev.availability[day],
                                     enabled: e.target.checked,
-                                    hours: e.target.checked ? [{ start: '09:00', end: '17:00' }] : []
-                                  }
-                                }
+                                    hours: e.target.checked
+                                      ? [{ start: '09:00', end: '17:00' }]
+                                      : [],
+                                  },
+                                },
                               }));
                             }}
                             className="h-4 w-4 text-green-600 rounded"
@@ -1671,12 +2194,12 @@ const CreateTechnicianProfile = () => {
                                   onChange={(e) => {
                                     const updated = [...formData.availability[day].hours];
                                     updated[idx] = { ...updated[idx], start: e.target.value };
-                                    setFormData(prev => ({
+                                    setFormData((prev) => ({
                                       ...prev,
                                       availability: {
                                         ...prev.availability,
-                                        [day]: { ...prev.availability[day], hours: updated }
-                                      }
+                                        [day]: { ...prev.availability[day], hours: updated },
+                                      },
                                     }));
                                   }}
                                   className="p-2 border border-gray-300 rounded-lg"
@@ -1688,12 +2211,12 @@ const CreateTechnicianProfile = () => {
                                   onChange={(e) => {
                                     const updated = [...formData.availability[day].hours];
                                     updated[idx] = { ...updated[idx], end: e.target.value };
-                                    setFormData(prev => ({
+                                    setFormData((prev) => ({
                                       ...prev,
                                       availability: {
                                         ...prev.availability,
-                                        [day]: { ...prev.availability[day], hours: updated }
-                                      }
+                                        [day]: { ...prev.availability[day], hours: updated },
+                                      },
                                     }));
                                   }}
                                   className="p-2 border border-gray-300 rounded-lg"
@@ -1714,7 +2237,9 @@ const CreateTechnicianProfile = () => {
                         onChange={handleInputChange}
                         className="h-4 w-4 text-green-600 rounded"
                       />
-                      <label className="ml-2 text-gray-700">Available for emergency services</label>
+                      <label className="ml-2 text-gray-700">
+                        Available for emergency services
+                      </label>
                     </div>
                     <div className="flex items-center">
                       <input
@@ -1724,7 +2249,9 @@ const CreateTechnicianProfile = () => {
                         onChange={handleInputChange}
                         className="h-4 w-4 text-green-600 rounded"
                       />
-                      <label className="ml-2 text-gray-700">Available for remote services</label>
+                      <label className="ml-2 text-gray-700">
+                        Available for remote services
+                      </label>
                     </div>
                     <div className="flex items-center">
                       <input
@@ -1734,14 +2261,16 @@ const CreateTechnicianProfile = () => {
                         onChange={handleInputChange}
                         className="h-4 w-4 text-green-600 rounded"
                       />
-                      <label className="ml-2 text-gray-700">Available on weekends</label>
+                      <label className="ml-2 text-gray-700">
+                        Available on weekends
+                      </label>
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* SOCIAL LINKS */}
+            {/* ═══ SOCIAL LINKS ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1752,7 +2281,11 @@ const CreateTechnicianProfile = () => {
                   <Globe className="w-5 h-5 mr-2 text-green-600" />
                   Social Links
                 </h2>
-                {expandedSections.social ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.social ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.social && (
                 <div className="p-6">
@@ -1828,7 +2361,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* SETTINGS */}
+            {/* ═══ SETTINGS ═══ */}
             <div className="border rounded-lg overflow-hidden">
               <button
                 type="button"
@@ -1839,59 +2372,139 @@ const CreateTechnicianProfile = () => {
                   <Settings className="w-5 h-5 mr-2 text-green-600" />
                   Settings
                 </h2>
-                {expandedSections.settings ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                {expandedSections.settings ? (
+                  <ChevronUp className="w-5 h-5" />
+                ) : (
+                  <ChevronDown className="w-5 h-5" />
+                )}
               </button>
               {expandedSections.settings && (
                 <div className="p-6">
                   <div className="space-y-6">
                     <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-semibold text-gray-800 mb-4">Privacy Settings</h3>
+                      <h3 className="font-semibold text-gray-800 mb-4">
+                        Privacy Settings
+                      </h3>
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <label className="text-gray-700">Show email on profile</label>
-                          <input type="checkbox" name="settings.showEmail" checked={formData.settings.showEmail} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <label className="text-gray-700">
+                            Show email on profile
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="settings.showEmail"
+                            checked={formData.settings.showEmail}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                         <div className="flex items-center justify-between">
-                          <label className="text-gray-700">Show phone on profile</label>
-                          <input type="checkbox" name="settings.showPhone" checked={formData.settings.showPhone} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <label className="text-gray-700">
+                            Show phone on profile
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="settings.showPhone"
+                            checked={formData.settings.showPhone}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                       </div>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-semibold text-gray-800 mb-4">Booking Settings</h3>
+                      <h3 className="font-semibold text-gray-800 mb-4">
+                        Booking Settings
+                      </h3>
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <label className="text-gray-700">Allow instant booking</label>
-                          <input type="checkbox" name="settings.instantBooking" checked={formData.settings.instantBooking} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <label className="text-gray-700">
+                            Allow instant booking
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="settings.instantBooking"
+                            checked={formData.settings.instantBooking}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                         <div className="flex items-center justify-between">
-                          <label className="text-gray-700">Require approval for bookings</label>
-                          <input type="checkbox" name="settings.requiresApproval" checked={formData.settings.requiresApproval} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <label className="text-gray-700">
+                            Require approval for bookings
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="settings.requiresApproval"
+                            checked={formData.settings.requiresApproval}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                         <div className="flex items-center justify-between">
-                          <label className="text-gray-700">Auto-accept jobs</label>
-                          <input type="checkbox" name="settings.autoAcceptJobs" checked={formData.settings.autoAcceptJobs} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <label className="text-gray-700">
+                            Auto-accept jobs
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="settings.autoAcceptJobs"
+                            checked={formData.settings.autoAcceptJobs}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                       </div>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-semibold text-gray-800 mb-4">Notification Settings</h3>
+                      <h3 className="font-semibold text-gray-800 mb-4">
+                        Notification Settings
+                      </h3>
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <label className="text-gray-700">Email notifications</label>
-                          <input type="checkbox" name="settings.notifications.email" checked={formData.settings.notifications.email} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <label className="text-gray-700">
+                            Email notifications
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="settings.notifications.email"
+                            checked={formData.settings.notifications.email}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                         <div className="flex items-center justify-between">
-                          <label className="text-gray-700">SMS notifications</label>
-                          <input type="checkbox" name="settings.notifications.sms" checked={formData.settings.notifications.sms} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <label className="text-gray-700">
+                            SMS notifications
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="settings.notifications.sms"
+                            checked={formData.settings.notifications.sms}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                         <div className="flex items-center justify-between">
-                          <label className="text-gray-700">Push notifications</label>
-                          <input type="checkbox" name="settings.notifications.push" checked={formData.settings.notifications.push} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <label className="text-gray-700">
+                            Push notifications
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="settings.notifications.push"
+                            checked={formData.settings.notifications.push}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                         <div className="flex items-center justify-between">
                           <label className="text-gray-700">Job reminders</label>
-                          <input type="checkbox" name="settings.jobReminders" checked={formData.settings.jobReminders} onChange={handleInputChange} className="h-4 w-4 text-green-600 rounded" />
+                          <input
+                            type="checkbox"
+                            name="settings.jobReminders"
+                            checked={formData.settings.jobReminders}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-green-600 rounded"
+                          />
                         </div>
                       </div>
                     </div>
@@ -1900,7 +2513,7 @@ const CreateTechnicianProfile = () => {
               )}
             </div>
 
-            {/* Submit Button */}
+            {/* ═══ SUBMIT ═══ */}
             <button
               type="submit"
               disabled={loading || success}
