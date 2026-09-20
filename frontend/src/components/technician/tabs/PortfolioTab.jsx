@@ -6,15 +6,18 @@
  * Features:
  * - Add portfolio items (image, video, document)
  * - Cloudinary upload via /api/upload/portfolio
- * - Preview uploaded media before saving
+ * - Shows selected file name + size before upload
+ * - Preview uploaded media
  * - Tags, client name, completion date
- * - Remove items (with Cloudinary cleanup on backend)
  * 
- * @version 2.0.0 – Fixed multipart upload header bug
+ * @version 3.0.0 – File name display + better feedback
  */
 
 import React, { useState } from 'react';
-import { Plus, Trash2, Camera, Star, FileText, Loader2 } from 'lucide-react';
+import {
+  Plus, Trash2, Camera, Star, FileText, Loader2,
+  CheckCircle, AlertCircle, X,
+} from 'lucide-react';
 import api from '../../../services/api';
 
 const PortfolioTab = ({ formData, setFormData, isEditing }) => {
@@ -35,8 +38,16 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
   const [newTag, setNewTag] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null); // ← holds the File object
 
-  // ─── Add portfolio item to form state ────────────────────
+  // ─── Utility: format file size ──────────────────────────
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  // ─── Add portfolio item ─────────────────────────────────
   const addPortfolio = () => {
     if (newPortfolio.title && newPortfolio.mediaUrl) {
       setFormData({
@@ -62,10 +73,11 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
       setNewTag('');
       setUploadError('');
       setUploading(false);
+      setSelectedFile(null);
     }
   };
 
-  // ─── Remove portfolio item ───────────────────────────────
+  // ─── Remove portfolio item ──────────────────────────────
   const removePortfolio = (index) => {
     const updatedPortfolio = [...(formData.portfolio || [])];
     const updatedGallery = [...(formData.gallery || [])];
@@ -78,7 +90,7 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
     });
   };
 
-  // ─── Tags ────────────────────────────────────────────────
+  // ─── Tags ───────────────────────────────────────────────
   const addTag = () => {
     if (newTag && !newPortfolio.tags.includes(newTag)) {
       setNewPortfolio({ ...newPortfolio, tags: [...newPortfolio.tags, newTag] });
@@ -93,10 +105,16 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
     });
   };
 
-  // ─── Media upload ────────────────────────────────────────
+  // ─── Media upload ───────────────────────────────────────
   const handleMediaUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    console.log('📁 File selected:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
 
     // Size guard
     if (file.size > 10 * 1024 * 1024) {
@@ -104,6 +122,8 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
       return;
     }
 
+    // Store the selected file so we can display its name
+    setSelectedFile(file);
     setUploading(true);
     setUploadError('');
 
@@ -111,7 +131,9 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
     formPayload.append('media', file);
 
     try {
-      // ✅ DO NOT set Content-Type manually — Axios adds the boundary
+      console.log('📤 Uploading:', file.name);
+
+      // DO NOT set Content-Type — axios auto-detects FormData
       const res = await api.post('/upload/portfolio', formPayload);
 
       console.log('📤 Upload response:', res.data);
@@ -124,6 +146,7 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
           thumbnailUrl: res.data.mediaUrl,
           mediaType: res.data.mediaType,
         }));
+        setUploadError('');
       } else {
         setUploadError(res.data.message || 'Upload failed');
       }
@@ -139,10 +162,24 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
     }
   };
 
+  // ─── Clear selected file ────────────────────────────────
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setNewPortfolio((prev) => ({
+      ...prev,
+      mediaUrl: '',
+      publicId: '',
+      thumbnailUrl: '',
+    }));
+    setUploadError('');
+    // Note: can't reset the <input type="file"> value directly.
+    // The user can pick another file if they want.
+  };
+
   // ═════════════════════════════════════════════════════════
   return (
     <div className="space-y-6">
-      {/* ─── Add form (only in edit mode) ──────────────────── */}
+      {/* ═══ Add form (only in edit mode) ═══ */}
       {isEditing && (
         <div className="bg-green-50 p-4 rounded-lg space-y-3 border border-green-200">
           <h3 className="font-medium text-gray-900">Add Portfolio Item</h3>
@@ -154,7 +191,7 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
               onChange={(e) =>
                 setNewPortfolio({ ...newPortfolio, title: e.target.value })
               }
-              placeholder="Project Title"
+              placeholder="Project Title *"
               className="p-2 border-2 border-green-300 rounded-lg focus:border-green-500 focus:outline-none"
             />
             <select
@@ -203,24 +240,30 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
             />
           </div>
 
-          {/* Upload */}
+          {/* ═══ Upload Section ═══ */}
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Upload Media <span className="text-red-500">*</span>
             </label>
 
-            <div className="flex items-center space-x-2">
+            {/* File picker button */}
+            <div className="flex flex-wrap items-center gap-3">
               <label
-                className={`cursor-pointer bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 inline-flex items-center transition-colors ${
+                className={`cursor-pointer bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 inline-flex items-center gap-2 transition-colors ${
                   uploading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
                 {uploading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Uploading…
+                  </>
                 ) : (
-                  <Camera className="w-4 h-4 mr-2" />
+                  <>
+                    <Camera className="w-4 h-4" />
+                    Choose File
+                  </>
                 )}
-                {uploading ? 'Uploading...' : 'Choose File'}
                 <input
                   type="file"
                   accept="image/*,video/*,.pdf"
@@ -230,37 +273,87 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
                 />
               </label>
 
+              {/* Selected file info */}
+              {selectedFile && !newPortfolio.mediaUrl && !uploading && (
+                <span className="text-sm text-gray-600">
+                  {selectedFile.name}
+                </span>
+              )}
+
+              {/* Uploaded success badge */}
               {newPortfolio.mediaUrl && !uploading && (
-                <span className="text-sm text-green-600 font-medium">
-                  ✓ Uploaded
+                <span className="inline-flex items-center gap-1 text-sm text-green-600 font-medium">
+                  <CheckCircle className="w-4 h-4" />
+                  Uploaded
                 </span>
               )}
             </div>
 
-            {uploadError && (
-              <p className="text-red-500 text-xs mt-1">{uploadError}</p>
+            {/* Selected file details (before upload completes) */}
+            {selectedFile && !newPortfolio.mediaUrl && !uploading && (
+              <div className="mt-2 p-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-800 truncate">{selectedFile.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatFileSize(selectedFile.size)} · {selectedFile.type}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearSelectedFile}
+                  className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-2"
+                  title="Remove file"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             )}
 
-            {/* Preview */}
+            {/* Upload error */}
+            {uploadError && (
+              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-red-700">{uploadError}</p>
+              </div>
+            )}
+
+            {/* Preview once uploaded */}
             {newPortfolio.mediaUrl && (
-              <div className="mt-3 p-2 bg-white rounded-lg border border-green-200">
+              <div className="mt-3 p-3 bg-white rounded-lg border border-green-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-green-700 font-medium flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Ready to add
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearSelectedFile}
+                    className="text-xs text-gray-400 hover:text-red-500"
+                  >
+                    Change
+                  </button>
+                </div>
+
                 {newPortfolio.mediaType === 'image' && (
                   <img
                     src={newPortfolio.mediaUrl}
                     alt="Preview"
-                    className="h-32 rounded object-cover"
+                    className="max-h-40 rounded object-contain"
                   />
                 )}
                 {newPortfolio.mediaType === 'video' && (
                   <video
                     src={newPortfolio.mediaUrl}
-                    className="h-32 rounded"
+                    className="max-h-40 rounded"
                     controls
                   />
                 )}
                 {newPortfolio.mediaType === 'document' && (
                   <div className="h-32 flex items-center justify-center bg-gray-50 rounded">
-                    <FileText className="w-8 h-8 text-gray-400" />
+                    <FileText className="w-10 h-10 text-gray-400" />
                   </div>
                 )}
               </div>
@@ -337,7 +430,7 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
         </div>
       )}
 
-      {/* ─── Portfolio grid ────────────────────────────────── */}
+      {/* ═══ Portfolio grid ═══ */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {(formData.portfolio || []).map((item, index) => (
           <div
