@@ -1,6 +1,8 @@
 /**
  * Subscription Controller for Technicians
  * Now supports Paystack (card only) and M-Pesa Daraja (STK Push)
+ * 
+ * @version 2.1.0 – Fixed mpesaStatus 404 after successful payment
  */
 
 const Technician = require('../models/Technician');
@@ -9,8 +11,6 @@ const { subscriptionPlans, plansList, isPlanActive } = require('../utils/subscri
 const Paystack = require('paystack-api')(process.env.PAYSTACK_SECRET_KEY);
 const mpesaService = require('../services/mpesaService');
 const notify = require('../services/notificationService');
-// ...
-
 
 // ─── GET PLANS ────────────────────────────────────────────────────────────────
 exports.getPlans = async (req, res) => {
@@ -133,7 +133,6 @@ exports.upgradeSubscription = async (req, res) => {
   try {
     const { planId, autoRenew = false, paymentMethod, phoneNumber } = req.body;
 
-    // Validate payment method
     if (!paymentMethod || (paymentMethod !== 'card' && paymentMethod !== 'mpesa')) {
       return res.status(400).json({
         success: false,
@@ -141,7 +140,6 @@ exports.upgradeSubscription = async (req, res) => {
       });
     }
 
-    // Validate plan
     const plan = subscriptionPlans[planId];
     if (!plan) {
       return res.status(400).json({ success: false, message: 'Invalid plan' });
@@ -176,7 +174,7 @@ exports.upgradeSubscription = async (req, res) => {
         amount: amountInKobo,
         email: user.email,
         currency: 'KES',
-        channels: ['card'], // only card
+        channels: ['card'],
         metadata,
         callback_url: `${process.env.FRONTEND_URL}/payment-callback`
       });
@@ -211,7 +209,6 @@ exports.upgradeSubscription = async (req, res) => {
         });
       }
 
-      // Clean and validate phone (2547XXXXXXXX)
       let cleaned = phoneNumber.replace(/\s/g, '');
       if (cleaned.startsWith('0')) cleaned = '254' + cleaned.slice(1);
       else if (cleaned.startsWith('+')) cleaned = cleaned.slice(1);
@@ -222,12 +219,13 @@ exports.upgradeSubscription = async (req, res) => {
         });
       }
 
-      const accountRef = `SUB-${Date.now()}`;
+      const accountRef = `SUB-${Date.now()}`.slice(0, 12); // ← max 12 chars
       const stkResponse = await mpesaService.stkPush(
         cleaned,
         plan.price,
         accountRef,
-        `${plan.name} subscription`
+        `${plan.name}`.slice(0, 13),  // ← max 13 chars
+        '/api/subscription/mpesa-callback'
       );
 
       technician.paymentPending = {
@@ -253,7 +251,6 @@ exports.upgradeSubscription = async (req, res) => {
       });
     }
 
-    // Should never reach here
     return res.status(400).json({ success: false, message: 'Invalid payment method' });
   } catch (error) {
     console.error('Payment initiation error:', error);
@@ -261,7 +258,7 @@ exports.upgradeSubscription = async (req, res) => {
   }
 };
 
-// ─── PAYSTACK WEBHOOK (unchanged) ──────────────────────────────────────────
+// ─── PAYSTACK WEBHOOK ───────────────────────────────────────────────────────
 exports.paystackWebhook = async (req, res) => {
   const crypto = require('crypto');
   const rawBody = req.body.toString('utf8');
@@ -289,25 +286,18 @@ exports.paystackWebhook = async (req, res) => {
     const transaction = event.data;
     const metadata = transaction.metadata || {};
 
-// ────────────────────────────────────────────────────────────
-  // ── NEW: Commission payment branch ──────────────────────────
-  // ────────────────────────────────────────────────────────────
-  if (metadata.type === 'commission') {
-    try {
-      const {
-        markCommissionsPaid,
-      } = require('./commissionPaymentController');
-
-      const result = await markCommissionsPaid(transaction, 'webhook');
-      console.log('✅ Commission webhook processed:', result);
-    } catch (err) {
-      console.error('❌ Commission webhook error:', err);
-      return res.status(500).send('Internal Server Error');
+    // ── Commission payment branch ──────────────────────────
+    if (metadata.type === 'commission') {
+      try {
+        const { markCommissionsPaid } = require('./commissionPaymentController');
+        const result = await markCommissionsPaid(transaction, 'webhook');
+        console.log('✅ Commission webhook processed:', result);
+      } catch (err) {
+        console.error('❌ Commission webhook error:', err);
+        return res.status(500).send('Internal Server Error');
+      }
+      return res.sendStatus(200);
     }
-    return res.sendStatus(200); // done — do NOT fall through to subscription
-  }
-
-
 
     if (!metadata.technicianId || !metadata.planId) {
       console.error('❌ Missing metadata in webhook:', metadata);
@@ -318,14 +308,12 @@ exports.paystackWebhook = async (req, res) => {
     const autoRenew = metadata.autoRenew === 'true' || metadata.autoRenew === true;
 
     try {
-      const Technician = require('../models/Technician');
       const technician = await Technician.findById(technicianId);
       if (!technician) {
         console.error(`❌ Technician not found: ${technicianId}`);
         return res.status(404).send('Technician not found');
       }
 
-      // Idempotency
       const alreadyProcessed = technician.subscription?.paymentHistory?.some(
         p => p.transactionId === transaction.reference
       );
@@ -334,7 +322,6 @@ exports.paystackWebhook = async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const { subscriptionPlans } = require('../utils/subscriptionPlans');
       const plan = subscriptionPlans[planId];
       if (!plan) {
         console.error(`❌ Invalid plan ID from webhook: ${planId}`);
@@ -376,7 +363,6 @@ exports.paystackWebhook = async (req, res) => {
       await technician.save();
       console.log(`✅ Subscription upgraded successfully for technician ${technicianId} to ${planId}`);
 
-// ─── Send renewal notification (non-blocking) ───
       try {
         const techUser = await User.findById(technician.userId).select('email firstName lastName');
         if (techUser?.email) {
@@ -384,7 +370,7 @@ exports.paystackWebhook = async (req, res) => {
             technicianEmail: techUser.email,
             technicianName: `${techUser.firstName} ${techUser.lastName}`.trim(),
             planName: plan.name,
-            amount: transaction.amount / 100, // Paystack amount is in kobo
+            amount: transaction.amount / 100,
             endDate: endDate.toLocaleDateString('en-KE', {
               day: 'numeric', month: 'long', year: 'numeric',
             }),
@@ -395,10 +381,6 @@ exports.paystackWebhook = async (req, res) => {
       } catch (notifyErr) {
         console.error('Renewal notification failed:', notifyErr.message);
       }
-
-   
-
-
     } catch (error) {
       console.error('❌ Error processing webhook:', error);
       return res.status(500).send('Internal Server Error');
@@ -459,7 +441,6 @@ exports.mpesaCallback = async (req, res) => {
       return res.status(404).send('Transaction not found');
     }
 
-    // Idempotency
     const alreadyProcessed = technician.subscription?.paymentHistory?.some(
       (p) => p.transactionId === CheckoutRequestID
     );
@@ -518,7 +499,6 @@ exports.mpesaCallback = async (req, res) => {
 
       console.log(`✅ M-Pesa subscription upgraded for ${technician._id} to ${planId}`);
 
-      // ─── Send renewal notification (non-blocking) ───
       try {
         const techUser = await User.findById(technician.userId).select('email firstName lastName');
         if (techUser?.email) {
@@ -555,7 +535,7 @@ exports.mpesaCallback = async (req, res) => {
   }
 };
 
-// ─── M-PESA STATUS POLL (authenticated) ─────────────────────────────────────
+// ─── M-PESA STATUS POLL (authenticated) — FIXED ─────────────────────────────
 exports.mpesaStatus = async (req, res) => {
   try {
     const { checkoutRequestID } = req.query;
@@ -563,46 +543,115 @@ exports.mpesaStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: 'checkoutRequestID required' });
     }
 
-    const technician = await Technician.findOne({
-      'paymentPending.checkoutRequestID': checkoutRequestID,
-      'paymentPending.method': 'mpesa',
-      userId: req.user.userId
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    // ─────────────────────────────────────────────────────────
+    // 1. CHECK IF PAYMENT ALREADY SUCCEEDED
+    //    The callback stores the transaction in subscription.paymentHistory
+    //    and clears paymentPending. So we search paymentHistory FIRST.
+    // ─────────────────────────────────────────────────────────
+    const completedTech = await Technician.findOne({
+      userId,
+      'subscription.paymentHistory.transactionId': checkoutRequestID,
     });
 
-    if (!technician) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found or already completed'
+    if (completedTech) {
+      console.log(`✅ mpesaStatus: payment already completed for ${checkoutRequestID}`);
+      return res.json({
+        success: true,
+        data: {
+          status: 'success',
+          message: 'Payment successful',
+        },
       });
     }
 
-    const statusData = await mpesaService.queryStatus(checkoutRequestID);
-    const resultCode = statusData.ResultCode;
+    // ─────────────────────────────────────────────────────────
+    // 2. CHECK IF PAYMENT FAILED
+    //    Failed transactions are kept in paymentPending with failureCode
+    // ─────────────────────────────────────────────────────────
+    const failedTech = await Technician.findOne({
+      userId,
+      'paymentPending.checkoutRequestID': checkoutRequestID,
+      'paymentPending.method': 'mpesa',
+      'paymentPending.failureCode': { $exists: true },
+    });
 
-    let status = 'pending';
-    let message = 'Payment still being processed';
-
-    if (resultCode === '0') {
-      status = 'success';
-      message = 'Payment successful';
-    } else if (resultCode === '1032') {
-      status = 'failed';
-      message = 'Transaction cancelled by user';
-    } else if (resultCode === '1037') {
-      status = 'failed';
-      message = 'Transaction timed out';
-    } else if (resultCode) {
-      status = 'failed';
-      message = statusData.ResultDesc || 'Payment failed';
+    if (failedTech) {
+      return res.json({
+        success: true,
+        data: {
+          status: 'failed',
+          message: failedTech.paymentPending.failureReason || 'Payment failed',
+        },
+      });
     }
 
-    return res.json({
-      success: true,
-      data: { status, message, resultCode }
+    // ─────────────────────────────────────────────────────────
+    // 3. STILL PENDING — query Safaricom
+    // ─────────────────────────────────────────────────────────
+    const technician = await Technician.findOne({
+      userId,
+      'paymentPending.checkoutRequestID': checkoutRequestID,
+      'paymentPending.method': 'mpesa',
     });
+
+    // Not found anywhere → return pending instead of 404
+    if (!technician) {
+      return res.json({
+        success: true,
+        data: {
+          status: 'pending',
+          message: 'Awaiting confirmation...',
+        },
+      });
+    }
+
+    try {
+      const statusData = await mpesaService.queryStatus(checkoutRequestID);
+      const resultCode = statusData.ResultCode;
+
+      let status = 'pending';
+      let message = 'Payment still being processed';
+
+      if (resultCode === '0') {
+        status = 'success';
+        message = 'Payment successful';
+      } else if (resultCode === '1032') {
+        status = 'failed';
+        message = 'Transaction cancelled by user';
+      } else if (resultCode === '1037') {
+        status = 'failed';
+        message = 'Transaction timed out';
+      } else if (resultCode) {
+        status = 'failed';
+        message = statusData.ResultDesc || 'Payment failed';
+      }
+
+      return res.json({
+        success: true,
+        data: { status, message, resultCode },
+      });
+    } catch (safErr) {
+      console.warn('mpesaStatus: Safaricom query failed, returning pending:', safErr.message);
+      return res.json({
+        success: true,
+        data: {
+          status: 'pending',
+          message: 'Awaiting confirmation...',
+        },
+      });
+    }
   } catch (error) {
     console.error('Error checking M-Pesa status:', error);
-    res.status(500).json({ success: false, message: error.message });
+    // Return pending instead of 500 so frontend keeps polling
+    return res.json({
+      success: true,
+      data: {
+        status: 'pending',
+        message: 'Checking...',
+      },
+    });
   }
 };
 
@@ -655,10 +704,6 @@ function getVisibilityRadius(technician) {
 
 /**
  * Downgrade an expired paid subscription to the free plan.
- * Called whenever the technician's subscription is fetched.
- * 
- * @param {Object} technician - The Technician document
- * @returns {Object} - The updated technician document
  */
 const downgradeExpiredSubscription = async (technician) => {
   if (!technician.subscription) return technician;
@@ -666,7 +711,6 @@ const downgradeExpiredSubscription = async (technician) => {
   const { plan, endDate } = technician.subscription;
   const isPaidPlan = plan && plan !== 'free' && plan !== 'trial';
 
-  // If it's a paid plan and the endDate is in the past, downgrade to free
   if (isPaidPlan && endDate && new Date(endDate) < new Date()) {
     console.log(`🔄 Downgrading technician ${technician._id} from ${plan} to free plan due to expiry.`);
 
@@ -674,14 +718,13 @@ const downgradeExpiredSubscription = async (technician) => {
       plan: 'free',
       planDetails: subscriptionPlans.free,
       startDate: new Date(),
-      endDate: null,              // no expiry
+      endDate: null,
       isTrial: false,
       autoRenew: false,
-      // Keep payment history for records
       paymentHistory: technician.subscription.paymentHistory || []
     };
 
-    technician.serviceRadius = subscriptionPlans.free.visibilityRadius; // 10 km
+    technician.serviceRadius = subscriptionPlans.free.visibilityRadius;
     await technician.save();
   }
 
