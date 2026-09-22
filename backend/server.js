@@ -1,9 +1,7 @@
 /**
  * Server Configuration
  * ====================
- * 
  * Main entry point for the Weba-Hub backend API
- * Includes job posting and application features
  * 
  * @version 2.0.0
  * @author Weba-Hub Team
@@ -14,27 +12,24 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
-const http = require('http');              // ← Required for Socket.io
-
+const http = require('http');
 
 const cron = require('node-cron');
 const { sendExpiryReminders } = require('./jobs/subscriptionReminders');
+
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const technicianProfileRoutes = require('./routes/technicianProfileRoutes');
 const serviceCatalogRoutes = require('./routes/serviceCatalogRoutes');
 const searchRoutes = require('./routes/searchRoutes');
-// const adminRoutes = require('./routes/admin/adminRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const technicianRoutes = require('./routes/technicianRoutes');
 const uploads = require('./routes/upload');
-const chatRoutes = require('./routes/chatRoutes');  // ← Chat REST routes
+const chatRoutes = require('./routes/chatRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
-const commissionPaymentRoutes = require('./routes/commissionPaymentRoutes');  // ← Commission payment routes
+const commissionPaymentRoutes = require('./routes/commissionPaymentRoutes');
 const adminRoutes = require('./routes/admin/index');
-// Import Socket.io chat handler
-const chatSocket = require('./socket/chatSocket');  // ← Real-time chat socket
-// Job and Application routes
+const chatSocket = require('./socket/chatSocket');
 const jobRoutes = require('./routes/jobRoutes');
 const jobApplicationRoutes = require('./routes/jobApplicationRoutes');
 
@@ -43,7 +38,6 @@ dotenv.config();
 // ===========================================
 // ENVIRONMENT VARIABLES VALIDATION
 // ===========================================
-// Ensure required environment variables are present
 const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'PAYSTACK_SECRET_KEY'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingVars.length > 0) {
@@ -63,7 +57,7 @@ const httpServer = http.createServer(app);
 // ===========================================
 const io = require('socket.io')(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL 
+    origin: process.env.FRONTEND_URL
       ? [process.env.FRONTEND_URL, 'https://tech-hub-frontend-lime.vercel.app']
       : ['http://localhost:3000', 'http://localhost:5173'],
     credentials: true,
@@ -72,16 +66,12 @@ const io = require('socket.io')(httpServer, {
   transports: ['websocket', 'polling']
 });
 
-// Initialize chat event handlers
 chatSocket(io);
-
-// Make io accessible globally
 app.set('io', io);
 
 // ===========================================
-// GLOBAL ERROR HANDLERS (Must be before any other code)
+// GLOBAL ERROR HANDLERS
 // ===========================================
-
 process.on('uncaughtException', (err) => {
   if (err.code === 'ECONNRESET') {
     console.log('🔌 Client disconnected during operation (expected, ignoring)');
@@ -107,13 +97,10 @@ process.on('unhandledRejection', (reason, promise) => {
 // ===========================================
 // MIDDLEWARE
 // ===========================================
-
-// Security middleware
 app.use(helmet());
 
-// CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL 
+  origin: process.env.FRONTEND_URL
     ? [process.env.FRONTEND_URL, 'https://tech-hub-frontend-lime.vercel.app']
     : ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true,
@@ -121,26 +108,15 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// ===========================================
-// 🔥 CRITICAL: RAW BODY PARSER FOR WEBHOOK
-// ===========================================
-/**
- * Paystack webhook needs the raw body to verify the X-Paystack-Signature.
- * This must be placed BEFORE the global express.json() middleware.
- * 
- * The route path must match exactly: /api/subscription/webhook
- * This ensures only that endpoint receives the raw body.
- */
+// Raw body parser for Paystack webhook
 app.use(
   '/api/subscription/webhook',
   express.raw({ type: 'application/json' })
 );
 
-// Body parsing middleware for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging for development
 if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
@@ -157,73 +133,141 @@ app.get('/api/health', (req, res) => {
     status: 'OK',
     message: 'Weba-Hub API is running',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    features: ['jobs', 'applications', 'subscriptions', 'service-catalog', 'technician-profiles']
+    version: '1.0.0'
   });
 });
 
-// Authentication routes
 app.use('/api/auth', authRoutes);
-
-// Admin routes
 app.use('/api/admin', adminRoutes);
-
-// Subscription routes (includes webhook - now raw parser is applied above)
 app.use('/api/subscription', subscriptionRoutes);
-
-// Technician profile routes
 app.use('/api/technician', technicianProfileRoutes);
-
-app.use('/api/payments', commissionPaymentRoutes);  // ← Commission payment routes
-
-// Service catalog routes
+app.use('/api/payments', commissionPaymentRoutes);
 app.use('/api/service-catalog', serviceCatalogRoutes);
-
-
-// Technician public routes
 app.use('/api/technician-public', technicianRoutes);
-
-// Chat routes
 app.use('/api/chat', chatRoutes);
-
 app.use('/api/bookings', bookingRoutes);
-// Search routes
 app.use('/api/search', searchRoutes);
-
-// Upload routes
 app.use('/api/upload', uploads);
-
-// Job and application routes
 app.use('/api/jobs', jobRoutes);
 app.use('/api/job-applications', jobApplicationRoutes);
 
 // ===========================================
+// DEBUG ENDPOINT — must come BEFORE the 404 handler
+// ⚠️ REMOVE THIS IN PRODUCTION
+// ===========================================
+app.get('/api/debug/mpesa-check', async (req, res) => {
+  try {
+    const { checkoutRequestID } = req.query;
+    if (!checkoutRequestID) {
+      return res.status(400).json({ error: 'checkoutRequestID required' });
+    }
+
+    const Technician = require('./models/Technician');
+    const mpesaService = require('./services/mpesaService');
+    const { subscriptionPlans } = require('./utils/subscriptionPlans');
+
+    const tech = await Technician.findOne({
+      'paymentPending.checkoutRequestID': checkoutRequestID,
+    });
+
+    if (!tech) {
+      const processed = await Technician.findOne({
+        'subscription.paymentHistory.transactionId': checkoutRequestID,
+      });
+
+      if (processed) {
+        return res.json({
+          success: true,
+          alreadyProcessed: true,
+          subscription: processed.subscription,
+        });
+      }
+
+      return res.status(404).json({ error: 'No pending transaction found' });
+    }
+
+    let safaricomResponse = null;
+    let safaricomError = null;
+    try {
+      safaricomResponse = await mpesaService.queryStatus(checkoutRequestID);
+    } catch (err) {
+      safaricomError = err.message;
+    }
+
+    let updated = false;
+    if (safaricomResponse && String(safaricomResponse.ResultCode) === '0') {
+      const planId = tech.paymentPending.planId;
+      const plan = subscriptionPlans[planId];
+
+      if (plan) {
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
+
+        tech.subscription = {
+          plan: planId,
+          planDetails: {
+            name: plan.name,
+            visibilityRadius: plan.visibilityRadius,
+            price: plan.price,
+            features: plan.features,
+          },
+          startDate: new Date(),
+          endDate,
+          isTrial: false,
+          autoRenew: false,
+          paymentMethod: 'mpesa',
+          lastPaymentDate: new Date(),
+          nextPaymentDate: endDate,
+          paymentHistory: [
+            ...(tech.subscription?.paymentHistory || []),
+            {
+              amount: tech.paymentPending.amount,
+              date: new Date(),
+              transactionId: checkoutRequestID,
+              status: 'success',
+              plan: planId,
+            },
+          ],
+        };
+
+        tech.serviceRadius = plan.visibilityRadius;
+        tech.paymentPending = undefined;
+        await tech.save();
+        updated = true;
+      }
+    }
+
+    res.json({
+      success: true,
+      pendingTransaction: {
+        planId: tech.paymentPending?.planId,
+        amount: tech.paymentPending?.amount,
+        initiatedAt: tech.paymentPending?.initiatedAt,
+      },
+      safaricomResponse,
+      safaricomError,
+      updated,
+      subscription: tech.subscription,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===========================================
 // BASE ROUTE
 // ===========================================
-
 app.get('/', (req, res) => {
   res.json({
     message: 'Welcome to Weba-Hub API',
     version: '1.0.0',
     documentation: '/api/health',
-    endpoints: {
-      auth: '/api/auth',
-      admin: '/api/admin',
-      subscription: '/api/subscription',
-      technician: '/api/technician',
-      technicianpublic: '/api/technician-public',
-      serviceCatalog: '/api/service-catalog',
-      search: '/api/search',
-      jobs: '/api/jobs',
-      jobApplications: '/api/job-applications'
-    }
   });
 });
 
 // ===========================================
 // DATABASE CONNECTION
 // ===========================================
-
 const connectDB = async () => {
   try {
     const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/tech-hub';
@@ -231,7 +275,7 @@ const connectDB = async () => {
     console.log('✅ MongoDB connected successfully');
     console.log(`📦 Database: ${mongoose.connection.name}`);
     console.log(`📍 Host: ${mongoose.connection.host}`);
-    
+
     mongoose.connection.on('error', (err) => {
       console.error('MongoDB connection error:', err);
     });
@@ -241,7 +285,7 @@ const connectDB = async () => {
     mongoose.connection.on('reconnected', () => {
       console.log('MongoDB reconnected successfully');
     });
-    
+
     return true;
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
@@ -252,39 +296,23 @@ const connectDB = async () => {
 };
 
 // ===========================================
-// ERROR HANDLING MIDDLEWARE
+// 404 + ERROR HANDLING — MUST come LAST
 // ===========================================
-
 app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: `Route not found: ${req.method} ${req.path}`,
-    availableEndpoints: {
-      auth: '/api/auth',
-      jobs: '/api/jobs',
-      applications: '/api/job-applications',
-      admin: '/api/admin',
-      technician: '/api/technician',
-      technicianpublic: '/api/technician-public',
-      serviceCatalog: '/api/service-catalog',
-      search: '/api/search',
-      subscription: '/api/subscription'
-    }
   });
 });
 
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
-  
+
   if (err.name === 'ValidationError') {
     const errors = Object.values(err.errors).map(e => e.message);
-    return res.status(400).json({
-      success: false,
-      message: 'Validation error',
-      errors
-    });
+    return res.status(400).json({ success: false, message: 'Validation error', errors });
   }
-  
+
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern)[0];
     return res.status(400).json({
@@ -292,21 +320,15 @@ app.use((err, req, res, next) => {
       message: `Duplicate value for ${field}. Please use a different value.`
     });
   }
-  
+
   if (err.name === 'JsonWebTokenError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid token. Please login again.'
-    });
+    return res.status(401).json({ success: false, message: 'Invalid token. Please login again.' });
   }
-  
+
   if (err.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Session expired. Please login again.'
-    });
+    return res.status(401).json({ success: false, message: 'Session expired. Please login again.' });
   }
-  
+
   const status = err.status || 500;
   res.status(status).json({
     success: false,
@@ -316,15 +338,10 @@ app.use((err, req, res, next) => {
 });
 
 // ===========================================
-// SERVER INSTANCE AND CONNECTION TRACKING
+// SERVER START
 // ===========================================
-
 let server;
 const activeConnections = new Set();
-
-// ===========================================
-// START SERVER
-// ===========================================
 
 const startServer = async () => {
   const dbConnected = await connectDB();
@@ -332,9 +349,9 @@ const startServer = async () => {
     console.error('❌ Failed to connect to database. Server will not start.');
     process.exit(1);
   }
-  
+
   const PORT = process.env.PORT || 5000;
-  
+
   server = httpServer.listen(PORT, () => {
     console.log(`\n🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -346,114 +363,78 @@ const startServer = async () => {
     console.log(`   - Job Applications & Tracking`);
     console.log(`   - Technician Profiles`);
     console.log(`   - Service Catalog`);
-    console.log(`   - Subscriptions (Paystack enabled)`);
+    console.log(`   - Subscriptions (Paystack + M-Pesa)`);
     console.log(`   - Admin Dashboard`);
     console.log(`   - Search & Filtering`);
-    console.log(`\n✅ Server ready to accept connections`);
-    console.log(`💡 Press Ctrl+C to gracefully shut down the server\n`);
+    console.log(`\n✅ Server ready to accept connections\n`);
   });
-  
+
   server.on('connection', (connection) => {
     activeConnections.add(connection);
     connection.on('close', () => {
       activeConnections.delete(connection);
     });
   });
-  
+
   server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
-      console.error(`❌ Port ${PORT} is already in use. Please use a different port or stop the other process.`);
+      console.error(`❌ Port ${PORT} is already in use.`);
       process.exit(1);
     } else {
       console.error('❌ Server error:', error);
       process.exit(1);
     }
   });
+
+  // ─── Cron jobs ─────────────────────────────────────────
+  cron.schedule('0 6 * * *', () => {
+    console.log('⏰ Running daily subscription reminders...');
+    sendExpiryReminders();
+  }, {
+    timezone: 'Africa/Nairobi'
+  });
 };
 
 // ===========================================
 // GRACEFUL SHUTDOWN
 // ===========================================
-
 const gracefulShutdown = () => {
   console.log('\n🛑 Received shutdown signal. Closing server gracefully...');
-  
+
   if (server) {
     server.close(() => {
-      console.log('✅ HTTP server closed (no longer accepting new connections)');
+      console.log('✅ HTTP server closed');
       mongoose.connection.close(false, () => {
         console.log('✅ MongoDB connection closed');
-        console.log('👋 Shutdown complete');
         process.exit(0);
       });
     });
-    
+
     setTimeout(() => {
-      const remainingConnections = activeConnections.size;
-      if (remainingConnections > 0) {
-        console.log(`⚠️ Force closing ${remainingConnections} active connection(s) that didn't close gracefully...`);
-        activeConnections.forEach(connection => {
-          try {
-            connection.destroy();
-          } catch (err) {
-            if (err.code !== 'ECONNRESET') {
-              console.error('Error destroying connection:', err.message);
-            }
-          }
-        });
-        activeConnections.clear();
-        console.log('✅ All remaining connections forcefully closed');
-      } else {
-        console.log('✅ No active connections remaining');
-      }
-    }, 5000);
-    
-    setTimeout(() => {
-      console.error('⚠️ Could not close all connections within timeout period (10 seconds)');
-      console.error('⚠️ Forcefully shutting down process');
+      activeConnections.forEach(connection => {
+        try { connection.destroy(); } catch (err) { /* ignore */ }
+      });
+      activeConnections.clear();
       process.exit(1);
     }, 10000);
-    
   } else {
-    console.log('⚠️ No active server instance found');
     if (mongoose.connection && mongoose.connection.readyState === 1) {
-      console.log('Closing MongoDB connection...');
-      mongoose.connection.close(false, () => {
-        console.log('✅ MongoDB connection closed');
-        process.exit(0);
-      });
+      mongoose.connection.close(false, () => process.exit(0));
     } else {
-      console.log('✅ No active connections to close');
       process.exit(0);
     }
   }
 };
 
-// ===========================================
-// SHUTDOWN SIGNAL HANDLERS
-// ===========================================
-
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
 // ===========================================
-// START THE APPLICATION
+// START
 // ===========================================
-
 startServer().catch(error => {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
-}
-
-);
-// ─── Cron jobs ─────────────────────────────────────────────
-// Run daily at 09:00 AM (Kenya time is UTC+3, so 06:00 UTC)
-cron.schedule('0 6 * * *', () => {
-  console.log('⏰ Running daily subscription reminders...');
-  sendExpiryReminders();
-}, {
-  timezone: 'Africa/Nairobi'
 });
 
-// Export app for testing
 module.exports = app;
