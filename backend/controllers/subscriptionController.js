@@ -536,6 +536,7 @@ exports.mpesaCallback = async (req, res) => {
 };
 
 // ─── M-PESA STATUS POLL (authenticated) — FIXED ─────────────────────────────
+// ─── M-PESA STATUS POLL (authenticated) — FIXED WITH FALLBACK ─────────
 exports.mpesaStatus = async (req, res) => {
   try {
     const { checkoutRequestID } = req.query;
@@ -546,9 +547,7 @@ exports.mpesaStatus = async (req, res) => {
     const userId = req.user.userId || req.user.id || req.user._id;
 
     // ─────────────────────────────────────────────────────────
-    // 1. CHECK IF PAYMENT ALREADY SUCCEEDED
-    //    The callback stores the transaction in subscription.paymentHistory
-    //    and clears paymentPending. So we search paymentHistory FIRST.
+    // 1. CHECK IF PAYMENT ALREADY SUCCEEDED (via callback)
     // ─────────────────────────────────────────────────────────
     const completedTech = await Technician.findOne({
       userId,
@@ -556,19 +555,14 @@ exports.mpesaStatus = async (req, res) => {
     });
 
     if (completedTech) {
-      console.log(`✅ mpesaStatus: payment already completed for ${checkoutRequestID}`);
       return res.json({
         success: true,
-        data: {
-          status: 'success',
-          message: 'Payment successful',
-        },
+        data: { status: 'success', message: 'Payment successful' },
       });
     }
 
     // ─────────────────────────────────────────────────────────
-    // 2. CHECK IF PAYMENT FAILED
-    //    Failed transactions are kept in paymentPending with failureCode
+    // 2. CHECK IF PAYMENT FAILED (via callback)
     // ─────────────────────────────────────────────────────────
     const failedTech = await Technician.findOne({
       userId,
@@ -588,7 +582,7 @@ exports.mpesaStatus = async (req, res) => {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 3. STILL PENDING — query Safaricom
+    // 3. LOOK UP THE PENDING TRANSACTION
     // ─────────────────────────────────────────────────────────
     const technician = await Technician.findOne({
       userId,
@@ -596,61 +590,139 @@ exports.mpesaStatus = async (req, res) => {
       'paymentPending.method': 'mpesa',
     });
 
-    // Not found anywhere → return pending instead of 404
     if (!technician) {
+      // Nothing pending, nothing in history — return pending
       return res.json({
         success: true,
-        data: {
-          status: 'pending',
-          message: 'Awaiting confirmation...',
-        },
+        data: { status: 'pending', message: 'Awaiting confirmation...' },
       });
     }
 
+    // ─────────────────────────────────────────────────────────
+    // 4. ASK SAFARICOM DIRECTLY (FALLBACK WHEN CALLBACK FAILS)
+    // ─────────────────────────────────────────────────────────
     try {
       const statusData = await mpesaService.queryStatus(checkoutRequestID);
-      const resultCode = statusData.ResultCode;
+      const resultCode = String(statusData.ResultCode || '');
 
-      let status = 'pending';
-      let message = 'Payment still being processed';
-
+      // ═══ SUCCESS: update the DB right here ═══
       if (resultCode === '0') {
-        status = 'success';
-        message = 'Payment successful';
-      } else if (resultCode === '1032') {
-        status = 'failed';
-        message = 'Transaction cancelled by user';
-      } else if (resultCode === '1037') {
-        status = 'failed';
-        message = 'Transaction timed out';
-      } else if (resultCode) {
-        status = 'failed';
-        message = statusData.ResultDesc || 'Payment failed';
+        console.log(`✅ mpesaStatus: Safaricom confirms SUCCESS for ${checkoutRequestID}. Updating DB...`);
+
+        const { planId, autoRenew } = technician.paymentPending;
+        const plan = subscriptionPlans[planId];
+
+        if (!plan) {
+          console.error(`Invalid plan ID: ${planId}`);
+          return res.json({
+            success: true,
+            data: { status: 'failed', message: 'Invalid plan' },
+          });
+        }
+
+        // Idempotency — don't double-process
+        const alreadyProcessed = technician.subscription?.paymentHistory?.some(
+          (p) => p.transactionId === checkoutRequestID
+        );
+
+        if (!alreadyProcessed) {
+          const endDate = new Date();
+          endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
+
+          technician.subscription = {
+            plan: planId,
+            planDetails: {
+              name: plan.name,
+              visibilityRadius: plan.visibilityRadius,
+              price: plan.price,
+              features: plan.features,
+            },
+            startDate: new Date(),
+            endDate,
+            isTrial: false,
+            autoRenew: autoRenew || false,
+            paymentMethod: 'mpesa',
+            lastPaymentDate: new Date(),
+            nextPaymentDate: endDate,
+            paymentHistory: [
+              ...(technician.subscription?.paymentHistory || []),
+              {
+                amount: technician.paymentPending.amount || plan.price,
+                date: new Date(),
+                transactionId: checkoutRequestID,
+                status: 'success',
+                plan: planId,
+              },
+            ],
+          };
+
+          technician.serviceRadius = plan.visibilityRadius;
+          technician.paymentPending = undefined;
+          await technician.save();
+
+          console.log(`✅ mpesaStatus fallback: subscription upgraded to ${planId}`);
+
+          // Send renewal notification (non-blocking)
+          try {
+            const techUser = await User.findById(technician.userId).select('email firstName lastName');
+            if (techUser?.email) {
+              await notify.technicianSubscriptionRenewed({
+                technicianEmail: techUser.email,
+                technicianName: `${techUser.firstName} ${techUser.lastName}`.trim(),
+                planName: plan.name,
+                amount: technician.subscription.paymentHistory.slice(-1)[0].amount,
+                endDate: endDate.toLocaleDateString('en-KE', {
+                  day: 'numeric', month: 'long', year: 'numeric',
+                }),
+                visibilityRadius: plan.visibilityRadius,
+              });
+              console.log(`📧 Renewal email sent to ${techUser.email}`);
+            }
+          } catch (notifyErr) {
+            console.error('Renewal notification failed:', notifyErr.message);
+          }
+        }
+
+        return res.json({
+          success: true,
+          data: { status: 'success', message: 'Payment successful' },
+        });
       }
 
-      return res.json({
-        success: true,
-        data: { status, message, resultCode },
-      });
-    } catch (safErr) {
-      console.warn('mpesaStatus: Safaricom query failed, returning pending:', safErr.message);
+      // ═══ FAILED ═══
+      if (resultCode === '1032') {
+        return res.json({
+          success: true,
+          data: { status: 'failed', message: 'Transaction cancelled by user' },
+        });
+      }
+      if (resultCode === '1037') {
+        return res.json({
+          success: true,
+          data: { status: 'failed', message: 'Transaction timed out' },
+        });
+      }
+
+      // ═══ STILL PENDING ═══
       return res.json({
         success: true,
         data: {
           status: 'pending',
-          message: 'Awaiting confirmation...',
+          message: statusData.ResultDesc || 'Awaiting confirmation...',
         },
+      });
+    } catch (safErr) {
+      console.warn('mpesaStatus: Safaricom query failed:', safErr.message);
+      return res.json({
+        success: true,
+        data: { status: 'pending', message: 'Awaiting confirmation...' },
       });
     }
   } catch (error) {
     console.error('Error checking M-Pesa status:', error);
-    // Return pending instead of 500 so frontend keeps polling
     return res.json({
       success: true,
-      data: {
-        status: 'pending',
-        message: 'Checking...',
-      },
+      data: { status: 'pending', message: 'Checking...' },
     });
   }
 };
