@@ -3,14 +3,15 @@
  * ========================
  * Displays the service catalog in a three-level hierarchy:
  * mainCategory → serviceCategory → subService.
- * 
+ *
  * Features:
- * - Modern gradient hero (no external images needed)
+ * - Gradient + photographic hero (engineering tools backdrop)
+ * - Brand name in green & red
  * - Distance & location controls with clear feedback
  * - Expandable service categories with lazy-loaded sub-services
  * - Responsive grid layout
- * 
- * @version 3.0.0 – Redesigned UI
+ *
+ * @version 3.1.0 – Rebranded hero (WeBA-Hub Service)
  * @author Weba-Hub Team
  */
 
@@ -30,6 +31,14 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import api from '../services/api';
+
+/**
+ * Hero background image — engineering / hand tools.
+ * Swap this URL for a local asset (e.g. `/images/tools-hero.jpg`)
+ * if you'd rather not depend on an external CDN.
+ */
+const HERO_IMAGE =
+  'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=2000&q=80';
 
 const Services = () => {
   const navigate = useNavigate();
@@ -251,33 +260,70 @@ const Services = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ════════════════ HERO SECTION ════════════════ */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-green-700 via-green-600 to-emerald-700">
-        {/* Decorative background shapes */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute -top-24 -right-24 w-96 h-96 bg-white rounded-full blur-3xl"></div>
-          <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+      <div className="relative overflow-hidden bg-gray-900">
+        {/* ── Layer 1: Engineering-tools photograph ── */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url('${HERO_IMAGE}')` }}
+          aria-hidden="true"
+        />
+
+        {/* ── Layer 2: Darkening + brand colour wash ── */}
+        <div
+          className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-black/90"
+          aria-hidden="true"
+        />
+        {/* Green glow (brand) from the top-left */}
+        <div
+          className="absolute inset-0 bg-gradient-to-br from-green-700/60 via-transparent to-transparent"
+          aria-hidden="true"
+        />
+        {/* Red glow (brand) from the bottom-right */}
+        <div
+          className="absolute inset-0 bg-gradient-to-tl from-red-800/50 via-transparent to-transparent"
+          aria-hidden="true"
+        />
+
+        {/* ── Layer 3: Soft decorative blobs ── */}
+        <div className="absolute inset-0 opacity-20" aria-hidden="true">
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-green-400 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-red-500 rounded-full blur-3xl"></div>
         </div>
 
-        <div className="relative z-10 max-w-6xl mx-auto px-4 py-16 md:py-20">
+        <div className="relative z-10 max-w-6xl mx-auto px-4 py-16 md:py-24">
           {/* Badge */}
-          <div className="flex justify-center mb-4">
-            <span className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-white text-xs font-semibold border border-white/30">
-              <Sparkles className="w-3.5 h-3.5" />
-              Verified Professionals
+          <div className="flex justify-center mb-5">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-white text-xs font-semibold border border-white/25 shadow-lg">
+              <Sparkles className="w-3.5 h-3.5 text-green-300" />
+              Verified Engineers &amp; Technicians
             </span>
           </div>
 
-          {/* Title */}
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white text-center mb-4 tracking-tight">
-            WeBA Infinity Services
+          {/* ═══ Brand Title — green + red ═══ */}
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-4 tracking-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]">
+            <span className="bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 bg-clip-text text-transparent">
+              WeBA-Hub
+            </span>{' '}
+            <span className="bg-gradient-to-r from-red-500 via-red-400 to-rose-400 bg-clip-text text-transparent">
+              Service
+            </span>
           </h1>
-          <p className="text-base md:text-lg text-white/90 text-center max-w-2xl mx-auto mb-8 leading-relaxed">
-            Browse our comprehensive range of professional services delivered by verified technicians across Kenya.
+
+          {/* Brand accent rule: green → red */}
+          <div className="flex justify-center mb-6">
+            <div className="h-1.5 w-28 rounded-full bg-gradient-to-r from-green-500 via-emerald-400 to-red-500 shadow-lg"></div>
+          </div>
+
+          {/* Tagline */}
+          <p className="text-base md:text-lg text-white/90 text-center max-w-2xl mx-auto mb-10 leading-relaxed drop-shadow-md">
+            Browse our comprehensive range of professional services delivered by
+            verified <span className="font-semibold text-green-300">engineers</span> and{' '}
+            <span className="font-semibold text-red-300">technicians</span> across Kenya.
           </p>
 
           {/* ═══ Location & Distance Control Card ═══ */}
           <div className="max-w-3xl mx-auto">
-            <div className="bg-white rounded-2xl shadow-2xl p-5 md:p-6">
+            <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl ring-1 ring-black/5 p-5 md:p-6">
               <div className="flex flex-col md:flex-row md:items-end gap-4">
                 {/* Distance selector */}
                 <div className="flex-1">
@@ -359,6 +405,12 @@ const Services = () => {
             </div>
           </div>
         </div>
+
+        {/* Bottom fade into the page background */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-gray-50 to-transparent"
+          aria-hidden="true"
+        />
       </div>
 
       {/* ════════════════ SERVICE CATALOG ════════════════ */}
