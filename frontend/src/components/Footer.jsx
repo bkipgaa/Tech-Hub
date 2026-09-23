@@ -40,33 +40,43 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           
           {/* Brand Column */}
-          <div className="lg:col-span-1 space-y-4">
-            <Link to="/" className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">W</span>
-              </div>
-              <span className="text-xl font-bold">
-                <span className="text-green-500">WeBA</span>
-                <span className="text-red-500">-Hub</span>
-              </span>
-            </Link>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Connecting you with verified professionals for all your technical and service needs.
-            </p>
-            <div className="flex space-x-3 pt-2">
-              {socialLinks.map((social, idx) => (
-                <a
-                  key={idx}
-                  href={social.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`w-9 h-9 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-700 ${social.color} transition-all duration-300`}
-                >
-                  <social.icon className="w-4 h-4" />
-                </a>
-              ))}
-            </div>
-          </div>
+<div className="lg:col-span-1 space-y-4">
+  <Link to="/" className="flex items-center space-x-3 group w-fit">
+    <div className="relative">
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400/40 to-red-400/40 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <img
+        src="/logo.jpg"
+        alt="WeBA-Hub"
+        className="relative w-12 h-12 object-contain rounded-full ring-2 ring-gray-700 shadow-lg
+                   transition-all duration-300 ease-out
+                   group-hover:scale-110 group-hover:ring-green-500/50"
+      />
+    </div>
+    <span className="text-xl font-bold leading-none">
+      <span className="text-green-500">WeBA</span>
+      <span className="text-red-500">-Hub</span>
+    </span>
+  </Link>
+
+  <p className="text-sm text-gray-400 leading-relaxed">
+    Connecting you with verified professionals for all your technical and service needs.
+  </p>
+
+  {/* Social icons unchanged */}
+  <div className="flex space-x-3 pt-2">
+    {socialLinks.map((social, idx) => (
+      <a
+        key={idx}
+        href={social.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`w-9 h-9 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-700 ${social.color} transition-all duration-300`}
+      >
+        <social.icon className="w-4 h-4" />
+      </a>
+    ))}
+  </div>
+</div>
 
           {/* Explore Links */}
           <div>

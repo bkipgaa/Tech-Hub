@@ -119,17 +119,35 @@ const Navbar = () => {
           <div className="flex justify-between items-center h-16">
 
             {/* ─── LOGO ───────────────────────────── */}
-            <Link to="/" className="flex items-center space-x-2 group" onClick={closeMobileMenu}>
-              <div className="relative">
-                <div className="w-9 h-9 bg-gradient-to-br from-green-600 to-green-500 rounded-lg rotate-6 group-hover:rotate-12 transition-transform duration-300 shadow-md flex items-center justify-center">
-                  <span className="text-white font-bold text-xl transform -rotate-6">W</span>
-                </div>
-              </div>
-              <span className="text-xl font-bold tracking-tight">
-                <span className="text-green-700">WeBA</span>
-                <span className="text-red-600">-Hub</span>
-              </span>
-            </Link>
+           
+<Link
+  to="/"
+  className="flex items-center space-x-3 group"
+  onClick={closeMobileMenu}
+  aria-label="WeBA-Hub Home"
+>
+  {/* Circular logo with hover lift + glow */}
+  <div className="relative">
+    {/* Soft glow behind logo */}
+    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400/30 to-red-400/30 blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+    {/* The logo image */}
+    <img
+      src="/logo.jpg"
+      alt="WeBA-Hub"
+      className="relative w-11 h-11 object-contain rounded-full ring-2 ring-white shadow-md
+                 transition-all duration-300 ease-out
+                 group-hover:scale-110 group-hover:shadow-xl
+                 group-hover:ring-green-100"
+    />
+  </div>
+
+  {/* Wordmark — colour preserved exactly as before */}
+  <span className="text-xl font-bold tracking-tight leading-none">
+    <span className="text-green-700">WeBA</span>
+    <span className="text-red-600">-Hub</span>
+  </span>
+</Link>
 
             {/* ─── DESKTOP NAVIGATION ─────────────── */}
             <div className="hidden md:flex items-center space-x-1">
