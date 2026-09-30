@@ -448,6 +448,18 @@ export const AuthProvider = ({ children }) => {
   const updateSocialLinks = (socialData) => updateProfileSection('/technician/profile/social-links', socialData);
   const updatePrivacySettings = (privacyData) => updateProfileSection('/technician/profile/settings', privacyData);
   const updateAvailabilitySchedule = (scheduleData) => updateProfileSection('/technician/profile/availability', scheduleData);
+    // ✅ NEW — inline-editable sections
+  const updateEducation      = (education) =>
+    updateProfileSection('/technician/profile/education', { education });
+
+  const updateCertifications = (certifications) =>
+    updateProfileSection('/technician/profile/certifications', { certifications });
+
+  const updateExperience     = (experience, yearsOfExperience) =>
+    updateProfileSection('/technician/profile/experience', { experience, yearsOfExperience });
+
+  const updatePortfolio      = (portfolio) =>
+    updateProfileSection('/technician/profile/portfolio', { portfolio });
 
 
 
@@ -1002,6 +1014,13 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     updatePrivacySettings,
     updateAvailabilitySchedule,
     toggleAvailability,
+
+
+      // ✅ NEW — inline-editable sections
+    updateEducation,
+    updateCertifications,
+    updateExperience,
+    updatePortfolio,
     
     // Admin functions
     getAllTechnicians,
