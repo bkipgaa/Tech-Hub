@@ -1,59 +1,71 @@
 /**
  * ProfileTab Component
  * ====================
- * Manages technician profile information including:
- * - Profile headline and bio
- * - Multiple main categories (array)
- * - Skills management
- * - Languages management
- * - Location with geocoding
- * 
- * @version 2.1.0 – Fixed category loading endpoint + fallback
+ * Manages technician profile information with inline editing for
+ * skills and languages.
+ *
+ * @version 3.0.0 – Inline edit for skills & languages
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, MapPin, Globe, Award, Languages, User, Briefcase, Navigation } from 'lucide-react';
+import {
+  Plus, Trash2, MapPin, Globe, Award, Languages,
+  User, Briefcase, Navigation, Pencil, Save, X, Loader2,
+} from 'lucide-react';
 import api from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
+
+const EMPTY_SKILL = { name: '', level: 'Intermediate', yearsOfExperience: 0 };
+const EMPTY_LANGUAGE = { name: '', proficiency: 'Fluent' };
 
 const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => {
-  // State for dynamic form inputs
-  const [newSkill, setNewSkill] = useState({ name: '', level: 'Intermediate', yearsOfExperience: 0 });
-  const [newLanguage, setNewLanguage] = useState({ name: '', proficiency: 'Fluent' });
+  const { updateSkills, updateLanguages } = useAuth();
 
-  // State for location services
+  // ── Add-form state ─────────────────────────────────────
+  const [newSkill, setNewSkill] = useState({ ...EMPTY_SKILL });
+  const [newLanguage, setNewLanguage] = useState({ ...EMPTY_LANGUAGE });
+
+  // ── Inline-edit state ──────────────────────────────────
+  const [editingSkillIdx, setEditingSkillIdx] = useState(null);
+  const [editSkillData, setEditSkillData] = useState({ ...EMPTY_SKILL });
+  const [savingSkill, setSavingSkill] = useState(false);
+
+  const [editingLanguageIdx, setEditingLanguageIdx] = useState(null);
+  const [editLanguageData, setEditLanguageData] = useState({ ...EMPTY_LANGUAGE });
+  const [savingLanguage, setSavingLanguage] = useState(false);
+
+  const [error, setError] = useState('');
+
+  // ── Location state (unchanged) ─────────────────────────
   const [gettingLocation, setGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState('');
 
-  // State for categories fetched from backend
+  // ── Categories state (unchanged) ───────────────────────
   const [mainCategories, setMainCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState('');
   const [selectedCategoryToAdd, setSelectedCategoryToAdd] = useState('');
 
-  // Static options for dropdowns
   const skillLevels = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
   const proficiencyLevels = ['Basic', 'Conversational', 'Fluent', 'Native'];
 
-  /**
-   * Fetch main categories from backend on mount.
-   * Uses /service-catalog/complete (matches CreateTechnicianProfile)
-   * with a hardcoded fallback if the API is unreachable.
-   */
+  // ═══════════════════════════════════════════════════════
+  // FETCH CATEGORIES (unchanged)
+  // ═══════════════════════════════════════════════════════
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setCategoriesLoading(true);
         setCategoriesError('');
-
         const response = await api.get('/service-catalog/complete');
         const catalogData = response.data?.data;
-
         if (catalogData && typeof catalogData === 'object' && Object.keys(catalogData).length > 0) {
-          const categories = Object.keys(catalogData).map((name) => ({
-            name,
-            hasServices: Array.isArray(catalogData[name]) && catalogData[name].length > 0,
-          }));
-          setMainCategories(categories);
+          setMainCategories(
+            Object.keys(catalogData).map((name) => ({
+              name,
+              hasServices: Array.isArray(catalogData[name]) && catalogData[name].length > 0,
+            }))
+          );
         } else {
           useFallbackCategories();
         }
@@ -67,26 +79,12 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
 
     const useFallbackCategories = () => {
       const fallback = [
-        'IT & Networking',
-        'Electrical Services',
-        'Mechanical Services',
-        'Plumbing',
-        'Programming & AI',
-        'Hairdressing & Beauty',
-        'Carpentry & Furniture',
-        'Laundry & Dry Cleaning',
-        'Cleaning Services',
-        'Painting & Decorating',
-        'Welding & Fabrication',
-        'Automotive Repair',
-        'Tutoring & Training',
-        'Photography & Videography',
-        'Event Planning',
-        'Construction & Renovation',
-        'HVAC Services',
-        'Appliance Repair',
-        'Moving & Logistics',
-        'Gardening & Landscaping',
+        'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
+        'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
+        'Laundry & Dry Cleaning', 'Cleaning Services', 'Painting & Decorating',
+        'Welding & Fabrication', 'Automotive Repair', 'Tutoring & Training',
+        'Photography & Videography', 'Event Planning', 'Construction & Renovation',
+        'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping',
       ];
       setMainCategories(fallback.map((name) => ({ name, hasServices: true })));
       setCategoriesError('');
@@ -95,34 +93,28 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
     fetchCategories();
   }, []);
 
-  /**
-   * Get current location using browser's geolocation API
-   */
+  // ═══════════════════════════════════════════════════════
+  // LOCATION (unchanged)
+  // ═══════════════════════════════════════════════════════
   const getCurrentLocation = () => {
     setGettingLocation(true);
     setLocationError('');
-
     if (!navigator.geolocation) {
       setLocationError('Geolocation is not supported by your browser');
       setGettingLocation(false);
       return;
     }
-
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
         setFormData((prev) => ({
           ...prev,
-          location: {
-            ...prev.location,
-            coordinates: [longitude, latitude],
-          },
+          location: { ...prev.location, coordinates: [longitude, latitude] },
         }));
         await reverseGeocode(latitude, longitude);
         setGettingLocation(false);
       },
       (error) => {
-        console.error('Location error:', error);
         switch (error.code) {
           case error.PERMISSION_DENIED:
             setLocationError('Please enable location access to help clients find you');
@@ -142,9 +134,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
     );
   };
 
-  /**
-   * Reverse geocode coordinates to get address details
-   */
   const reverseGeocode = async (lat, lng) => {
     try {
       const response = await fetch(
@@ -162,10 +151,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             country: data.address.country || 'Kenya',
             zipCode: data.address.postcode || prev.address.zipCode,
           },
-          location: {
-            ...prev.location,
-            formattedAddress: data.display_name,
-          },
+          location: { ...prev.location, formattedAddress: data.display_name },
         }));
       }
     } catch (error) {
@@ -173,41 +159,107 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
     }
   };
 
-  // ---------- Skills ----------
+  // ═══════════════════════════════════════════════════════
+  // SKILLS — add / edit / delete
+  // ═══════════════════════════════════════════════════════
   const addSkill = () => {
-    if (newSkill.name) {
-      setFormData({
-        ...formData,
-        skills: [...formData.skills, { ...newSkill }],
-      });
-      setNewSkill({ name: '', level: 'Intermediate', yearsOfExperience: 0 });
+    if (!newSkill.name) return;
+    setFormData({ ...formData, skills: [...formData.skills, { ...newSkill }] });
+    setNewSkill({ ...EMPTY_SKILL });
+  };
+
+  const removeSkill = async (index) => {
+    const next = formData.skills.filter((_, i) => i !== index);
+    setFormData({ ...formData, skills: next });
+    if (editingSkillIdx === index) cancelEditSkill();
+    const res = await updateSkills(next);
+    if (!res.success) setError(res.error || 'Failed to delete skill');
+  };
+
+  const startEditSkill = (idx) => {
+    setEditingSkillIdx(idx);
+    setEditSkillData({ ...EMPTY_SKILL, ...formData.skills[idx] });
+    setError('');
+  };
+
+  const cancelEditSkill = () => {
+    setEditingSkillIdx(null);
+    setEditSkillData({ ...EMPTY_SKILL });
+  };
+
+  const saveEditSkill = async () => {
+    if (!editSkillData.name.trim()) {
+      setError('Skill name is required');
+      return;
+    }
+    setSavingSkill(true);
+    setError('');
+    const previous = formData.skills;
+    const next = [...previous];
+    next[editingSkillIdx] = editSkillData;
+    setFormData({ ...formData, skills: next });
+
+    const res = await updateSkills(next);
+    setSavingSkill(false);
+    if (res.success) cancelEditSkill();
+    else {
+      setFormData({ ...formData, skills: previous });
+      setError(res.error || 'Failed to save skill');
     }
   };
 
-  const removeSkill = (index) => {
-    const updatedSkills = [...formData.skills];
-    updatedSkills.splice(index, 1);
-    setFormData({ ...formData, skills: updatedSkills });
-  };
-
-  // ---------- Languages ----------
+  // ═══════════════════════════════════════════════════════
+  // LANGUAGES — add / edit / delete
+  // ═══════════════════════════════════════════════════════
   const addLanguage = () => {
-    if (newLanguage.name) {
-      setFormData({
-        ...formData,
-        languages: [...formData.languages, { ...newLanguage }],
-      });
-      setNewLanguage({ name: '', proficiency: 'Fluent' });
+    if (!newLanguage.name) return;
+    setFormData({ ...formData, languages: [...formData.languages, { ...newLanguage }] });
+    setNewLanguage({ ...EMPTY_LANGUAGE });
+  };
+
+  const removeLanguage = async (index) => {
+    const next = formData.languages.filter((_, i) => i !== index);
+    setFormData({ ...formData, languages: next });
+    if (editingLanguageIdx === index) cancelEditLanguage();
+    const res = await updateLanguages(next);
+    if (!res.success) setError(res.error || 'Failed to delete language');
+  };
+
+  const startEditLanguage = (idx) => {
+    setEditingLanguageIdx(idx);
+    setEditLanguageData({ ...EMPTY_LANGUAGE, ...formData.languages[idx] });
+    setError('');
+  };
+
+  const cancelEditLanguage = () => {
+    setEditingLanguageIdx(null);
+    setEditLanguageData({ ...EMPTY_LANGUAGE });
+  };
+
+  const saveEditLanguage = async () => {
+    if (!editLanguageData.name.trim()) {
+      setError('Language name is required');
+      return;
+    }
+    setSavingLanguage(true);
+    setError('');
+    const previous = formData.languages;
+    const next = [...previous];
+    next[editingLanguageIdx] = editLanguageData;
+    setFormData({ ...formData, languages: next });
+
+    const res = await updateLanguages(next);
+    setSavingLanguage(false);
+    if (res.success) cancelEditLanguage();
+    else {
+      setFormData({ ...formData, languages: previous });
+      setError(res.error || 'Failed to save language');
     }
   };
 
-  const removeLanguage = (index) => {
-    const updatedLanguages = [...formData.languages];
-    updatedLanguages.splice(index, 1);
-    setFormData({ ...formData, languages: updatedLanguages });
-  };
-
-  // ---------- Main Categories (multiple) ----------
+  // ═══════════════════════════════════════════════════════
+  // MAIN CATEGORIES (unchanged)
+  // ═══════════════════════════════════════════════════════
   const addMainCategory = () => {
     if (!selectedCategoryToAdd) return;
     if (formData.mainCategories?.includes(selectedCategoryToAdd)) {
@@ -228,34 +280,31 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
     }));
   };
 
-  // ========== DISPLAY MODE ==========
+  // ═══════════════════════════════════════════════════════
+  // DISPLAY MODE
+  // ═══════════════════════════════════════════════════════
   if (!isEditing) {
     return (
       <div className="space-y-8">
-        {/* Profile Headline */}
+        {/* Headline */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center">
-            <User className="w-3.5 h-3.5 mr-1.5" />
-            Profile Headline
+            <User className="w-3.5 h-3.5 mr-1.5" /> Profile Headline
           </h3>
           <p className="text-gray-800 text-base">{formData.profileHeadline || '—'}</p>
         </div>
 
-        {/* About Me */}
+        {/* About */}
         <div className="border-b border-gray-100 pb-4">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">
-            About Me
-          </h3>
+          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">About Me</h3>
           <p className="text-gray-700 leading-relaxed">{formData.aboutMe || '—'}</p>
         </div>
 
         {/* Main Categories */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center">
-            <Briefcase className="w-3.5 h-3.5 mr-1.5" />
-            Main Categories
+            <Briefcase className="w-3.5 h-3.5 mr-1.5" /> Main Categories
           </h3>
-
           {formData.mainCategory && (
             <div className="mb-2">
               <span className="text-xs text-gray-500 mr-2">Primary:</span>
@@ -264,14 +313,10 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
               </span>
             </div>
           )}
-
           {formData.mainCategories && formData.mainCategories.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {formData.mainCategories.map((cat, idx) => (
-                <span
-                  key={idx}
-                  className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
-                >
+                <span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
                   {cat}
                 </span>
               ))}
@@ -284,16 +329,12 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
         {/* Skills */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center">
-            <Award className="w-3.5 h-3.5 mr-1.5" />
-            Skills
+            <Award className="w-3.5 h-3.5 mr-1.5" /> Skills
           </h3>
           {formData.skills && formData.skills.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {formData.skills.map((skill, idx) => (
-                <span
-                  key={idx}
-                  className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm"
-                >
+                <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
                   {skill.name} ({skill.level})
                   {skill.yearsOfExperience > 0 && ` · ${skill.yearsOfExperience} yrs`}
                 </span>
@@ -307,16 +348,12 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
         {/* Languages */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center">
-            <Languages className="w-3.5 h-3.5 mr-1.5" />
-            Languages
+            <Languages className="w-3.5 h-3.5 mr-1.5" /> Languages
           </h3>
           {formData.languages && formData.languages.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {formData.languages.map((lang, idx) => (
-                <span
-                  key={idx}
-                  className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm"
-                >
+                <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
                   {lang.name} ({lang.proficiency})
                 </span>
               ))}
@@ -326,16 +363,13 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
           )}
         </div>
 
-        {/* Location */}
+        {/* Location (unchanged) */}
         <div className="border-b border-gray-100 pb-4">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center">
-            <MapPin className="w-3.5 h-3.5 mr-1.5" />
-            Location
+            <MapPin className="w-3.5 h-3.5 mr-1.5" /> Location
           </h3>
           <div className="space-y-1">
-            {formData.address?.street && (
-              <p className="text-gray-700">{formData.address.street}</p>
-            )}
+            {formData.address?.street && <p className="text-gray-700">{formData.address.street}</p>}
             <p className="text-gray-700">
               {formData.address?.city && `${formData.address.city}, `}
               {formData.address?.state}
@@ -346,7 +380,6 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
               <Globe className="w-3.5 h-3.5 mr-1.5" />
               Service radius: {formData.serviceRadius} km
             </p>
-
             {formData.location?.coordinates &&
               formData.location.coordinates[0] !== 0 &&
               formData.location.coordinates[1] !== 0 && (
@@ -354,50 +387,38 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
                   <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
                     <MapPin className="w-3 h-3" /> 📍 Location Coordinates
                   </p>
-                  <div className="space-y-1">
-                    <p className="text-xs text-gray-600 font-mono">
-                      Latitude:{' '}
-                      <span className="text-gray-800">
-                        {formData.location.coordinates[1].toFixed(6)}°
-                      </span>
-                    </p>
-                    <p className="text-xs text-gray-600 font-mono">
-                      Longitude:{' '}
-                      <span className="text-gray-800">
-                        {formData.location.coordinates[0].toFixed(6)}°
-                      </span>
-                    </p>
-                    <p className="text-xs text-green-600 mt-2">
-                      ✓ Clients can find you within {formData.serviceRadius} km radius
-                    </p>
-                  </div>
+                  <p className="text-xs text-gray-600 font-mono">
+                    Latitude: <span className="text-gray-800">{formData.location.coordinates[1].toFixed(6)}°</span>
+                  </p>
+                  <p className="text-xs text-gray-600 font-mono">
+                    Longitude: <span className="text-gray-800">{formData.location.coordinates[0].toFixed(6)}°</span>
+                  </p>
+                  <p className="text-xs text-green-600 mt-2">
+                    ✓ Clients can find you within {formData.serviceRadius} km radius
+                  </p>
                 </div>
               )}
-
-            {(!formData.location?.coordinates ||
-              formData.location.coordinates[0] === 0 ||
-              formData.location.coordinates[1] === 0) && (
-              <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <p className="text-xs text-yellow-700">
-                  ⚠️ No location coordinates set. Click "Edit Profile" and use "Update My
-                  Current Location" to help clients find you.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>
     );
   }
 
-  // ========== EDIT MODE ==========
+  // ═══════════════════════════════════════════════════════
+  // EDIT MODE
+  // ═══════════════════════════════════════════════════════
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-start gap-2">
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError('')} className="text-red-500 hover:text-red-700">✕</button>
+        </div>
+      )}
+
       {/* Profile Headline */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Profile Headline
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Profile Headline</label>
         <input
           type="text"
           name="profileHeadline"
@@ -423,7 +444,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
         />
       </div>
 
-      {/* Main Categories - Multiple selection */}
+      {/* Main Categories */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Main Categories <span className="text-red-500">*</span>
@@ -490,6 +511,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Skills</label>
         <div className="space-y-3">
+          {/* Add form */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <input
@@ -505,9 +527,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
                 className="p-2 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
               >
                 {skillLevels.map((level) => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
+                  <option key={level} value={level}>{level}</option>
                 ))}
               </select>
               <div className="flex gap-2">
@@ -515,10 +535,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
                   type="number"
                   value={newSkill.yearsOfExperience}
                   onChange={(e) =>
-                    setNewSkill({
-                      ...newSkill,
-                      yearsOfExperience: parseInt(e.target.value) || 0,
-                    })
+                    setNewSkill({ ...newSkill, yearsOfExperience: parseInt(e.target.value) || 0 })
                   }
                   placeholder="Years"
                   min="0"
@@ -535,30 +552,95 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             </div>
           </div>
 
+          {/* Saved skills with inline edit */}
           {formData.skills && formData.skills.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Your Skills</p>
               {formData.skills.map((skill, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200"
-                >
-                  <div>
-                    <span className="font-medium text-gray-900">{skill.name}</span>
-                    <span className="text-sm text-gray-500 ml-2">({skill.level})</span>
-                    {skill.yearsOfExperience > 0 && (
-                      <span className="text-sm text-gray-500 ml-2">
-                        {skill.yearsOfExperience} years
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeSkill(index)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <div key={index} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  {editingSkillIdx === index ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input
+                          type="text"
+                          value={editSkillData.name}
+                          onChange={(e) => setEditSkillData({ ...editSkillData, name: e.target.value })}
+                          placeholder="Skill name"
+                          className="p-2 border-2 border-green-300 rounded-lg"
+                        />
+                        <select
+                          value={editSkillData.level}
+                          onChange={(e) => setEditSkillData({ ...editSkillData, level: e.target.value })}
+                          className="p-2 border-2 border-green-300 rounded-lg bg-white"
+                        >
+                          {skillLevels.map((lvl) => (
+                            <option key={lvl} value={lvl}>{lvl}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          value={editSkillData.yearsOfExperience}
+                          onChange={(e) =>
+                            setEditSkillData({
+                              ...editSkillData,
+                              yearsOfExperience: parseInt(e.target.value) || 0,
+                            })
+                          }
+                          min="0"
+                          placeholder="Years"
+                          className="p-2 border-2 border-green-300 rounded-lg"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={saveEditSkill}
+                          disabled={savingSkill}
+                          className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 inline-flex items-center justify-center gap-1.5 text-sm disabled:opacity-50"
+                        >
+                          {savingSkill ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          {savingSkill ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditSkill}
+                          className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 inline-flex items-center justify-center gap-1.5 text-sm"
+                        >
+                          <X className="w-4 h-4" /> Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium text-gray-900">{skill.name}</span>
+                        <span className="text-sm text-gray-500 ml-2">({skill.level})</span>
+                        {skill.yearsOfExperience > 0 && (
+                          <span className="text-sm text-gray-500 ml-2">
+                            {skill.yearsOfExperience} years
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEditSkill(index)}
+                          className="text-blue-500 hover:text-blue-700 p-1"
+                          title="Edit"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeSkill(index)}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -570,6 +652,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Languages</label>
         <div className="space-y-3">
+          {/* Add form */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="flex gap-2">
               <input
@@ -581,15 +664,11 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
               />
               <select
                 value={newLanguage.proficiency}
-                onChange={(e) =>
-                  setNewLanguage({ ...newLanguage, proficiency: e.target.value })
-                }
+                onChange={(e) => setNewLanguage({ ...newLanguage, proficiency: e.target.value })}
                 className="flex-1 p-2 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
               >
                 {proficiencyLevels.map((level) => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
+                  <option key={level} value={level}>{level}</option>
                 ))}
               </select>
               <button
@@ -602,32 +681,89 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             </div>
           </div>
 
+          {/* Saved languages with inline edit */}
           {formData.languages && formData.languages.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Your Languages</p>
               {formData.languages.map((lang, index) => (
-                <span
-                  key={index}
-                  className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm flex items-center border border-gray-200"
-                >
-                  {lang.name} ({lang.proficiency})
-                  <button
-                    type="button"
-                    onClick={() => removeLanguage(index)}
-                    className="ml-2 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </span>
+                <div key={index} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  {editingLanguageIdx === index ? (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={editLanguageData.name}
+                          onChange={(e) => setEditLanguageData({ ...editLanguageData, name: e.target.value })}
+                          placeholder="Language"
+                          className="flex-1 p-2 border-2 border-green-300 rounded-lg"
+                        />
+                        <select
+                          value={editLanguageData.proficiency}
+                          onChange={(e) =>
+                            setEditLanguageData({ ...editLanguageData, proficiency: e.target.value })
+                          }
+                          className="flex-1 p-2 border-2 border-green-300 rounded-lg bg-white"
+                        >
+                          {proficiencyLevels.map((lvl) => (
+                            <option key={lvl} value={lvl}>{lvl}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={saveEditLanguage}
+                          disabled={savingLanguage}
+                          className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 inline-flex items-center justify-center gap-1.5 text-sm disabled:opacity-50"
+                        >
+                          {savingLanguage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          {savingLanguage ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditLanguage}
+                          className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 inline-flex items-center justify-center gap-1.5 text-sm"
+                        >
+                          <X className="w-4 h-4" /> Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">
+                        <span className="font-medium text-gray-900">{lang.name}</span>
+                        <span className="text-gray-500 ml-2">({lang.proficiency})</span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEditLanguage(index)}
+                          className="text-blue-500 hover:text-blue-700 p-1"
+                          title="Edit"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeLanguage(index)}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* Location */}
+      {/* Location (unchanged) */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-
         <div className="mb-4">
           <button
             type="button"
@@ -706,9 +842,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              Service Radius (km)
-            </label>
+            <label className="block text-sm text-gray-600 mb-1">Service Radius (km)</label>
             <input
               type="number"
               name="serviceRadius"
