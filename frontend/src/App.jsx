@@ -57,6 +57,8 @@ import BookService from './pages/BookService';
 import PaymentCallback from './pages/PaymentCallback';
 import TechnicianBookings from './pages/TechnicianBookings';
 import BookingDetails from './pages/BookingDetails';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
 
 import './App.css';
 
@@ -91,6 +93,8 @@ function App() {
           {/* ── Public routes ─────────────────────────────── */}
           <Route index element={<Home />} />
           <Route path="services" element={<Services />} />
+          <Route path="terms" element={<Terms />} />
+<Route path="privacy" element={<Privacy />} />      
           <Route path="technicians" element={<Technicians />} />
           <Route path="technician/:id" element={<TechnicianProfile />} />
           <Route path="available-jobs" element={<JobsPage />} />
