@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Wordmark } from '../../components/Wordmark';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
@@ -91,7 +92,7 @@ const AdminLogin = () => {
             </div>
             <div className="text-left">
               <h1 className="text-2xl font-bold text-white">
-                WeBA<span className="text-red-500">-Hub</span>
+                <Wordmark className="" onDark />
               </h1>
               <p className="text-xs text-gray-400 uppercase tracking-wider">
                 Admin Portal
@@ -220,7 +221,7 @@ const AdminLogin = () => {
             href="/"
             className="hover:text-gray-300 transition-colors"
           >
-            ← Back to Weba-Hub
+            ← Back to Webalink
           </a>
         </p>
       </div>

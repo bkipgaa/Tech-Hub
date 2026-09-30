@@ -1,4 +1,5 @@
 import React from "react";
+import { Wordmark } from "./Wordmark";
 import { Link } from "react-router-dom";
 import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin, Globe } from "lucide-react";
 
@@ -46,16 +47,13 @@ const Footer = () => {
       <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400/40 to-red-400/40 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       <img
         src="/logo.jpg"
-        alt="WeBA-Hub"
+        alt="Webalink"
         className="relative w-12 h-12 object-contain rounded-full ring-2 ring-gray-700 shadow-lg
                    transition-all duration-300 ease-out
                    group-hover:scale-110 group-hover:ring-green-500/50"
       />
     </div>
-    <span className="text-xl font-bold leading-none">
-      <span className="text-green-500">WeBA</span>
-      <span className="text-red-500">-Hub</span>
-    </span>
+    <Wordmark className="text-xl" onDark />
   </Link>
 
   <p className="text-sm text-gray-400 leading-relaxed">
@@ -151,7 +149,7 @@ const Footer = () => {
 
         {/* Bottom Bar */}
         <div className="mt-10 pt-6 border-t border-gray-800 flex flex-col sm:flex-row justify-between items-center text-xs text-gray-500">
-          <p>&copy; {currentYear} WeBA-Hub. All rights reserved.</p>
+          <p>&copy; {currentYear} Webalink Limited. All rights reserved.</p>
           <div className="flex gap-6 mt-3 sm:mt-0">
             <Link to="/privacy" className="hover:text-green-500 transition-colors">Privacy Policy</Link>
             <Link to="/terms" className="hover:text-green-500 transition-colors">Terms of Service</Link>

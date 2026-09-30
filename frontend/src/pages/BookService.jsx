@@ -16,7 +16,7 @@
  * - Loading states with skeleton or spinner
  * 
  * @version 2.0.0
- * @author Weba-Hub Team
+ * @author Webalink Team
  */
 
 import React, { useState, useEffect, useCallback } from 'react';

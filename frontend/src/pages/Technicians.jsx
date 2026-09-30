@@ -8,7 +8,7 @@
  * This component is reached via /technicians/search?mainCategory=...&serviceCategory=...&subService=...
  * It calls the backend /search/technicians endpoint and displays a list of matching technicians.
  * 
- * @author Weba-Hub Team
+ * @author Webalink Team
  */
 
 import React, { useState, useEffect, useCallback } from 'react';

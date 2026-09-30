@@ -15,7 +15,7 @@
  * - Responsive design with comprehensive error handling
  * 
  * @version 3.0.0 – Full 12‑step flow
- * @author Weba-Hub Team
+ * @author Webalink Team
  */
 
 import React, { useState, useEffect, useCallback } from 'react';

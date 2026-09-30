@@ -50,7 +50,7 @@ const SignUp = () => {
       <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-xl">
         <div>
           <h2 className="text-3xl font-bold text-center text-green-700">Create Account</h2>
-          <p className="mt-2 text-center text-gray-600">Join WeBA-Hub today</p>
+          <p className="mt-2 text-center text-gray-600">Join Webalink today</p>
         </div>
         
         {error && (

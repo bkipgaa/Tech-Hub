@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Wordmark } from '../components/Wordmark';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import api from '../services/api';
@@ -96,7 +97,7 @@ const Home = () => {
         {/* Hero Content */}
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
           <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
-            Welcome to <span className="text-green-500">WeBA-Hub</span>
+            Welcome to <Wordmark className="" onDark />
           </h1>
           <p className="text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
             Your trusted marketplace connecting you with verified professionals
@@ -211,7 +212,7 @@ const Home = () => {
       <div className="bg-gradient-to-r from-green-700 to-green-900 py-10 mt-6">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-2xl font-bold text-white mb-2">Ready to grow your business?</h2>
-          <p className="text-green-100 mb-5 text-sm">Join thousands of professionals who trust WeBA-Hub</p>
+          <p className="text-green-100 mb-5 text-sm">Join thousands of professionals who trust Webalink</p>
           <button
             onClick={() => navigate('/become-technician')}
             className="bg-white text-green-700 px-6 py-2.5 rounded-md font-semibold hover:bg-gray-100 transition-colors text-sm"

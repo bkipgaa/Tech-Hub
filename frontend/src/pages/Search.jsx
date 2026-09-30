@@ -12,7 +12,7 @@
  * - Results display with plan badges, visibility radius, and booking actions
  * 
  * @version 2.2.0 – Fixed sub-service object rendering (React error #31)
- * @author Weba-Hub Team
+ * @author Webalink Team
  */
 
 import React, { useState, useEffect } from 'react';

@@ -11,8 +11,8 @@
  * - Expandable service categories with lazy-loaded sub-services
  * - Responsive grid layout
  *
- * @version 3.1.0 – Rebranded hero (WeBA-Hub Service)
- * @author Weba-Hub Team
+ * @version 3.1.0 – Rebranded hero (Webalink Service)
+ * @author Webalink Team
  */
 
 import React, { useState, useEffect } from 'react';
@@ -302,7 +302,7 @@ const Services = () => {
           {/* ═══ Brand Title — green + red ═══ */}
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-4 tracking-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]">
             <span className="bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 bg-clip-text text-transparent">
-              WeBA-Hub
+              Webalink
             </span>{' '}
             <span className="bg-gradient-to-r from-red-500 via-red-400 to-rose-400 bg-clip-text text-transparent">
               Service

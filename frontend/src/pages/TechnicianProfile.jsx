@@ -12,7 +12,7 @@
  * - ✅ Error handling with full logging for Render
  * 
  * @version 3.0.0
- * @author Weba-Hub Team
+ * @author Webalink Team
  */
 
 import React, { useState, useEffect } from 'react';
@@ -769,7 +769,7 @@ const TechnicianProfile = () => {
             <CheckCircle className="w-6 h-6 text-green-600" />
             <div>
               <p className="font-semibold text-green-800">Verified Professional</p>
-              <p className="text-sm text-green-700">This technician has been verified by WeBA-Hub</p>
+              <p className="text-sm text-green-700">This technician has been verified by Webalink</p>
             </div>
           </div>
         )}

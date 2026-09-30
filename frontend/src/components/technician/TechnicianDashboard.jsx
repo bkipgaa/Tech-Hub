@@ -21,7 +21,7 @@
  * - Regular users (clients): Redirected to home
  * 
  * @version 3.1.0 - Added Job Requests navigation
- * @author Weba-Hub Team
+ * @author Webalink Team
  */
 
 import React, { useState, useEffect, useRef } from 'react';

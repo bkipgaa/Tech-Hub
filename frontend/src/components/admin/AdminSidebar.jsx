@@ -140,7 +140,7 @@ const AdminSidebar = ({ isOpen, onClose }) => {
               <span className="text-white font-bold text-sm">W</span>
             </div>
             <div>
-              <p className="text-sm font-bold tracking-tight">WeBA-Hub</p>
+              <p className="text-sm font-bold tracking-tight">Webalink</p>
               <p className="text-[10px] text-gray-400 uppercase tracking-wider">Admin Panel</p>
             </div>
           </div>

@@ -25,6 +25,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { Wordmark } from "./Wordmark";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Menu, X, User, ChevronDown, LogOut, UserCircle, Wrench,
@@ -124,7 +125,7 @@ const Navbar = () => {
   to="/"
   className="flex items-center space-x-3 group"
   onClick={closeMobileMenu}
-  aria-label="WeBA-Hub Home"
+  aria-label="Webalink Home"
 >
   {/* Circular logo with hover lift + glow */}
   <div className="relative">
@@ -134,7 +135,7 @@ const Navbar = () => {
     {/* The logo image */}
     <img
       src="/logo.jpg"
-      alt="WeBA-Hub"
+      alt="Webalink"
       className="relative w-11 h-11 object-contain rounded-full ring-2 ring-white shadow-md
                  transition-all duration-300 ease-out
                  group-hover:scale-110 group-hover:shadow-xl
@@ -143,10 +144,7 @@ const Navbar = () => {
   </div>
 
   {/* Wordmark — colour preserved exactly as before */}
-  <span className="text-xl font-bold tracking-tight leading-none">
-    <span className="text-green-700">WeBA</span>
-    <span className="text-red-600">-Hub</span>
-  </span>
+  <Wordmark className="text-xl" />
 </Link>
 
             {/* ─── DESKTOP NAVIGATION ─────────────── */}
