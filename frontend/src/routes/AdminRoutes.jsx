@@ -40,6 +40,10 @@ import Bookings from '../pages/Admin/Bookings';
 import BookingDetail from '../pages/Admin/BookingDetail';
 import ServiceCatalog from '../pages/Admin/ServiceCatalog';
 import AdminUsers from '../pages/Admin/AdminUsers';
+import Revenue from '../pages/Admin/Revenue';
+import Commissions from '../pages/Admin/Commissions';
+import Payments from '../pages/Admin/Payments';
+import Users from '../pages/Admin/Users';
 // ─── Placeholders for pages not yet built ────────────────────
 // Replace each placeholder as you build the real page.
 const Placeholder = ({ title }) => (
@@ -134,7 +138,9 @@ const Placeholder = ({ title }) => (
               <AdminUsers />
             </ProtectedAdminRoute>
           }
-        />
+        />;
+
+
 
 const JobsPage            = () => <Placeholder title="Jobs" />;
 const ServiceCatalogPage  = () => <Placeholder title="Service Catalog" />;
@@ -264,7 +270,7 @@ const AdminRoutes = () => {
           path="revenue"
           element={
             <ProtectedAdminRoute permission="revenue.view">
-              <RevenuePage />
+              <Revenue />
             </ProtectedAdminRoute>
           }
         />
@@ -274,7 +280,7 @@ const AdminRoutes = () => {
           path="commissions"
           element={
             <ProtectedAdminRoute permission="commission.view">
-              <CommissionsPage />
+              <Commissions/>
             </ProtectedAdminRoute>
           }
         />
@@ -284,7 +290,7 @@ const AdminRoutes = () => {
           path="payments"
           element={
             <ProtectedAdminRoute permission="payments.view">
-              <PaymentsPage />
+              <Payments />
             </ProtectedAdminRoute>
           }
         />
@@ -294,7 +300,7 @@ const AdminRoutes = () => {
           path="users"
           element={
             <ProtectedAdminRoute permission="users.view">
-              <UsersPage />
+              <Users />
             </ProtectedAdminRoute>
           }
         />
