@@ -4,7 +4,7 @@
  * Shared role utilities. Mirrors the backend hierarchy in
  * scripts/seedAdminRoles.js + middleware/roleHierarchy.js.
  *
- * @version 1.0.0
+ * @version 1.0.1
  */
 
 export const ROLE_RANK = {
@@ -44,11 +44,9 @@ export const getRank = (r) => ROLE_RANK[r] ?? 1;
 export const canManageRole = (actorRole, targetRole) =>
   getRank(actorRole) > getRank(targetRole);
 
-/** Roles that `actorRole` can assign to others. */
 export const assignableRoles = (actorRole) =>
   ALL_ROLES.filter((r) => canManageRole(actorRole, r));
 
-/** Never trust the DB `fullName` virtual — compute from parts if needed. */
 export const fullNameOf = (admin) =>
   admin?.fullName ||
   `${admin?.firstName || ''} ${admin?.lastName || ''}`.trim() ||
