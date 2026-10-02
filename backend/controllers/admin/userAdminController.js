@@ -23,20 +23,19 @@ exports.list = async (req, res) => {
 
     const filter = {};
     if (req.query.role && req.query.role !== 'all') filter.role = req.query.role;
-    if (req.query.isActive !== undefined && req.query.isActive !== '') {
-      filter.isActive = req.query.isActive === 'true';
+
+    // status filter instead of isActive
+    if (req.query.status && req.query.status !== 'all') {
+      filter.status = req.query.status;   // 'active' | 'suspended' | 'pending'
     }
+
     if (req.query.search) {
       const rx = new RegExp(req.query.search.trim(), 'i');
       filter.$or = [{ firstName: rx }, { lastName: rx }, { email: rx }, { phone: rx }];
     }
 
     const [items, total] = await Promise.all([
-      User.find(filter)
-        .select('-password')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
+      User.find(filter).select('-password').sort({ createdAt: -1 }).skip(skip).limit(limit),
       User.countDocuments(filter),
     ]);
 
@@ -83,10 +82,11 @@ exports.getOne = async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 exports.stats = async (req, res) => {
   try {
-    const [total, active, inactive, byRole] = await Promise.all([
+    const [total, active, suspended, pending, byRole] = await Promise.all([
       User.countDocuments(),
-      User.countDocuments({ isActive: true }),
-      User.countDocuments({ isActive: false }),
+      User.countDocuments({ status: 'active' }),
+      User.countDocuments({ status: 'suspended' }),
+      User.countDocuments({ status: 'pending' }),
       User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]),
     ]);
 
@@ -100,7 +100,9 @@ exports.stats = async (req, res) => {
       data: {
         total,
         active,
-        inactive,
+        suspended,
+        pending,
+        inactive: suspended,          // keep key name for frontend compatibility
         clients: roleMap.client || 0,
         technicians: roleMap.technician || 0,
         admins: roleMap.admin || 0,
@@ -125,7 +127,13 @@ exports.update = async (req, res) => {
     allowed.forEach((k) => {
       if (req.body[k] !== undefined) user[k] = String(req.body[k]).trim();
     });
-    if (req.body.isActive !== undefined) user.isActive = !!req.body.isActive;
+
+    if (typeof req.body.status === 'string' &&
+        ['active', 'suspended', 'pending'].includes(req.body.status)) {
+      user.status = req.body.status;
+    } else if (typeof req.body.isActive === 'boolean') {
+      user.status = req.body.isActive ? 'active' : 'suspended';
+    }
 
     await user.save();
     res.json({ success: true, data: user });
@@ -140,19 +148,33 @@ exports.update = async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 exports.setStatus = async (req, res) => {
   try {
-    const { isActive } = req.body;
-    if (typeof isActive !== 'boolean') {
-      return res.status(400).json({ success: false, message: 'isActive must be boolean' });
+    const { isActive, status } = req.body;
+
+    let nextStatus;
+    if (typeof status === 'string') {
+      if (!['active', 'suspended', 'pending'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Invalid status' });
+      }
+      nextStatus = status;
+    } else if (typeof isActive === 'boolean') {
+      nextStatus = isActive ? 'active' : 'suspended';
+    } else {
+      return res.status(400).json({ success: false, message: 'Provide `status` or `isActive`' });
     }
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { isActive },
+      { status: nextStatus },
       { new: true }
     ).select('-password');
+
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    res.json({ success: true, data: user, message: isActive ? 'User activated' : 'User suspended' });
+    res.json({
+      success: true,
+      data: user,
+      message: nextStatus === 'active' ? 'User activated' : 'User suspended',
+    });
   } catch (err) {
     console.error('setUserStatus error:', err);
     res.status(500).json({ success: false, message: 'Failed to update status' });

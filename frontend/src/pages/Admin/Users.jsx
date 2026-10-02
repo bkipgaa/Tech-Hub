@@ -1,26 +1,71 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Users as UsersIcon, UserCheck, UserX, UserPlus, RefreshCw, Search, Power, Trash2, MoreVertical, Pencil } from 'lucide-react';
+import {
+  Users as UsersIcon,
+  UserCheck,
+  UserX,
+  UserPlus,
+  Clock,
+  RefreshCw,
+  Search,
+  Power,
+  Trash2,
+  MoreVertical,
+  Pencil,
+} from 'lucide-react';
 import { adminUserServiceFull } from '../../services/adminRevenueService';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 
+// ─── Role & Status styling ────────────────────────────────
 const ROLE_BADGE = {
   client: 'bg-gray-100 text-gray-700',
   technician: 'bg-blue-100 text-blue-800',
   admin: 'bg-purple-100 text-purple-800',
 };
 
+const STATUS_CONFIG = {
+  active: {
+    label: 'Active',
+    dot: 'bg-green-500',
+    text: 'text-green-700',
+    badge: 'bg-green-100 text-green-800',
+    icon: UserCheck,
+  },
+  suspended: {
+    label: 'Suspended',
+    dot: 'bg-red-500',
+    text: 'text-red-700',
+    badge: 'bg-red-100 text-red-800',
+    icon: UserX,
+  },
+  pending: {
+    label: 'Pending',
+    dot: 'bg-amber-500',
+    text: 'text-amber-700',
+    badge: 'bg-amber-100 text-amber-800',
+    icon: Clock,
+  },
+};
+
+const getStatus = (user) => {
+  // Fallback: if status is missing for some reason, treat as active
+  return STATUS_CONFIG[user?.status] || STATUS_CONFIG.active;
+};
+
+// ─── Stat card ────────────────────────────────────────────
 const StatCard = ({ icon: Icon, label, value, tint }) => (
   <div className="bg-white rounded-xl border border-gray-200 p-4">
     <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${tint} mb-3`}>
       <Icon className="w-4 h-4" />
     </div>
-    <p className="text-2xl font-bold text-gray-900">{value}</p>
+    <p className="text-2xl font-bold text-gray-900">{value ?? '—'}</p>
     <p className="text-xs text-gray-500 mt-0.5">{label}</p>
   </div>
 );
 
+// ═══════════════════════════════════════════════════════════
 export default function Users() {
   const { hasPermission } = useAdminAuth();
+
   const [items, setItems] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,41 +79,68 @@ export default function Users() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [openMenuId, setOpenMenuId] = useState(null);
 
-  const load = useCallback(async (isRefresh = false) => {
-    isRefresh ? setRefreshing(true) : setLoading(true);
-    setError('');
-    try {
-      const [r, s] = await Promise.all([
-        adminUserServiceFull.list({
-          page,
-          limit: 20,
-          role: roleFilter === 'all' ? undefined : roleFilter,
-          isActive: statusFilter === 'all' ? undefined : statusFilter === 'active',
-          search: search || undefined,
-        }),
-        adminUserServiceFull.stats(),
-      ]);
-      setItems(r.data.data || []);
-      setPagination(r.data.pagination || { page: 1, limit: 20, total: 0, pages: 1 });
-      setStats(s.data.data);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load users');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  // ── Load ───────────────────────────────────────────────
+  const load = useCallback(
+    async (isRefresh = false) => {
+      isRefresh ? setRefreshing(true) : setLoading(true);
+      setError('');
+      try {
+        const [r, s] = await Promise.all([
+          adminUserServiceFull.list({
+            page,
+            limit: 20,
+            role: roleFilter === 'all' ? undefined : roleFilter,
+            status: statusFilter === 'all' ? undefined : statusFilter, // 'active' | 'suspended' | 'pending'
+            search: search || undefined,
+          }),
+          adminUserServiceFull.stats(),
+        ]);
+        setItems(r.data.data || []);
+        setPagination(r.data.pagination || { page: 1, limit: 20, total: 0, pages: 1 });
+        setStats(s.data.data);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load users');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [page, roleFilter, statusFilter, search]
+  );
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Debounce filters → reset page
+  useEffect(() => {
+    const t = setTimeout(() => setPage(1), 400);
+    return () => clearTimeout(t);
+  }, [search, roleFilter, statusFilter]);
+
+  // Close menu when clicking anywhere
+  useEffect(() => {
+    const close = () => setOpenMenuId(null);
+    if (openMenuId) {
+      window.addEventListener('scroll', close, true);
+      return () => window.removeEventListener('scroll', close, true);
     }
-  }, [page, roleFilter, statusFilter, search]);
+  }, [openMenuId]);
 
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { const t = setTimeout(() => setPage(1), 400); return () => clearTimeout(t); }, [search, roleFilter, statusFilter]);
+  const showToast = (m) => {
+    setToast(m);
+    setTimeout(() => setToast(''), 3000);
+  };
 
-  const showToast = (m) => { setToast(m); setTimeout(() => setToast(''), 3000); };
-
+  // ── Actions ────────────────────────────────────────────
   const toggleStatus = async (user) => {
-    if (!window.confirm(`${user.isActive ? 'Suspend' : 'Activate'} ${user.firstName} ${user.lastName}?`)) return;
+    const isSuspended = user.status === 'suspended';
+    const verb = isSuspended ? 'Activate' : 'Suspend';
+    if (!window.confirm(`${verb} ${user.firstName} ${user.lastName}?`)) return;
     try {
-      await adminUserServiceFull.setStatus(user._id, !user.isActive);
-      showToast(`User ${user.isActive ? 'suspended' : 'activated'}`);
+      // Backend accepts { isActive: boolean } and maps it to status
+      await adminUserServiceFull.setStatus(user._id, isSuspended);
+      showToast(`User ${isSuspended ? 'activated' : 'suspended'}`);
       load(true);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update status');
@@ -86,8 +158,16 @@ export default function Users() {
     }
   };
 
+  const openEdit = (user) => {
+    setOpenMenuId(null);
+    // TODO: hook this to your existing edit modal — currently a no-op
+    // e.g. setEditingUser(user)
+  };
+
+  // ── Render ─────────────────────────────────────────────
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -106,9 +186,11 @@ export default function Users() {
         </button>
       </div>
 
+      {/* Banners */}
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-          {error}
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-start gap-2">
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError('')} className="text-red-500 hover:text-red-700">✕</button>
         </div>
       )}
       {toast && (
@@ -117,13 +199,14 @@ export default function Users() {
         </div>
       )}
 
+      {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          <StatCard icon={UsersIcon} label="Total"        value={stats.total}        tint="bg-blue-50 text-blue-600" />
-          <StatCard icon={UserCheck} label="Active"       value={stats.active}       tint="bg-green-50 text-green-600" />
-          <StatCard icon={UserX}     label="Inactive"     value={stats.inactive}     tint="bg-red-50 text-red-600" />
-          <StatCard icon={UsersIcon} label="Clients"      value={stats.clients}      tint="bg-gray-100 text-gray-600" />
-          <StatCard icon={UsersIcon} label="Technicians"  value={stats.technicians}  tint="bg-indigo-50 text-indigo-600" />
+          <StatCard icon={UsersIcon} label="Total"          value={stats.total}        tint="bg-blue-50 text-blue-600" />
+          <StatCard icon={UserCheck} label="Active"         value={stats.active}       tint="bg-green-50 text-green-600" />
+          <StatCard icon={UserX}     label="Suspended"      value={stats.suspended ?? stats.inactive} tint="bg-red-50 text-red-600" />
+          <StatCard icon={UsersIcon} label="Clients"        value={stats.clients}      tint="bg-gray-100 text-gray-600" />
+          <StatCard icon={UsersIcon} label="Technicians"    value={stats.technicians}  tint="bg-indigo-50 text-indigo-600" />
           <StatCard icon={UserPlus}  label="New This Month" value={stats.newThisMonth} tint="bg-amber-50 text-amber-600" />
         </div>
       )}
@@ -140,6 +223,7 @@ export default function Users() {
             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
           />
         </div>
+
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value)}
@@ -150,6 +234,7 @@ export default function Users() {
           <option value="technician">Technicians</option>
           <option value="admin">Admins</option>
         </select>
+
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -157,7 +242,8 @@ export default function Users() {
         >
           <option value="all">All statuses</option>
           <option value="active">Active</option>
-          <option value="inactive">Suspended</option>
+          <option value="suspended">Suspended</option>
+          <option value="pending">Pending</option>
         </select>
       </div>
 
@@ -186,93 +272,142 @@ export default function Users() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {items.map((u) => (
-                  <tr key={u._id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {u.profileImage ? (
-                          <img src={u.profileImage} alt="" className="w-9 h-9 rounded-full object-cover" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                            {u.firstName?.[0]}{u.lastName?.[0]}
+                {items.map((u) => {
+                  const status = getStatus(u);
+                  const StatusIcon = status.icon;
+                  const isSuspended = u.status === 'suspended';
+
+                  return (
+                    <tr key={u._id} className="hover:bg-gray-50">
+                      {/* User */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          {u.profileImage ? (
+                            <img
+                              src={u.profileImage}
+                              alt=""
+                              className="w-9 h-9 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                              {u.firstName?.[0]}
+                              {u.lastName?.[0]}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 truncate">
+                              {u.firstName} {u.lastName}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">{u.email}</p>
                           </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="font-medium text-gray-900 truncate">
-                            {u.firstName} {u.lastName}
-                          </p>
-                          <p className="text-xs text-gray-500 truncate">{u.email}</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-700'}`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-600">{u.phone || '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${u.isActive ? 'text-green-700' : 'text-gray-400'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        {u.isActive ? 'Active' : 'Suspended'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {u.createdAt
-                        ? new Date(u.createdAt).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right relative">
-                      <button
-                        onClick={() => setOpenMenuId(openMenuId === u._id ? null : u._id)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
-                        aria-label="Actions"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                      {openMenuId === u._id && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                          <div className="absolute right-4 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-left">
-                            {hasPermission('users.edit') && (
-                              <button
-                                onClick={() => { setOpenMenuId(null); /* open edit modal */ }}
-                                className="w-full px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-50"
-                              >
-                                <Pencil className="w-3.5 h-3.5" /> Edit user
-                              </button>
-                            )}
-                            {hasPermission('users.suspend') && (
-                              <button
-                                onClick={() => { setOpenMenuId(null); toggleStatus(u); }}
-                                className="w-full px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-50"
-                              >
-                                <Power className="w-3.5 h-3.5" />
-                                {u.isActive ? 'Suspend account' : 'Activate account'}
-                              </button>
-                            )}
-                            {hasPermission('users.delete') && (
-                              <>
-                                <div className="my-1 border-t border-gray-100" />
+                      </td>
+
+                      {/* Role */}
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${
+                            ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {u.role}
+                        </span>
+                      </td>
+
+                      {/* Phone */}
+                      <td className="px-4 py-3 text-xs text-gray-600">
+                        {u.phone || '—'}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-xs font-medium ${status.text}`}
+                        >
+                          <StatusIcon className="w-3.5 h-3.5" />
+                          {status.label}
+                        </span>
+                      </td>
+
+                      {/* Joined */}
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {u.createdAt
+                          ? new Date(u.createdAt).toLocaleDateString('en-KE', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3 text-right relative">
+                        <button
+                          onClick={() =>
+                            setOpenMenuId(openMenuId === u._id ? null : u._id)
+                          }
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                          aria-label="Actions"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {openMenuId === u._id && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-10"
+                              onClick={() => setOpenMenuId(null)}
+                            />
+                            <div className="absolute right-4 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-left">
+                              {hasPermission('users.edit') && (
                                 <button
-                                  onClick={() => { setOpenMenuId(null); deleteUser(u); }}
-                                  className="w-full px-3 py-2 text-sm flex items-center gap-2 text-red-600 hover:bg-red-50"
+                                  onClick={() => openEdit(u)}
+                                  className="w-full px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-50"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" /> Delete user
+                                  <Pencil className="w-3.5 h-3.5" /> Edit user
                                 </button>
-                              </>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                              )}
+
+                              {hasPermission('users.suspend') && (
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    toggleStatus(u);
+                                  }}
+                                  className="w-full px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-50"
+                                >
+                                  <Power className="w-3.5 h-3.5" />
+                                  {isSuspended ? 'Activate account' : 'Suspend account'}
+                                </button>
+                              )}
+
+                              {hasPermission('users.delete') && (
+                                <>
+                                  <div className="my-1 border-t border-gray-100" />
+                                  <button
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      deleteUser(u);
+                                    }}
+                                    className="w-full px-3 py-2 text-sm flex items-center gap-2 text-red-600 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Delete user
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
+        {/* Pagination */}
         {pagination.pages > 1 && (
           <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between text-sm">
             <p className="text-gray-500">
