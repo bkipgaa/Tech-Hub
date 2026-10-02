@@ -1,11 +1,12 @@
 import adminApi from './adminApi';
 
 export const adminRevenueService = {
-  overview:     ()               => adminApi.get('/revenue/overview'),
-  timeline:     ()               => adminApi.get('/revenue/timeline'),
-  breakdown:    ()               => adminApi.get('/revenue/breakdown'),
-  transactions: (params = {})    => adminApi.get('/revenue/transactions', { params }),
-  export:       ()               => adminApi.get('/revenue/export', { responseType: 'blob' }),
+  overview:     (params = {}) => adminApi.get('/revenue/overview',     { params }),
+  timeline:     (params = {}) => adminApi.get('/revenue/timeline',     { params }),
+  breakdown:    (params = {}) => adminApi.get('/revenue/breakdown',    { params }),
+  transactions: (params = {}) => adminApi.get('/revenue/transactions', { params }),
+  export:       (params = {}) =>
+    adminApi.get('/revenue/export', { params, responseType: 'blob' }),
 };
 
 export const adminCommissionService = {
@@ -23,10 +24,10 @@ export const adminPaymentService = {
 };
 
 export const adminUserServiceFull = {
-  stats:     ()            => adminApi.get('/users/stats'),
-  list:      (params = {}) => adminApi.get('/users', { params }),
-  get:       (id)          => adminApi.get(`/users/${id}`),
-  update:    (id, payload) => adminApi.put(`/users/${id}`, payload),
-  setStatus: (id, isActive)=> adminApi.put(`/users/${id}/status`, { isActive }),
-  remove:    (id)          => adminApi.delete(`/users/${id}`),
+  stats:     ()             => adminApi.get('/users/stats'),
+  list:      (params = {})  => adminApi.get('/users', { params }),
+  get:       (id)           => adminApi.get(`/users/${id}`),
+  update:    (id, payload)  => adminApi.put(`/users/${id}`, payload),
+  setStatus: (id, isActive) => adminApi.put(`/users/${id}/status`, { isActive }),
+  remove:    (id)           => adminApi.delete(`/users/${id}`),
 };

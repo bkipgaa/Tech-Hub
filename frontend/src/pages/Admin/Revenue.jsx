@@ -5,6 +5,14 @@ import { adminRevenueService } from '../../services/adminRevenueService';
 const KES = (n) =>
   n == null || isNaN(n) ? 'KES 0' : `KES ${Number(n).toLocaleString()}`;
 
+const PERIODS = [
+  { value: 'day', label: 'Today' },
+  { value: 'week', label: 'This Week' },
+  { value: 'month', label: 'This Month' },
+  { value: 'year', label: 'This Year' },
+  { value: 'all', label: 'Last 12 Months' },
+];
+
 const StatCard = ({ icon: Icon, label, value, tint, sub }) => (
   <div className="bg-white rounded-xl border border-gray-200 p-4">
     <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${tint} mb-3`}>
@@ -17,6 +25,7 @@ const StatCard = ({ icon: Icon, label, value, tint, sub }) => (
 );
 
 export default function Revenue() {
+  const [period, setPeriod] = useState('month');
   const [overview, setOverview] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [breakdown, setBreakdown] = useState(null);
@@ -24,42 +33,50 @@ export default function Revenue() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const load = useCallback(async (isRefresh = false) => {
-    isRefresh ? setRefreshing(true) : setLoading(true);
-    setError('');
-    try {
-      const [o, t, b] = await Promise.all([
-        adminRevenueService.overview(),
-        adminRevenueService.timeline(),
-        adminRevenueService.breakdown(),
-      ]);
-      setOverview(o.data.data);
-      setTimeline(t.data.data || []);
-      setBreakdown(b.data.data);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load revenue data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (isRefresh = false) => {
+      isRefresh ? setRefreshing(true) : setLoading(true);
+      setError('');
+      try {
+        const [o, t, b] = await Promise.all([
+          adminRevenueService.overview({ period }),
+          adminRevenueService.timeline({ period }),
+          adminRevenueService.breakdown({ period }),
+        ]);
+        setOverview(o.data.data);
+        setTimeline(t.data.data || []);
+        setBreakdown(b.data.data);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load revenue data');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [period]
+  );
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const exportCsv = async () => {
     try {
-      const res = await adminRevenueService.export();
+      const res = await adminRevenueService.export({ period });
       const url = URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `revenue-${Date.now()}.csv`;
+      a.download = `revenue-${period}-${Date.now()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { alert('Export failed'); }
+    } catch {
+      alert('Export failed');
+    }
   };
 
   const maxTotal = Math.max(...timeline.map((t) => t.total), 1);
   const maxPlanRev = Math.max(...(breakdown?.byPlan || []).map((p) => p.revenue), 1);
+  const periodLabel = overview?.groupLabel || '';
 
   if (loading) {
     return (
@@ -78,7 +95,7 @@ export default function Revenue() {
             <TrendingUp className="w-6 h-6 text-emerald-600" /> Revenue
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Subscriptions + commission performance across the platform.
+            Subscriptions + commission performance — {periodLabel.toLowerCase()}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -98,6 +115,23 @@ export default function Revenue() {
         </div>
       </div>
 
+      {/* Period selector */}
+      <div className="bg-white rounded-xl border border-gray-200 p-2 inline-flex flex-wrap gap-1">
+        {PERIODS.map((p) => (
+          <button
+            key={p.value}
+            onClick={() => setPeriod(p.value)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              period === p.value
+                ? 'bg-green-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
           {error}
@@ -108,21 +142,21 @@ export default function Revenue() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={DollarSign}
-          label="Revenue This Month"
+          label={`Revenue ${periodLabel}`}
           value={KES(overview?.thisMonth.total)}
           tint="bg-green-50 text-green-600"
-          sub={`${overview?.growth >= 0 ? '▲' : '▼'} ${Math.abs(overview?.growth || 0)}% vs last month`}
+          sub={`${overview?.growth >= 0 ? '▲' : '▼'} ${Math.abs(overview?.growth || 0)}% vs previous`}
         />
         <StatCard
           icon={Percent}
-          label="Subscriptions (Month)"
+          label="Subscriptions"
           value={KES(overview?.thisMonth.subscriptions)}
           tint="bg-blue-50 text-blue-600"
           sub={`${overview?.activeSubscriptions || 0} active plans`}
         />
         <StatCard
           icon={Wallet}
-          label="Commission (Month)"
+          label="Commission"
           value={KES(overview?.thisMonth.commission)}
           tint="bg-purple-50 text-purple-600"
           sub={`${KES(overview?.pendingCommission)} pending overall`}
@@ -136,22 +170,25 @@ export default function Revenue() {
         />
       </div>
 
-      {/* 6-month chart */}
+      {/* Chart */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-gray-800">Revenue — Last 6 Months</h2>
+          <h2 className="text-base font-semibold text-gray-800">
+            Revenue — {periodLabel}
+          </h2>
           <span className="text-xs text-gray-500">Subscriptions + Commission</span>
         </div>
         {timeline.length === 0 ? (
           <p className="text-center py-8 text-sm text-gray-400">No data yet.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {timeline.map((t, i) => {
               const subW = (t.subscriptions / maxTotal) * 100;
               const commW = (t.commission / maxTotal) * 100;
+              const empty = t.total === 0;
               return (
                 <div key={i} className="flex items-center gap-3">
-                  <span className="w-12 text-xs text-gray-500 font-medium">{t.month}</span>
+                  <span className="w-14 text-xs text-gray-500 font-medium">{t.month}</span>
                   <div className="flex-1 bg-gray-100 h-6 rounded overflow-hidden flex">
                     <div
                       className="bg-blue-500 h-full transition-all"
@@ -164,7 +201,11 @@ export default function Revenue() {
                       title={`Commission: ${KES(t.commission)}`}
                     />
                   </div>
-                  <span className="w-28 text-xs font-medium text-gray-700 text-right">
+                  <span
+                    className={`w-28 text-xs font-medium text-right ${
+                      empty ? 'text-gray-300' : 'text-gray-700'
+                    }`}
+                  >
                     {KES(t.total)}
                   </span>
                 </div>
@@ -187,9 +228,11 @@ export default function Revenue() {
       {/* Plan breakdown */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-gray-800">Subscriptions by Plan</h2>
+          <h2 className="text-base font-semibold text-gray-800">
+            Subscriptions by Plan — {periodLabel}
+          </h2>
           <span className="text-xs text-gray-500">
-            Total commission: {KES(breakdown?.commissionTotal)}
+            Commission collected: {KES(breakdown?.commissionTotal)}
           </span>
         </div>
         {!breakdown?.byPlan?.length ? (
