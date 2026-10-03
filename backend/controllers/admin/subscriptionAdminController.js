@@ -77,6 +77,94 @@ const decorateSubscription = (tech, nowMs = Date.now()) => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// PERIOD HELPERS
+// ─────────────────────────────────────────────────────────────
+
+const startOfDay = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+const startOfWeek = (d = new Date()) => {
+  const day = d.getDay();
+  const diff = (day + 6) % 7; // Monday start
+  const s = startOfDay(d);
+  s.setDate(s.getDate() - diff);
+  return s;
+};
+
+const startOfMonth = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth(), 1);
+
+const startOfYear = (d = new Date()) =>
+  new Date(d.getFullYear(), 0, 1);
+
+/**
+ * Given a `period`, return the range + the previous equivalent range
+ * so stats can show growth.
+ *
+ *   period = day | week | month | year | all
+ */
+function buildSubscriptionPeriod(period) {
+  const now = new Date();
+
+  switch (period) {
+    case 'day': {
+      const start = startOfDay(now);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      const prevStart = new Date(start);
+      prevStart.setDate(prevStart.getDate() - 1);
+      return { start, end, prevStart, prevEnd: start, label: 'Today' };
+    }
+    case 'week': {
+      const start = startOfWeek(now);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 7);
+      const prevStart = new Date(start);
+      prevStart.setDate(prevStart.getDate() - 7);
+      return { start, end, prevStart, prevEnd: start, label: 'This Week' };
+    }
+    case 'year': {
+      const start = startOfYear(now);
+      const end = new Date(now.getFullYear() + 1, 0, 1);
+      const prevStart = new Date(now.getFullYear() - 1, 0, 1);
+      const prevEnd = new Date(now.getFullYear(), 0, 1);
+      return { start, end, prevStart, prevEnd, label: 'This Year' };
+    }
+    case 'all': {
+      // Everything — no range filtering, but still useful as "period=all"
+      const start = new Date(2020, 0, 1); // safe floor
+      const end = new Date(now.getFullYear() + 1, 0, 1);
+      return { start, end, prevStart: null, prevEnd: null, label: 'All Time' };
+    }
+    case 'month':
+    default: {
+      const start = startOfMonth(now);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevEnd = start;
+      return { start, end, prevStart, prevEnd, label: 'This Month' };
+    }
+  }
+}
+
+/** Sum payments within a date range. */
+function sumPaymentsInRange(techs, start, end, paymentHistoryKey = 'paymentHistory') {
+  let total = 0;
+  techs.forEach((t) => {
+    const history = t.subscription?.[paymentHistoryKey] || [];
+    history.forEach((p) => {
+      if (!p.date) return;
+      const d = new Date(p.date);
+      if (d >= start && d < end) total += Number(p.amount) || 0;
+    });
+  });
+  return total;
+}
+
+// ─────────────────────────────────────────────────────────────
+// LIST
+// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // LIST
 // ─────────────────────────────────────────────────────────────
 exports.listSubscriptions = async (req, res) => {
@@ -87,9 +175,10 @@ exports.listSubscriptions = async (req, res) => {
       sortBy = 'createdAt',
       sortOrder = 'desc',
       plan,
-      status, // 'active' | 'expired' | 'expiring' | 'free' | 'paid' | 'all'
+      status,
       search,
       expiringInDays = 7,
+      period = 'all',        // day | week | month | year | all
     } = req.query;
 
     const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
@@ -97,18 +186,33 @@ exports.listSubscriptions = async (req, res) => {
     const nowMs = Date.now();
     const expiringWindow = parseInt(expiringInDays) || 7;
 
-    // Build base filter
+    const { start: rangeStart, end: rangeEnd } =
+      period === 'all'
+        ? { start: null, end: null }
+        : buildSubscriptionPeriod(period);
+
+    // ── Base filter ────────────────────────────────────
     const filter = {};
 
     if (plan && plan !== 'all') {
       filter['subscription.plan'] = plan;
     }
 
+    // Period filter — subscriptions that STARTED within the period
+    if (rangeStart && rangeEnd) {
+      filter['subscription.startDate'] = { $gte: rangeStart, $lt: rangeEnd };
+    }
+
     // Search
     if (search && search.trim()) {
       const regex = new RegExp(search.trim(), 'i');
       const userIds = await User.find({
-        $or: [{ firstName: regex }, { lastName: regex }, { email: regex }, { phone: regex }],
+        $or: [
+          { firstName: regex },
+          { lastName: regex },
+          { email: regex },
+          { phone: regex },
+        ],
       }).distinct('_id');
 
       filter.$or = [
@@ -117,7 +221,7 @@ exports.listSubscriptions = async (req, res) => {
       ];
     }
 
-    // Status filter
+    // Status filter (same as before)
     if (status === 'free') {
       filter['subscription.plan'] = 'free';
     } else if (status === 'paid') {
@@ -157,6 +261,7 @@ exports.listSubscriptions = async (req, res) => {
     res.json({
       success: true,
       data,
+      period,
       pagination: {
         page: parseInt(page),
         limit: limitNum,
@@ -168,26 +273,28 @@ exports.listSubscriptions = async (req, res) => {
     handleError(res, error, 'Failed to fetch subscriptions.');
   }
 };
-
 // ─────────────────────────────────────────────────────────────
 // STATS
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// STATS — period-aware
+// ─────────────────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
   try {
+    const period = req.query.period || 'month';
     const nowMs = Date.now();
-    const now = new Date(nowMs);
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { start, end, prevStart, prevEnd, label } =
+      buildSubscriptionPeriod(period);
 
-    const techs = await Technician.find()
-      .select('subscription')
-      .lean();
+    const techs = await Technician.find().select('subscription').lean();
 
+    // ── Live snapshot counts (not windowed) ────────────
     let activePaid = 0;
     let expiredPaid = 0;
     let free = 0;
     let trial = 0;
     let expiringSoon = 0;
-    let mrr = 0; // monthly recurring revenue
+    let mrr = 0;
 
     techs.forEach((t) => {
       const plan = t.subscription?.plan || 'free';
@@ -195,11 +302,9 @@ exports.getStats = async (req, res) => {
       const trialEndDate = t.subscription?.trialEndDate;
       const isActive = isPlanActive(plan, endDate, trialEndDate);
 
-      if (plan === 'free') {
-        free++;
-      } else if (plan === 'trial') {
-        trial++;
-      } else if (isActive) {
+      if (plan === 'free') free++;
+      else if (plan === 'trial') trial++;
+      else if (isActive) {
         activePaid++;
         mrr += t.subscription?.planDetails?.price || subscriptionPlans[plan]?.price || 0;
         if (endDate) {
@@ -211,32 +316,47 @@ exports.getStats = async (req, res) => {
       }
     });
 
-    // Revenue this month from payment history
-    let revenueThisMonth = 0;
-    let revenueLastMonth = 0;
-    techs.forEach((t) => {
-      const history = t.subscription?.paymentHistory || [];
-      history.forEach((p) => {
-        if (!p.date) return;
-        const date = new Date(p.date);
-        if (date >= startOfMonth) {
-          revenueThisMonth += p.amount || 0;
-        } else {
-          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          if (date >= lastMonthStart && date < startOfMonth) {
-            revenueLastMonth += p.amount || 0;
-          }
-        }
-      });
-    });
+    // ── Revenue within the window ──────────────────────
+    const revenueThisPeriod = sumPaymentsInRange(techs, start, end);
+    const revenuePrevPeriod =
+      prevStart && prevEnd ? sumPaymentsInRange(techs, prevStart, prevEnd) : 0;
 
-    const growth = revenueLastMonth > 0
-      ? Number((((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100).toFixed(1))
-      : 0;
+    const growth =
+      revenuePrevPeriod > 0
+        ? Number(
+            (
+              ((revenueThisPeriod - revenuePrevPeriod) / revenuePrevPeriod) *
+              100
+            ).toFixed(1)
+          )
+        : revenueThisPeriod > 0
+        ? 100
+        : 0;
+
+    // ── New subscriptions started in the window ────────
+    const newInPeriod = techs.filter((t) => {
+      const s = t.subscription?.startDate;
+      if (!s) return false;
+      const d = new Date(s);
+      return d >= start && d < end;
+    }).length;
+
+    const newPrevPeriod =
+      prevStart && prevEnd
+        ? techs.filter((t) => {
+            const s = t.subscription?.startDate;
+            if (!s) return false;
+            const d = new Date(s);
+            return d >= prevStart && d < prevEnd;
+          }).length
+        : 0;
 
     res.json({
       success: true,
+      period,
+      periodLabel: label,
       data: {
+        // Live snapshot
         total: techs.length,
         activePaid,
         expiredPaid,
@@ -244,10 +364,30 @@ exports.getStats = async (req, res) => {
         trial,
         expiringSoon,
         mrr,
+
+        // Window-based
         revenue: {
-          thisMonth: revenueThisMonth,
-          lastMonth: revenueLastMonth,
+          thisPeriod: revenueThisPeriod,
+          prevPeriod: revenuePrevPeriod,
+          // keep legacy keys for older frontend code
+          thisMonth: revenueThisPeriod,
+          lastMonth: revenuePrevPeriod,
           growth,
+        },
+        newSubscriptions: {
+          thisPeriod: newInPeriod,
+          prevPeriod: newPrevPeriod,
+          growth:
+            newPrevPeriod > 0
+              ? Number(
+                  (
+                    ((newInPeriod - newPrevPeriod) / newPrevPeriod) *
+                    100
+                  ).toFixed(1)
+                )
+              : newInPeriod > 0
+              ? 100
+              : 0,
         },
       },
     });
@@ -255,7 +395,6 @@ exports.getStats = async (req, res) => {
     handleError(res, error, 'Failed to load subscription stats.');
   }
 };
-
 // ─────────────────────────────────────────────────────────────
 // EXPIRING SOON
 // ─────────────────────────────────────────────────────────────
@@ -416,16 +555,25 @@ exports.cancelSubscription = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // EXPORT (CSV)
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// EXPORT (CSV) — period-aware
+// ─────────────────────────────────────────────────────────────
 exports.exportSubscriptions = async (req, res) => {
   try {
     const nowMs = Date.now();
+    const period = req.query.period || 'all';
+    const { start, end } = buildSubscriptionPeriod(period);
 
-    const techs = await Technician.find()
+    const filter = {};
+    if (period !== 'all') {
+      filter['subscription.startDate'] = { $gte: start, $lt: end };
+    }
+
+    const techs = await Technician.find(filter)
       .populate('userId', 'firstName lastName email phone')
       .select('userId businessName mainCategory subscription serviceRadius')
       .lean();
 
-    // Build CSV
     const header = [
       'Technician ID',
       'First Name',
@@ -466,11 +614,16 @@ exports.exportSubscriptions = async (req, res) => {
     });
 
     const csv = [header, ...rows]
-      .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .map((row) =>
+        row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')
+      )
       .join('\n');
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="subscriptions-${Date.now()}.csv"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="subscriptions-${period}-${Date.now()}.csv"`
+    );
     res.send(csv);
   } catch (error) {
     handleError(res, error, 'Failed to export subscriptions.');

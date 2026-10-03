@@ -2,12 +2,80 @@
  * commissionController.js
  * =======================
  * Admin management of technician commissions
- * (5% of labor, marked "pending" | "invoiced" | "paid").
+ * (5% of labor, marked "pending" | "invoiced" | "paid" | "waived").
+ *
+ * Period-aware: filter by day | week | month | year | all
  *
  * Mounted at: /api/admin/commissions
  */
 
 const Booking = require('../../models/Booking');
+
+// ═══════════════════════════════════════════════════════════
+// PERIOD HELPERS
+// ═══════════════════════════════════════════════════════════
+const startOfDay = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+const startOfWeek = (d = new Date()) => {
+  const day = d.getDay();
+  const diff = (day + 6) % 7; // Monday start
+  const s = startOfDay(d);
+  s.setDate(s.getDate() - diff);
+  return s;
+};
+
+const startOfMonth = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth(), 1);
+
+const startOfYear = (d = new Date()) =>
+  new Date(d.getFullYear(), 0, 1);
+
+/**
+ * Return { start, end, prevStart, prevEnd, label } for a period token.
+ */
+function buildCommissionPeriod(period) {
+  const now = new Date();
+
+  switch (period) {
+    case 'day': {
+      const start = startOfDay(now);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      const prevStart = new Date(start);
+      prevStart.setDate(prevStart.getDate() - 1);
+      return { start, end, prevStart, prevEnd: start, label: 'Today' };
+    }
+    case 'week': {
+      const start = startOfWeek(now);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 7);
+      const prevStart = new Date(start);
+      prevStart.setDate(prevStart.getDate() - 7);
+      return { start, end, prevStart, prevEnd: start, label: 'This Week' };
+    }
+    case 'year': {
+      const start = startOfYear(now);
+      const end = new Date(now.getFullYear() + 1, 0, 1);
+      const prevStart = new Date(now.getFullYear() - 1, 0, 1);
+      const prevEnd = new Date(now.getFullYear(), 0, 1);
+      return { start, end, prevStart, prevEnd, label: 'This Year' };
+    }
+    case 'all': {
+      const start = new Date(2020, 0, 1);
+      const end = new Date(now.getFullYear() + 1, 0, 1);
+      return { start, end, prevStart: null, prevEnd: null, label: 'All Time' };
+    }
+    case 'month':
+    default: {
+      const start = startOfMonth(now);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevEnd = start;
+      return { start, end, prevStart, prevEnd, label: 'This Month' };
+    }
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 // LIST
@@ -17,21 +85,28 @@ exports.list = async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
+    const period = req.query.period || 'all';
 
     const filter = { 'commission.amount': { $gt: 0 } };
+
     if (req.query.status && req.query.status !== 'all') {
       filter['commission.status'] = req.query.status;
     }
-    if (req.query.from || req.query.to) {
-      filter.createdAt = {};
-      if (req.query.from) filter.createdAt.$gte = new Date(req.query.from);
-      if (req.query.to) filter.createdAt.$lte = new Date(req.query.to);
+
+    // Period filter — commission created within the window
+    if (period !== 'all') {
+      const { start, end } = buildCommissionPeriod(period);
+      filter['commission.createdAt'] = { $gte: start, $lt: end };
     }
 
     const [items, total] = await Promise.all([
       Booking.find(filter)
-        .populate('technicianId', 'businessName userId mainCategory')
-        .populate('technicianId.userId', 'firstName lastName email')
+        // ✅ FIX: use nested populate so technicianId.userId resolves
+        .populate({
+          path: 'technicianId',
+          select: 'businessName userId mainCategory',
+          populate: { path: 'userId', select: 'firstName lastName email' },
+        })
         .populate('clientId', 'firstName lastName email')
         .sort({ 'commission.createdAt': -1, createdAt: -1 })
         .skip(skip)
@@ -42,6 +117,7 @@ exports.list = async (req, res) => {
     res.json({
       success: true,
       data: items,
+      period,
       pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
     });
   } catch (err) {
@@ -51,45 +127,161 @@ exports.list = async (req, res) => {
 };
 
 // ═══════════════════════════════════════════════════════════
-// STATS
+// STATS — period-aware
 // ═══════════════════════════════════════════════════════════
 exports.stats = async (req, res) => {
   try {
+    const period = req.query.period || 'all';
+    const { start, end, prevStart, prevEnd, label } =
+      buildCommissionPeriod(period);
+
+    const matchStage =
+      period === 'all'
+        ? { 'commission.amount': { $gt: 0 } }
+        : {
+            'commission.amount': { $gt: 0 },
+            'commission.createdAt': { $gte: start, $lt: end },
+          };
+
+    // ── Current window ─────────────────────────────────
     const [agg] = await Booking.aggregate([
-      { $match: { 'commission.amount': { $gt: 0 } } },
+      { $match: matchStage },
       {
         $group: {
           _id: null,
           total: { $sum: '$commission.amount' },
           pending: {
-            $sum: { $cond: [{ $eq: ['$commission.status', 'pending'] }, '$commission.amount', 0] },
+            $sum: {
+              $cond: [
+                { $eq: ['$commission.status', 'pending'] },
+                '$commission.amount',
+                0,
+              ],
+            },
           },
           invoiced: {
-            $sum: { $cond: [{ $eq: ['$commission.status', 'invoiced'] }, '$commission.amount', 0] },
+            $sum: {
+              $cond: [
+                { $eq: ['$commission.status', 'invoiced'] },
+                '$commission.amount',
+                0,
+              ],
+            },
           },
           paid: {
-            $sum: { $cond: [{ $eq: ['$commission.status', 'paid'] }, '$commission.amount', 0] },
+            $sum: {
+              $cond: [
+                { $eq: ['$commission.status', 'paid'] },
+                '$commission.amount',
+                0,
+              ],
+            },
+          },
+          waived: {
+            $sum: {
+              $cond: [
+                { $eq: ['$commission.status', 'waived'] },
+                '$commission.amount',
+                0,
+              ],
+            },
           },
           count: { $sum: 1 },
         },
       },
     ]);
 
-    const thisMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const [thisMonth] = await Booking.aggregate([
-      { $match: { 'commission.amount': { $gt: 0 }, 'commission.createdAt': { $gte: thisMonthStart } } },
-      { $group: { _id: null, total: { $sum: '$commission.amount' } } },
+    // ── Previous window (for growth) ───────────────────
+    let prevTotal = 0;
+    let prevCount = 0;
+    if (prevStart && prevEnd) {
+      const [prevAgg] = await Booking.aggregate([
+        {
+          $match: {
+            'commission.amount': { $gt: 0 },
+            'commission.createdAt': { $gte: prevStart, $lt: prevEnd },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$commission.amount' },
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+      prevTotal = prevAgg?.total || 0;
+      prevCount = prevAgg?.count || 0;
+    }
+
+    const currentTotal = agg?.total || 0;
+    const currentCount = agg?.count || 0;
+
+    const growth =
+      prevTotal > 0
+        ? Number((((currentTotal - prevTotal) / prevTotal) * 100).toFixed(1))
+        : currentTotal > 0
+        ? 100
+        : 0;
+
+    // ── All-time totals (independent of period) ────────
+    const [allTimeAgg] = await Booking.aggregate([
+      { $match: { 'commission.amount': { $gt: 0 } } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$commission.amount' },
+          paid: {
+            $sum: {
+              $cond: [
+                { $eq: ['$commission.status', 'paid'] },
+                '$commission.amount',
+                0,
+              ],
+            },
+          },
+          pending: {
+            $sum: {
+              $cond: [
+                {
+                  $in: ['$commission.status', ['pending', 'invoiced']],
+                },
+                '$commission.amount',
+                0,
+              ],
+            },
+          },
+        },
+      },
     ]);
 
     res.json({
       success: true,
+      period,
+      periodLabel: label,
       data: {
-        total: agg?.total || 0,
+        // Window-scoped
+        total: currentTotal,
         pending: agg?.pending || 0,
         invoiced: agg?.invoiced || 0,
         paid: agg?.paid || 0,
-        count: agg?.count || 0,
-        thisMonth: thisMonth?.total || 0,
+        waived: agg?.waived || 0,
+        count: currentCount,
+
+        // For legacy frontend keys
+        thisMonth: currentTotal,
+
+        // Growth
+        prevTotal,
+        prevCount,
+        growth,
+
+        // All-time snapshot
+        allTime: {
+          total: allTimeAgg?.total || 0,
+          paid: allTimeAgg?.paid || 0,
+          pending: allTimeAgg?.pending || 0,
+        },
       },
     });
   } catch (err) {
@@ -111,7 +303,8 @@ exports.markPaid = async (req, res) => {
 
     booking.commission.status = 'paid';
     booking.commission.paidAt = new Date();
-    booking.commission.reference = req.body.reference || booking.commission.reference || '';
+    booking.commission.reference =
+      req.body.reference || booking.commission.reference || '';
     await booking.save();
 
     res.json({ success: true, data: booking, message: 'Commission marked as paid' });
@@ -145,22 +338,42 @@ exports.waive = async (req, res) => {
 };
 
 // ═══════════════════════════════════════════════════════════
-// EXPORT
+// EXPORT CSV — period-aware
 // ═══════════════════════════════════════════════════════════
 exports.exportCsv = async (req, res) => {
   try {
+    const period = req.query.period || 'all';
+
     const filter = { 'commission.amount': { $gt: 0 } };
     if (req.query.status && req.query.status !== 'all') {
       filter['commission.status'] = req.query.status;
     }
+    if (period !== 'all') {
+      const { start, end } = buildCommissionPeriod(period);
+      filter['commission.createdAt'] = { $gte: start, $lt: end };
+    }
 
     const items = await Booking.find(filter)
-      .populate('technicianId.userId', 'firstName lastName email')
+      .populate({
+        path: 'technicianId',
+        select: 'businessName userId mainCategory',
+        populate: { path: 'userId', select: 'firstName lastName email' },
+      })
       .populate('clientId', 'firstName lastName')
       .lean();
 
     const rows = [
-      ['Booking ID', 'Technician', 'Technician Email', 'Client', 'Service', 'Labor (KES)', 'Commission (KES)', 'Status', 'Date'],
+      [
+        'Booking ID',
+        'Technician',
+        'Technician Email',
+        'Client',
+        'Service',
+        'Labor (KES)',
+        'Commission (KES)',
+        'Status',
+        'Date',
+      ],
       ...items.map((b) => [
         b._id.toString(),
         b.technicianId?.userId
@@ -172,13 +385,21 @@ exports.exportCsv = async (req, res) => {
         b.laborPayment?.amount || 0,
         b.commission?.amount || 0,
         b.commission?.status || '',
-        b.commission?.createdAt ? new Date(b.commission.createdAt).toISOString() : '',
+        b.commission?.createdAt
+          ? new Date(b.commission.createdAt).toISOString()
+          : '',
       ]),
     ];
 
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="commissions-${Date.now()}.csv"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="commissions-${period}-${Date.now()}.csv"`
+    );
     res.send(csv);
   } catch (err) {
     console.error('exportCommissions error:', err);
