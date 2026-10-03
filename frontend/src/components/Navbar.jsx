@@ -144,7 +144,7 @@ const Navbar = () => {
   </div>
 
   {/* Wordmark — colour preserved exactly as before */}
-  <Wordmark className="text-xl" />
+  <Wordmark className="text-2xl md:text-3xl" />
 </Link>
 
             {/* ─── DESKTOP NAVIGATION ─────────────── */}
