@@ -1,17 +1,13 @@
 /**
  * Services Page Component
  * ========================
- * Displays the service catalog in a three-level hierarchy:
- * mainCategory → serviceCategory → subService.
+ * Progressive-disclosure service catalog:
+ *   1. Pick a main category   (horizontal chips)
+ *   2. Pick a service category (horizontal chips)
+ *   3. Set your search radius  (with location)
+ *   4. Browse sub-services & book a technician
  *
- * Features:
- * - Gradient + photographic hero (engineering tools backdrop)
- * - Brand name in green & red
- * - Distance & location controls with clear feedback
- * - Expandable service categories with lazy-loaded sub-services
- * - Responsive grid layout
- *
- * @version 3.1.0 – Rebranded hero (Webalink Service)
+ * @version 4.0.0 – Chip-based navigation, no hero
  * @author Webalink Team
  */
 
@@ -20,7 +16,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Wrench,
   ChevronDown,
-  ChevronUp,
   Clock,
   DollarSign,
   MapPin,
@@ -32,51 +27,40 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 
-/**
- * Hero background image — engineering / hand tools.
- * Swap this URL for a local asset (e.g. `/images/tools-hero.jpg`)
- * if you'd rather not depend on an external CDN.
- */
-const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=2000&q=80';
-
 const Services = () => {
   const navigate = useNavigate();
 
-  // --- State for catalog data ---
+  // ── Catalog ───────────────────────────────────────────
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [retryCount, setRetryCount] = useState(0);
 
-  // --- State for UI expansion & sub-service data ---
-  const [expandedCategories, setExpandedCategories] = useState({});
+  // ── Progressive selection ─────────────────────────────
+  const [selectedMainCategory, setSelectedMainCategory] = useState(null);
+  const [selectedServiceCategory, setSelectedServiceCategory] = useState(null);
+
+  // ── Sub-services cache (per main||service pair) ───────
   const [subServicesData, setSubServicesData] = useState({});
   const [subServicesLoading, setSubServicesLoading] = useState({});
 
-  // --- Distance & location ---
+  // ── Location & distance ───────────────────────────────
   const [maxDistance, setMaxDistance] = useState('');
   const [userLocation, setUserLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState('idle');
   const [locationMessage, setLocationMessage] = useState('');
 
-  // ============================================================
-  // SIDE EFFECTS
-  // ============================================================
-
+  // ═══════════════════════════════════════════════════════
+  // EFFECTS
+  // ═══════════════════════════════════════════════════════
   useEffect(() => {
     fetchServiceCatalog();
+    requestUserLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    requestUserLocation();
-  }, []);
-
-  // ============================================================
-  // DATA FETCHING
-  // ============================================================
-
+  // ═══════════════════════════════════════════════════════
+  // FETCHING
+  // ═══════════════════════════════════════════════════════
   const fetchServiceCatalog = async () => {
     setLoading(true);
     setError('');
@@ -87,54 +71,39 @@ const Services = () => {
       setCatalog(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load services:', err);
-      let errorMsg = 'Could not load services. ';
-      if (err.response) {
-        errorMsg += `Server error (${err.response.status}). `;
-      } else if (err.request) {
-        errorMsg += 'No response from server. Check your internet connection. ';
-      } else {
-        errorMsg += 'An unexpected error occurred. ';
-      }
-      setError(errorMsg);
+      let msg = 'Could not load services. ';
+      if (err.response) msg += `Server error (${err.response.status}). `;
+      else if (err.request) msg += 'No response from server. Check your internet connection. ';
+      else msg += 'An unexpected error occurred. ';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchSubServices = async (mainCategory, serviceCategory) => {
-    const key = `${mainCategory}-${serviceCategory}`;
+  const fetchSubServices = async (mainCat, serviceCat) => {
+    const key = `${mainCat}||${serviceCat}`;
     if (subServicesData[key]) return;
 
     setSubServicesLoading((prev) => ({ ...prev, [key]: true }));
-
     try {
-      const encodedMain = encodeURIComponent(mainCategory);
-      const encodedService = encodeURIComponent(serviceCategory);
       const response = await api.get(
-        `/service-catalog/${encodedMain}/${encodedService}/sub-services/detailed`
+        `/service-catalog/${encodeURIComponent(mainCat)}/${encodeURIComponent(serviceCat)}/sub-services/detailed`
       );
       const payload = response.data ?? response;
       const data = payload.data ?? payload ?? { subServices: [] };
       setSubServicesData((prev) => ({ ...prev, [key]: data }));
-    } catch (error) {
-      console.error('Failed to load sub-services:', error);
+    } catch (err) {
+      console.error('Failed to load sub-services:', err);
+      setSubServicesData((prev) => ({ ...prev, [key]: { subServices: [] } }));
     } finally {
       setSubServicesLoading((prev) => ({ ...prev, [key]: false }));
     }
   };
 
-  const toggleCategory = async (mainCategory, categoryName) => {
-    const key = `${mainCategory}-${categoryName}`;
-    if (!expandedCategories[key]) {
-      await fetchSubServices(mainCategory, categoryName);
-    }
-    setExpandedCategories((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
   // LOCATION
-  // ============================================================
-
+  // ═══════════════════════════════════════════════════════
   const requestUserLocation = () => {
     if (!navigator.geolocation) {
       setLocationStatus('error');
@@ -143,11 +112,8 @@ const Services = () => {
     }
     setLocationStatus('loading');
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setLocationStatus('success');
       },
       (err) => {
@@ -162,11 +128,34 @@ const Services = () => {
     );
   };
 
-  // ============================================================
-  // NAVIGATION
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
+  // HANDLERS
+  // ═══════════════════════════════════════════════════════
+  const handleMainCategoryClick = (category) => {
+    // Click active → deselect everything
+    if (selectedMainCategory?.mainCategory === category.mainCategory) {
+      setSelectedMainCategory(null);
+      setSelectedServiceCategory(null);
+      return;
+    }
+    setSelectedMainCategory(category);
+    setSelectedServiceCategory(null);
+  };
 
-  const handleViewTechnicians = (mainCategory, serviceCategory, subService) => {
+  const handleServiceCategoryClick = async (serviceCat) => {
+    if (selectedServiceCategory?.name === serviceCat.name) {
+      setSelectedServiceCategory(null);
+      return;
+    }
+    setSelectedServiceCategory(serviceCat);
+
+    const key = `${selectedMainCategory.mainCategory}||${serviceCat.name}`;
+    if (!subServicesData[key]) {
+      await fetchSubServices(selectedMainCategory.mainCategory, serviceCat.name);
+    }
+  };
+
+  const handleViewTechnicians = (subService) => {
     if (!maxDistance) {
       alert('Please select a maximum distance first.');
       return;
@@ -178,9 +167,9 @@ const Services = () => {
     }
 
     const params = new URLSearchParams({
-      mainCategory,
-      serviceCategory,
-      subService,
+      mainCategory: selectedMainCategory.mainCategory,
+      serviceCategory: selectedServiceCategory.name,
+      subService: subService.name,
       radius: maxDistance,
       lat: userLocation.lat,
       lng: userLocation.lng,
@@ -190,13 +179,27 @@ const Services = () => {
   };
 
   const handleRetry = () => {
-    setRetryCount((prev) => prev + 1);
     fetchServiceCatalog();
   };
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
+  // DERIVED
+  // ═══════════════════════════════════════════════════════
+  const canSearch = Boolean(maxDistance && userLocation);
+  const subServicesKey =
+    selectedMainCategory && selectedServiceCategory
+      ? `${selectedMainCategory.mainCategory}||${selectedServiceCategory.name}`
+      : null;
+  const subServices = subServicesKey
+    ? subServicesData[subServicesKey]?.subServices ?? []
+    : [];
+  const subServicesIsLoading = subServicesKey
+    ? subServicesLoading[subServicesKey]
+    : false;
+
+  // ═══════════════════════════════════════════════════════
   // RENDER: LOADING
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -208,9 +211,9 @@ const Services = () => {
     );
   }
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
   // RENDER: ERROR
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
   if (error) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -231,9 +234,9 @@ const Services = () => {
     );
   }
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
   // RENDER: EMPTY CATALOG
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
   if (catalog.length === 0) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -254,76 +257,147 @@ const Services = () => {
     );
   }
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
   // RENDER: MAIN
-  // ============================================================
+  // ═══════════════════════════════════════════════════════
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ════════════════ HERO SECTION ════════════════ */}
-      <div className="relative overflow-hidden bg-gray-900">
-        {/* ── Layer 1: Engineering-tools photograph ── */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: `url('${HERO_IMAGE}')` }}
-          aria-hidden="true"
-        />
+      <div className="max-w-6xl mx-auto px-4 py-8 md:py-10">
 
-        {/* ── Layer 2: Darkening + brand colour wash ── */}
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-black/90"
-          aria-hidden="true"
-        />
-        {/* Green glow (brand) from the top-left */}
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-green-700/60 via-transparent to-transparent"
-          aria-hidden="true"
-        />
-        {/* Red glow (brand) from the bottom-right */}
-        <div
-          className="absolute inset-0 bg-gradient-to-tl from-red-800/50 via-transparent to-transparent"
-          aria-hidden="true"
-        />
-
-        {/* ── Layer 3: Soft decorative blobs ── */}
-        <div className="absolute inset-0 opacity-20" aria-hidden="true">
-          <div className="absolute -top-24 -right-24 w-96 h-96 bg-green-400 rounded-full blur-3xl"></div>
-          <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-red-500 rounded-full blur-3xl"></div>
+        {/* ─── Header ─────────────────────────────────── */}
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+            Browse Services
+          </h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1">
+            Pick a category → choose a service → set your distance → book a technician.
+          </p>
         </div>
 
-        <div className="relative z-10 max-w-6xl mx-auto px-4 py-16 md:py-24">
-          {/* Badge */}
-          <div className="flex justify-center mb-5">
-            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-white text-xs font-semibold border border-white/25 shadow-lg">
-              <Sparkles className="w-3.5 h-3.5 text-green-300" />
-              Verified Engineers &amp; Technicians
+        {/* ═══════════════════════════════════════════════
+            STEP 1 — MAIN CATEGORIES (horizontal chips)
+            ═══════════════════════════════════════════════ */}
+        <section className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+              1
             </span>
+            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+              Choose a main category
+            </h2>
           </div>
 
-          {/* ═══ Brand Title — green + red ═══ */}
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-center mb-4 tracking-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]">
-            <span className="bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 bg-clip-text text-transparent">
-              Webalink
-            </span>{' '}
-            <span className="bg-gradient-to-r from-red-500 via-red-400 to-rose-400 bg-clip-text text-transparent">
-              Service
-            </span>
-          </h1>
+          <div className="flex flex-wrap gap-2">
+            {catalog.map((cat) => {
+              const isActive =
+                selectedMainCategory?.mainCategory === cat.mainCategory;
 
-          {/* Brand accent rule: green → red */}
-          <div className="flex justify-center mb-6">
-            <div className="h-1.5 w-28 rounded-full bg-gradient-to-r from-green-500 via-emerald-400 to-red-500 shadow-lg"></div>
+              return (
+                <button
+                  key={cat.mainCategory}
+                  onClick={() => handleMainCategoryClick(cat)}
+                  aria-pressed={isActive}
+                  className={`group inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold border-2 transition-all duration-150 ${
+                    isActive
+                      ? 'bg-green-600 text-white border-green-600 shadow-md'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-700 hover:border-green-500 hover:shadow-sm'
+                  }`}
+                >
+                  <Wrench
+                    className={`w-4 h-4 transition-colors ${
+                      isActive
+                        ? 'text-white'
+                        : 'text-gray-400 group-hover:text-green-600'
+                    }`}
+                  />
+                  <span>{cat.mainCategory}</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full transition-colors ${
+                      isActive
+                        ? 'bg-white/25 text-white'
+                        : 'bg-gray-100 text-gray-500 group-hover:bg-green-100 group-hover:text-green-700'
+                    }`}
+                  >
+                    {cat.serviceCategories?.length ?? 0}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+        </section>
 
-          {/* Tagline */}
-          <p className="text-base md:text-lg text-white/90 text-center max-w-2xl mx-auto mb-10 leading-relaxed drop-shadow-md">
-            Browse our comprehensive range of professional services delivered by
-            verified <span className="font-semibold text-green-300">engineers</span> and{' '}
-            <span className="font-semibold text-red-300">technicians</span> across Kenya.
-          </p>
+        {/* ═══════════════════════════════════════════════
+            STEP 2 — SERVICE CATEGORIES
+            ═══════════════════════════════════════════════ */}
+        {selectedMainCategory && (
+          <section className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                2
+              </span>
+              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                Choose a service category
+                <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
+                  in {selectedMainCategory.mainCategory}
+                </span>
+              </h2>
+            </div>
 
-          {/* ═══ Location & Distance Control Card ═══ */}
-          <div className="max-w-3xl mx-auto">
-            <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl ring-1 ring-black/5 p-5 md:p-6">
+            {selectedMainCategory.serviceCategories?.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {selectedMainCategory.serviceCategories.map((sc) => {
+                  const isActive = selectedServiceCategory?.name === sc.name;
+
+                  return (
+                    <button
+                      key={sc.name}
+                      onClick={() => handleServiceCategoryClick(sc)}
+                      aria-pressed={isActive}
+                      className={`group inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold border-2 transition-all duration-150 ${
+                        isActive
+                          ? 'bg-green-600 text-white border-green-600 shadow-md'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-700 hover:border-green-500 hover:shadow-sm'
+                      }`}
+                    >
+                      <span>{sc.name}</span>
+                      {sc.subServiceCount != null && (
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full transition-colors ${
+                            isActive
+                              ? 'bg-white/25 text-white'
+                              : 'bg-gray-100 text-gray-500 group-hover:bg-green-100 group-hover:text-green-700'
+                          }`}
+                        >
+                          {sc.subServiceCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 italic">
+                No service categories in this main category.
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* ═══════════════════════════════════════════════
+            STEP 3 — DISTANCE & LOCATION
+            ═══════════════════════════════════════════════ */}
+        {selectedServiceCategory && (
+          <section className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                3
+              </span>
+              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                Set your search distance
+              </h2>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
               <div className="flex flex-col md:flex-row md:items-end gap-4">
                 {/* Distance selector */}
                 <div className="flex-1">
@@ -339,7 +413,7 @@ const Services = () => {
                       id="distanceSelect"
                       value={maxDistance}
                       onChange={(e) => setMaxDistance(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none bg-white text-gray-800 font-medium appearance-none cursor-pointer"
+                      className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none bg-white text-gray-800 font-medium appearance-none cursor-pointer"
                     >
                       <option value="">Select distance…</option>
                       <option value="5">Within 5 km</option>
@@ -360,12 +434,14 @@ const Services = () => {
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                     Your Location
                   </label>
+
                   {locationStatus === 'loading' && (
                     <div className="inline-flex items-center gap-2 px-4 py-3 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-yellow-700 text-sm font-medium">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Detecting…
                     </div>
                   )}
+
                   {locationStatus === 'error' && (
                     <button
                       onClick={requestUserLocation}
@@ -375,12 +451,14 @@ const Services = () => {
                       {locationMessage} · Retry
                     </button>
                   )}
+
                   {locationStatus === 'success' && (
                     <div className="inline-flex items-center gap-2 px-4 py-3 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 text-sm font-medium">
                       <MapPin className="w-4 h-4" />
                       Location active
                     </div>
                   )}
+
                   {locationStatus === 'idle' && (
                     <button
                       onClick={requestUserLocation}
@@ -395,200 +473,136 @@ const Services = () => {
 
               {/* Help text */}
               <p className="text-xs text-gray-500 mt-3">
-                {!maxDistance && locationStatus === 'success' &&
-                  '👉 Pick a distance to start finding technicians near you'}
-                {maxDistance && locationStatus !== 'success' &&
-                  '👉 Enable location to see technicians within your chosen radius'}
-                {maxDistance && locationStatus === 'success' &&
-                  '✅ Ready! Browse services below and click "View Technicians"'}
+                {!maxDistance &&
+                  locationStatus === 'success' &&
+                  '👉 Pick a distance to unlock the "View Technicians" buttons'}
+                {maxDistance &&
+                  locationStatus !== 'success' &&
+                  '👉 Enable location so we can find technicians near you'}
+                {maxDistance &&
+                  locationStatus === 'success' &&
+                  '✅ Ready! Pick a service below to see technicians'}
               </p>
             </div>
-          </div>
-        </div>
+          </section>
+        )}
 
-        {/* Bottom fade into the page background */}
-        <div
-          className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-gray-50 to-transparent"
-          aria-hidden="true"
-        />
-      </div>
+        {/* ═══════════════════════════════════════════════
+            STEP 4 — SUB-SERVICES
+            ═══════════════════════════════════════════════ */}
+        {selectedServiceCategory && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                4
+              </span>
+              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+                Pick a service
+                <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
+                  {selectedMainCategory.mainCategory} › {selectedServiceCategory.name}
+                </span>
+              </h2>
+            </div>
 
-      {/* ════════════════ SERVICE CATALOG ════════════════ */}
-      <div className="max-w-6xl mx-auto py-12 px-4">
-        <div className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
-            Browse Services
-          </h2>
-          <p className="text-gray-600">
-            {catalog.length} main categor{catalog.length !== 1 ? 'ies' : 'y'} · click any service to expand
-          </p>
-        </div>
-
-        <div className="space-y-6">
-          {catalog.map((category) => (
-            <div
-              key={category.mainCategory}
-              className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-            >
-              {/* Category header */}
-              <div className="bg-gradient-to-r from-gray-50 to-white px-6 py-5 border-b border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-sm">
-                    <Wrench className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-800">
-                      {category.mainCategory}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {category.serviceCategories?.length ?? 0} service categor{category.serviceCategories?.length !== 1 ? 'ies' : 'y'}
-                    </p>
-                  </div>
-                </div>
+            {subServicesIsLoading ? (
+              <div className="flex justify-center items-center py-16 bg-white rounded-xl border border-gray-200">
+                <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
+                <span className="ml-2 text-gray-500 text-sm font-medium">
+                  Loading services…
+                </span>
               </div>
+            ) : subServices.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {subServices.map((sub, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-white p-5 rounded-xl border border-gray-200 hover:border-green-400 hover:shadow-lg transition-all flex flex-col"
+                  >
+                    <div className="flex items-start gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="w-4 h-4 text-green-600" />
+                      </div>
+                      <h3 className="font-bold text-gray-800 text-sm leading-tight pt-1">
+                        {sub.name}
+                      </h3>
+                    </div>
 
-              {/* Service categories */}
-              <div className="divide-y divide-gray-100">
-                {category.serviceCategories?.map((serviceCat) => {
-                  const key = `${category.mainCategory}-${serviceCat.name}`;
-                  const isExpanded = expandedCategories[key];
-                  const subData = subServicesData[key];
-                  const isLoading = subServicesLoading[key];
+                    {sub.description && (
+                      <p className="text-xs text-gray-600 leading-relaxed mb-3 flex-grow">
+                        {sub.description}
+                      </p>
+                    )}
 
-                  return (
-                    <div key={serviceCat.name}>
-                      {/* Toggle button */}
-                      <button
-                        onClick={() => toggleCategory(category.mainCategory, serviceCat.name)}
-                        className="w-full px-6 py-4 flex justify-between items-center hover:bg-gray-50 transition-colors text-left group"
-                      >
-                        <div className="pr-4 min-w-0">
-                          <h4 className="text-base font-bold text-gray-800 group-hover:text-green-700 transition-colors">
-                            {serviceCat.name}
-                          </h4>
-                          {serviceCat.description && (
-                            <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">
-                              {serviceCat.description}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          <span className="hidden sm:inline-flex text-xs text-green-700 bg-green-100 px-3 py-1 rounded-full font-semibold">
-                            {serviceCat.subServiceCount ?? 0} services
-                          </span>
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                            isExpanded ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'
-                          }`}>
-                            {isExpanded ? (
-                              <ChevronUp className="w-4 h-4" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4" />
-                            )}
-                          </div>
-                        </div>
-                      </button>
-
-                      {/* Expanded sub-services */}
-                      {isExpanded && (
-                        <div className="px-6 pb-6 pt-2 bg-gray-50 border-t border-gray-100">
-                          {isLoading ? (
-                            <div className="flex justify-center items-center py-10">
-                              <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
-                              <span className="ml-2 text-gray-500 text-sm font-medium">
-                                Loading services…
-                              </span>
-                            </div>
-                          ) : subData?.subServices?.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {subData.subServices.map((sub, idx) => {
-                                const canBook = maxDistance && userLocation;
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="bg-white p-5 rounded-xl border border-gray-200 hover:border-green-300 hover:shadow-lg transition-all flex flex-col group"
-                                  >
-                                    <div className="flex items-start gap-2 mb-2">
-                                      <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
-                                        <Sparkles className="w-4 h-4 text-green-600" />
-                                      </div>
-                                      <h5 className="font-bold text-gray-800 text-sm leading-tight pt-1">
-                                        {sub.name}
-                                      </h5>
-                                    </div>
-
-                                    {sub.description && (
-                                      <p className="text-xs text-gray-600 leading-relaxed mb-3 flex-grow">
-                                        {sub.description}
-                                      </p>
-                                    )}
-
-                                    {/* Meta chips */}
-                                    <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
-                                      {sub.typicalDuration && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded-md font-medium">
-                                          <Clock className="w-3 h-3" />
-                                          {sub.typicalDuration.value} {sub.typicalDuration.unit}
-                                        </span>
-                                      )}
-                                      {sub.suggestedPriceRange && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-md font-medium">
-                                          <DollarSign className="w-3 h-3" />
-                                          {sub.suggestedPriceRange.min?.toLocaleString?.() ?? sub.suggestedPriceRange.min}
-                                          {' - '}
-                                          {sub.suggestedPriceRange.max?.toLocaleString?.() ?? sub.suggestedPriceRange.max}
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    {/* CTA button */}
-                                    <button
-                                      onClick={() =>
-                                        handleViewTechnicians(
-                                          category.mainCategory,
-                                          serviceCat.name,
-                                          sub.name
-                                        )
-                                      }
-                                      disabled={!canBook}
-                                      className={`w-full mt-auto px-4 py-2.5 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1.5 ${
-                                        canBook
-                                          ? 'bg-gray-800 text-white hover:bg-green-600 shadow-sm hover:shadow-md'
-                                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                      }`}
-                                    >
-                                      {!maxDistance ? (
-                                        'Select distance first'
-                                      ) : !userLocation ? (
-                                        'Enable location'
-                                      ) : (
-                                        <>
-                                          View Technicians
-                                          <ArrowRight className="w-3.5 h-3.5" />
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="text-center py-8 text-gray-400 text-sm">
-                              No sub-services available for this category.
-                            </div>
-                          )}
-                        </div>
+                    {/* Meta chips */}
+                    <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
+                      {sub.typicalDuration && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded-md font-medium">
+                          <Clock className="w-3 h-3" />
+                          {sub.typicalDuration.value} {sub.typicalDuration.unit}
+                        </span>
+                      )}
+                      {sub.suggestedPriceRange && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-md font-medium">
+                          <DollarSign className="w-3 h-3" />
+                          {sub.suggestedPriceRange.min?.toLocaleString?.() ??
+                            sub.suggestedPriceRange.min}
+                          {' - '}
+                          {sub.suggestedPriceRange.max?.toLocaleString?.() ??
+                            sub.suggestedPriceRange.max}
+                        </span>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
 
-        {/* Footer CTA */}
-        <div className="mt-12 bg-white rounded-2xl border border-gray-200 p-8 text-center">
+                    {/* CTA */}
+                    <button
+                      onClick={() => handleViewTechnicians(sub)}
+                      disabled={!canSearch}
+                      className={`w-full mt-auto px-4 py-2.5 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                        canSearch
+                          ? 'bg-gray-800 text-white hover:bg-green-600 shadow-sm hover:shadow-md'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {!maxDistance ? (
+                        'Select distance first'
+                      ) : !userLocation ? (
+                        'Enable location'
+                      ) : (
+                        <>
+                          View Technicians
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
+                <Wrench className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">
+                  No sub-services available for this category.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Idle hint ─────────────────────────────── */}
+        {!selectedMainCategory && (
+          <div className="mt-8 text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
+            <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">Click a category above to get started</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {catalog.length} categor{catalog.length !== 1 ? 'ies' : 'y'} available
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Footer CTA (kept) ─────────────────────────── */}
+      <div className="max-w-6xl mx-auto px-4 pb-12">
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
           <h3 className="text-lg font-bold text-gray-800 mb-2">
             Need a specific service not listed?
           </h3>

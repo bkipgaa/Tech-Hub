@@ -2,16 +2,17 @@
  * SearchPage.js
  * =============
  * A comprehensive search page for finding technicians.
- * Allows searching by three‑level service hierarchy:
+ * Allows searching by three-level service hierarchy:
  * mainCategory → serviceCategory → subService.
- * 
+ *
  * Features:
  * - Dropdown cascading from backend catalog data
  * - Location detection and radius control
  * - Advanced filters (rating, hourly rate)
- * - Results display with plan badges, visibility radius, and booking actions
- * 
- * @version 2.2.0 – Fixed sub-service object rendering (React error #31)
+ * - Results display with plan badges, visibility radius, and a single
+ *   "View Profile & Book" action — matching the Services page pattern
+ *
+ * @version 2.5.0 – Single "View Profile & Book" action (Services parity)
  * @author Webalink Team
  */
 
@@ -30,11 +31,11 @@ import {
   Crown,
   Zap,
   Briefcase,
-  Award,
   Clock,
   CheckCircle,
   AlertCircle,
   Loader2,
+  ArrowRight,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -93,21 +94,11 @@ const SearchPage = () => {
   // ============================================================
   // CATALOG LOADING
   // ============================================================
-
-  /**
-   * Load the service catalog from the backend.
-   * Uses `/search/categories/full` which returns a complete
-   * hierarchy: mainCategory → serviceCategories → subServices.
-   * 
-   * On failure, falls back to a static default catalog.
-   * Caches result in sessionStorage for instant loads on revisit.
-   */
   const fetchCatalogData = async () => {
     setCatalogLoading(true);
     setCatalogError('');
     setUsingDefaultCatalog(false);
 
-    // Check cache first
     const cached = sessionStorage.getItem('catalogData');
     if (cached) {
       try {
@@ -130,14 +121,10 @@ const SearchPage = () => {
         const subServicesMap = {};
 
         categories.forEach((cat) => {
-          // Main category name
           mainCategories.push(cat.mainCategory);
-          // Service categories: array of names
           serviceCategoriesMap[cat.mainCategory] = (cat.serviceCategories || []).map((s) => s.name);
 
-          // Sub-services: store only the names (not the full objects)
           (cat.serviceCategories || []).forEach((sc) => {
-            // Ensure subServices is an array of strings (or extract .name)
             const subNames = (sc.subServices || []).map((sub) =>
               typeof sub === 'string' ? sub : sub.name || sub.subService || ''
             );
@@ -161,32 +148,14 @@ const SearchPage = () => {
     }
   };
 
-  /**
-   * Provides a static fallback catalog when the backend is unreachable.
-   * This ensures the search page remains functional even without API.
-   */
   const useDefaultCatalog = () => {
     const defaultMainCategories = [
-      'IT & Networking',
-      'Electrical Services',
-      'Mechanical Services',
-      'Plumbing',
-      'Programming & AI',
-      'Hairdressing & Beauty',
-      'Carpentry & Furniture',
-      'Laundry & Dry Cleaning',
-      'Cleaning Services',
-      'Painting & Decorating',
-      'Welding & Fabrication',
-      'Automotive Repair',
-      'Tutoring & Training',
-      'Photography & Videography',
-      'Event Planning',
-      'Construction & Renovation',
-      'HVAC Services',
-      'Appliance Repair',
-      'Moving & Logistics',
-      'Gardening & Landscaping',
+      'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
+      'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
+      'Laundry & Dry Cleaning', 'Cleaning Services', 'Painting & Decorating',
+      'Welding & Fabrication', 'Automotive Repair', 'Tutoring & Training',
+      'Photography & Videography', 'Event Planning', 'Construction & Renovation',
+      'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping',
     ];
 
     const defaultServiceCategories = {
@@ -212,7 +181,6 @@ const SearchPage = () => {
     });
   };
 
-  // Load catalog on mount (with cache check inside fetch function)
   useEffect(() => {
     fetchCatalogData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,8 +189,6 @@ const SearchPage = () => {
   // ============================================================
   // DYNAMIC DROPDOWN UPDATES
   // ============================================================
-
-  // When main category changes, update service categories
   useEffect(() => {
     if (filters.mainCategory) {
       const services = catalogData.serviceCategoriesMap[filters.mainCategory] || [];
@@ -235,12 +201,9 @@ const SearchPage = () => {
     }
   }, [filters.mainCategory, catalogData.serviceCategoriesMap]);
 
-  // When service category changes, update sub-services
   useEffect(() => {
     if (filters.serviceCategory) {
-      // Ensure subServices is always an array of strings
       const subs = catalogData.subServicesMap[filters.serviceCategory] || [];
-      // If subs contains objects, extract the name property
       const subNames = subs.map((sub) =>
         typeof sub === 'string' ? sub : sub.name || sub.subService || ''
       );
@@ -254,11 +217,6 @@ const SearchPage = () => {
   // ============================================================
   // LOCATION FUNCTIONS
   // ============================================================
-
-  /**
-   * Request the user's geolocation and trigger a search if successful.
-   * Shows an in‑UI error message on failure (instead of alert).
-   */
   const getCurrentLocation = () => {
     setGettingLocation(true);
     setSearchError('');
@@ -304,13 +262,6 @@ const SearchPage = () => {
   // ============================================================
   // SEARCH FUNCTION
   // ============================================================
-
-  /**
-   * Perform the actual technician search.
-   * Builds query parameters from filters and location, then calls
-   * the backend `/search/technicians` endpoint.
-   * On success, updates the technicians list; on failure, sets searchError.
-   */
   const performSearch = async (lat, lng) => {
     setLoading(true);
     setSearchError('');
@@ -367,7 +318,6 @@ const SearchPage = () => {
   // ============================================================
   // EVENT HANDLERS
   // ============================================================
-
   const handleSearch = (e) => {
     e.preventDefault();
     if (userLocation) {
@@ -377,6 +327,11 @@ const SearchPage = () => {
     }
   };
 
+  /**
+   * Navigate to the technician's profile page.
+   * Same destination the Services flow ends up at: /technician/:id
+   * The profile page owns the "Book Service" action.
+   */
   const handleViewProfile = (technicianId) => {
     navigate(`/technician/${technicianId}`);
   };
@@ -410,7 +365,6 @@ const SearchPage = () => {
   // ============================================================
   // UI HELPERS
   // ============================================================
-
   const getRadiusText = () => {
     const radius = parseInt(filters.radius);
     if (radius <= 10) return `${radius} km (Local)`;
@@ -432,9 +386,8 @@ const SearchPage = () => {
   };
 
   // ============================================================
-  // RENDER
+  // RENDER: LOADING
   // ============================================================
-
   if (catalogLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -446,6 +399,9 @@ const SearchPage = () => {
     );
   }
 
+  // ============================================================
+  // RENDER: CATALOG ERROR
+  // ============================================================
   if (catalogError && !usingDefaultCatalog) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -465,7 +421,9 @@ const SearchPage = () => {
     );
   }
 
-  // Main render
+  // ============================================================
+  // RENDER: MAIN
+  // ============================================================
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -493,9 +451,7 @@ const SearchPage = () => {
         {/* ===== SEARCH FORM ===== */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <form onSubmit={handleSearch} className="space-y-4">
-            {/* Three‑level service dropdowns */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Level 1: Main Category */}
               <select
                 value={filters.mainCategory}
                 onChange={(e) => setFilters({ ...filters, mainCategory: e.target.value })}
@@ -503,13 +459,10 @@ const SearchPage = () => {
               >
                 <option value="">Select Main Category</option>
                 {catalogData.mainCategories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
+                  <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
 
-              {/* Level 2: Service Category */}
               <select
                 value={filters.serviceCategory}
                 onChange={(e) => setFilters({ ...filters, serviceCategory: e.target.value })}
@@ -518,29 +471,23 @@ const SearchPage = () => {
               >
                 <option value="">Select Service Category</option>
                 {serviceCategories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
+                  <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
 
-              {/* Level 3: Sub‑Service */}
               <select
                 value={filters.subService}
                 onChange={(e) => setFilters({ ...filters, subService: e.target.value })}
                 disabled={!filters.serviceCategory || subServices.length === 0}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none disabled:bg-gray-100 bg-white"
               >
-                <option value="">Select Sub‑Service</option>
+                <option value="">Select Sub-Service</option>
                 {subServices.map((sub) => (
-                  <option key={sub} value={sub}>
-                    {sub}
-                  </option>
+                  <option key={sub} value={sub}>{sub}</option>
                 ))}
               </select>
             </div>
 
-            {/* Location & Radius Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -595,9 +542,7 @@ const SearchPage = () => {
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Searching...
                     </>
-                  ) : (
-                    'Search'
-                  )}
+                  ) : 'Search'}
                 </button>
                 <button
                   type="button"
@@ -610,7 +555,6 @@ const SearchPage = () => {
               </div>
             </div>
 
-            {/* Advanced Filters (collapsible) */}
             {showFilters && (
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -764,7 +708,6 @@ const SearchPage = () => {
                                   {tech.mainCategory}
                                 </span>
                               )}
-                              {/* Plan Badge */}
                               <span
                                 className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${planInfo.bg} ${planInfo.color}`}
                               >
@@ -790,8 +733,12 @@ const SearchPage = () => {
                           </div>
                           <div className="flex items-center gap-1 bg-yellow-50 px-3 py-1 rounded-full">
                             <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                            <span className="font-medium">{tech.rating?.average?.toFixed(1) || 'New'}</span>
-                            <span className="text-gray-400 text-sm">({tech.rating?.count || 0} reviews)</span>
+                            <span className="font-medium">
+                              {tech.rating?.average?.toFixed(1) || 'New'}
+                            </span>
+                            <span className="text-gray-400 text-sm">
+                              ({tech.rating?.count || 0} reviews)
+                            </span>
                           </div>
                         </div>
 
@@ -824,11 +771,13 @@ const SearchPage = () => {
                           )}
                         </div>
 
-                        {/* Skills */}
                         {tech.skills && tech.skills.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-3">
                             {tech.skills.slice(0, 3).map((skill, idx) => (
-                              <span key={idx} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                              <span
+                                key={idx}
+                                className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
+                              >
                                 {skill.name}
                               </span>
                             ))}
@@ -840,7 +789,6 @@ const SearchPage = () => {
                           </div>
                         )}
 
-                        {/* Service Categories & Sub‑Services */}
                         {tech.serviceCategories && tech.serviceCategories.length > 0 && (
                           <div className="mt-3">
                             <div className="flex flex-wrap gap-2">
@@ -852,7 +800,8 @@ const SearchPage = () => {
                                   {service.subServices && service.subServices.length > 0 && (
                                     <span className="text-xs text-gray-400">
                                       ({service.subServices.slice(0, 2).join(', ')}
-                                      {service.subServices.length > 2 && ` +${service.subServices.length - 2} more`})
+                                      {service.subServices.length > 2 &&
+                                        ` +${service.subServices.length - 2} more`})
                                     </span>
                                   )}
                                 </div>
@@ -867,16 +816,17 @@ const SearchPage = () => {
                         )}
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex-shrink-0 flex flex-col gap-2">
+                      {/* ═══════════════════════════════════════════════
+                          SINGLE ACTION — View Profile & Book
+                          (matches Services / TechnicianSearchResults flow)
+                          ═══════════════════════════════════════════════ */}
+                      <div className="flex-shrink-0 flex items-center justify-center w-full md:w-auto">
                         <button
                           onClick={() => handleViewProfile(tech._id)}
-                          className="bg-gray-800 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                          className="w-full md:w-auto bg-gray-800 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-600 transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center justify-center gap-2 whitespace-nowrap"
                         >
-                          View Profile
-                        </button>
-                        <button className="border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-                          Request Service
+                          View Profile &amp; Book
+                          <ArrowRight className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
