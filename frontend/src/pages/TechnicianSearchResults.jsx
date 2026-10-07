@@ -1,6 +1,8 @@
 /**
  * TechnicianSearchResults.jsx
- * Dedicated page for displaying technicians found for a specific service + distance
+ * Dedicated page for displaying technicians found for a specific service + distance.
+ *
+ * @version 2.1.0 – Removed hourly rate from results cards
  */
 
 import React, { useState, useEffect } from 'react';
@@ -9,7 +11,6 @@ import {
   Wrench,
   MapPin,
   Star,
-  DollarSign,
   Clock,
   ArrowLeft,
   Loader2,
@@ -173,7 +174,11 @@ const TechnicianSearchResults = () => {
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-gray-500 mb-4">
-              Found <span className="font-semibold text-gray-800">{technicians.length}</span> technician{technicians.length !== 1 ? 's' : ''}
+              Found{' '}
+              <span className="font-semibold text-gray-800">
+                {technicians.length}
+              </span>{' '}
+              technician{technicians.length !== 1 ? 's' : ''}
             </p>
 
             {technicians.map((tech) => (
@@ -189,12 +194,16 @@ const TechnicianSearchResults = () => {
                         src={tech.user.profileImage}
                         alt={`${tech.user?.firstName ?? 'Technician'} profile`}
                         className="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
-                        onError={(e) => { e.target.style.display = 'none'; }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
                       />
                     ) : null}
                     <div
                       className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center border-2 border-gray-100"
-                      style={{ display: tech.user?.profileImage ? 'none' : 'flex' }}
+                      style={{
+                        display: tech.user?.profileImage ? 'none' : 'flex',
+                      }}
                     >
                       <span className="text-xl font-bold text-gray-500">
                         {getInitials(tech.user)}
@@ -208,7 +217,8 @@ const TechnicianSearchResults = () => {
                       <div>
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <h2 className="text-lg font-bold text-gray-800">
-                            {tech.user?.firstName ?? 'Unknown'} {tech.user?.lastName ?? ''}
+                            {tech.user?.firstName ?? 'Unknown'}{' '}
+                            {tech.user?.lastName ?? ''}
                           </h2>
                           {tech.verificationStatus === 'verified' && (
                             <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
@@ -217,7 +227,9 @@ const TechnicianSearchResults = () => {
                           )}
                         </div>
                         <p className="text-sm text-gray-600">
-                          {tech.profileHeadline || tech.businessName || 'Professional Technician'}
+                          {tech.profileHeadline ||
+                            tech.businessName ||
+                            'Professional Technician'}
                         </p>
                       </div>
 
@@ -233,12 +245,12 @@ const TechnicianSearchResults = () => {
                     <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-600">
                       <span className="flex items-center gap-1">
                         <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                        <span className="font-semibold">{tech.rating?.average?.toFixed(1) ?? 'New'}</span>
-                        <span className="text-gray-400">({tech.rating?.count ?? 0} reviews)</span>
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="w-4 h-4 text-green-600" />
-                        <span className="font-semibold">KES {tech.pricing?.hourlyRate ?? 0}/hr</span>
+                        <span className="font-semibold">
+                          {tech.rating?.average?.toFixed(1) ?? 'New'}
+                        </span>
+                        <span className="text-gray-400">
+                          ({tech.rating?.count ?? 0} reviews)
+                        </span>
                       </span>
                       {tech.yearsOfExperience > 0 && (
                         <span className="flex items-center gap-1">
@@ -280,10 +292,12 @@ const TechnicianSearchResults = () => {
                     {/* Action */}
                     <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
                       <button
-                        onClick={() => navigate(`/technician/${tech._id ?? tech.id}`)}
+                        onClick={() =>
+                          navigate(`/technician/${tech._id ?? tech.id}`)
+                        }
                         className="bg-gray-800 text-white px-6 py-2 rounded-lg font-medium hover:bg-green-600 transition-colors"
                       >
-                        View Profile & Book
+                        View Profile &amp; Book
                       </button>
                     </div>
                   </div>

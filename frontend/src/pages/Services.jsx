@@ -520,30 +520,10 @@ const Services = () => {
                     </div>
 
                     {sub.description && (
-                      <p className="text-xs text-gray-600 leading-relaxed mb-3 flex-grow">
-                        {sub.description}
-                      </p>
-                    )}
-
-                    {/* Meta chips */}
-                    <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
-                      {sub.typicalDuration && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded-md font-medium">
-                          <Clock className="w-3 h-3" />
-                          {sub.typicalDuration.value} {sub.typicalDuration.unit}
-                        </span>
-                      )}
-                      {sub.suggestedPriceRange && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-md font-medium">
-                          <DollarSign className="w-3 h-3" />
-                          {sub.suggestedPriceRange.min?.toLocaleString?.() ??
-                            sub.suggestedPriceRange.min}
-                          {' - '}
-                          {sub.suggestedPriceRange.max?.toLocaleString?.() ??
-                            sub.suggestedPriceRange.max}
-                        </span>
-                      )}
-                    </div>
+  <p className="text-xs text-gray-600 leading-relaxed mb-4 flex-grow">
+    {sub.description}
+  </p>
+)}
 
                     {/* CTA */}
                     <button
