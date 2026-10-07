@@ -2,12 +2,12 @@
  * Services Page Component
  * ========================
  * Progressive-disclosure service catalog:
- *   1. Pick a main category   (horizontal chips)
- *   2. Pick a service category (horizontal chips)
+ *   1. Pick a main category   (compact horizontal chips)
+ *   2. Pick a service category (compact horizontal chips)
  *   3. Set your search radius  (with location)
  *   4. Browse sub-services & book a technician
  *
- * @version 4.0.0 – Chip-based navigation, no hero
+ * @version 4.1.0 – Compact chips (no icon, ~7 per row)
  * @author Webalink Team
  */
 
@@ -132,7 +132,6 @@ const Services = () => {
   // HANDLERS
   // ═══════════════════════════════════════════════════════
   const handleMainCategoryClick = (category) => {
-    // Click active → deselect everything
     if (selectedMainCategory?.mainCategory === category.mainCategory) {
       setSelectedMainCategory(null);
       setSelectedServiceCategory(null);
@@ -275,7 +274,7 @@ const Services = () => {
         </div>
 
         {/* ═══════════════════════════════════════════════
-            STEP 1 — MAIN CATEGORIES (horizontal chips)
+            STEP 1 — MAIN CATEGORIES (compact chips)
             ═══════════════════════════════════════════════ */}
         <section className="mb-6">
           <div className="flex items-center gap-2 mb-3">
@@ -287,7 +286,7 @@ const Services = () => {
             </h2>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {catalog.map((cat) => {
               const isActive =
                 selectedMainCategory?.mainCategory === cat.mainCategory;
@@ -297,22 +296,15 @@ const Services = () => {
                   key={cat.mainCategory}
                   onClick={() => handleMainCategoryClick(cat)}
                   aria-pressed={isActive}
-                  className={`group inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold border-2 transition-all duration-150 ${
+                  className={`group inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-all duration-150 ${
                     isActive
-                      ? 'bg-green-600 text-white border-green-600 shadow-md'
+                      ? 'bg-green-600 text-white border-green-600 shadow-sm'
                       : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-700 hover:border-green-500 hover:shadow-sm'
                   }`}
                 >
-                  <Wrench
-                    className={`w-4 h-4 transition-colors ${
-                      isActive
-                        ? 'text-white'
-                        : 'text-gray-400 group-hover:text-green-600'
-                    }`}
-                  />
                   <span>{cat.mainCategory}</span>
                   <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full transition-colors ${
+                    className={`text-[9px] font-bold px-1 py-0.5 rounded-full leading-none transition-colors ${
                       isActive
                         ? 'bg-white/25 text-white'
                         : 'bg-gray-100 text-gray-500 group-hover:bg-green-100 group-hover:text-green-700'
@@ -344,7 +336,7 @@ const Services = () => {
             </div>
 
             {selectedMainCategory.serviceCategories?.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {selectedMainCategory.serviceCategories.map((sc) => {
                   const isActive = selectedServiceCategory?.name === sc.name;
 
@@ -353,16 +345,16 @@ const Services = () => {
                       key={sc.name}
                       onClick={() => handleServiceCategoryClick(sc)}
                       aria-pressed={isActive}
-                      className={`group inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold border-2 transition-all duration-150 ${
+                      className={`group inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-all duration-150 ${
                         isActive
-                          ? 'bg-green-600 text-white border-green-600 shadow-md'
+                          ? 'bg-green-600 text-white border-green-600 shadow-sm'
                           : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-700 hover:border-green-500 hover:shadow-sm'
                       }`}
                     >
                       <span>{sc.name}</span>
                       {sc.subServiceCount != null && (
                         <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full transition-colors ${
+                          className={`text-[9px] font-bold px-1 py-0.5 rounded-full leading-none transition-colors ${
                             isActive
                               ? 'bg-white/25 text-white'
                               : 'bg-gray-100 text-gray-500 group-hover:bg-green-100 group-hover:text-green-700'
