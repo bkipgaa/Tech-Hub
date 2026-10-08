@@ -231,9 +231,7 @@ const SubscriptionManager = () => {
               <div className="flex items-center gap-2 mb-2">
                 <Crown className="w-5 h-5 text-yellow-500" />
                 <span className="text-xl font-bold">
-                  {currentSubscription.plan === 'trial' ? 'Free Trial' : 
-                   currentSubscription.plan === 'basicPlus' ? 'Basic-Plus' :
-                   currentSubscription.plan?.charAt(0).toUpperCase() + currentSubscription.plan?.slice(1) || 'Free'}
+                  {currentSubscription.planDetails?.name || currentSubscription.plan || 'Free'}
                 </span>
                 <span className={`px-2 py-1 text-xs rounded-full ${currentSubscription.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                   {currentSubscription.isActive ? 'Active' : 'Inactive'}
