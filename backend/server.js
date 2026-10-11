@@ -298,6 +298,13 @@ const startServer = async () => {
   });
 
   // ─── Cron jobs ─────────────────────────────────────────
+  // Set DISABLE_CRON=true on staging: it shares the production DB,
+  // so running reminders there would email everyone twice.
+  if (process.env.DISABLE_CRON === 'true') {
+    console.log('⏸️ Cron jobs disabled (DISABLE_CRON=true)');
+    return;
+  }
+
   cron.schedule('0 6 * * *', () => {
     console.log('⏰ Running daily subscription reminders...');
     sendExpiryReminders();
