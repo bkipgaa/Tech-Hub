@@ -538,6 +538,13 @@ const TechnicianProfile = () => {
                       ({technician.rating?.count || 0} reviews)
                     </span>
                   </div>
+                  <div className="flex items-center gap-1 bg-white/20 px-3 py-1.5 rounded-full">
+                    <Briefcase className="w-5 h-5 text-white" />
+                    <span className="font-bold text-lg text-white">{technician.completedJobs || 0}</span>
+                    <span className="text-white/80 text-sm">
+                      job{technician.completedJobs === 1 ? '' : 's'} completed
+                    </span>
+                  </div>
                 </div>
 
                 {/* Action Buttons: Contact, Message, Book */}
@@ -556,7 +563,7 @@ const TechnicianProfile = () => {
                     <MessageCircle className="w-4 h-4" />
                     Message
                   </button>
-                  {isLoggedIn && (
+                  {isLoggedIn && technician.acceptingBookings !== false && (
                     <button
                       onClick={openBookingModal}
                       className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
@@ -564,6 +571,12 @@ const TechnicianProfile = () => {
                       <CalendarIcon className="w-4 h-4" />
                       Book Service
                     </button>
+                  )}
+                  {isLoggedIn && technician.acceptingBookings === false && (
+                    <span className="bg-white/20 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4" />
+                      Not accepting new bookings right now
+                    </span>
                   )}
                   {isLoggedIn && hasCompletedBooking && !hasRated && (
                     <button

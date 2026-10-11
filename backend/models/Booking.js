@@ -117,6 +117,7 @@ const bookingSchema = new mongoose.Schema({
       default: 'pending'
     },
     createdAt: Date,
+    dueAt: Date,                        // 30 days after labor payment confirmed
     invoicedAt: Date,
     paidAt: Date,
     reference: String,                  // set by admin "mark paid"
@@ -240,7 +241,9 @@ bookingSchema.pre('save', async function() {
 bookingSchema.pre('save', async function() {
   // Only when the date is being set — later status updates happen after it has passed
   if (!this.isNew && !this.isModified('preferredDate')) return;
-  if (this.preferredDate && this.preferredDate < new Date()) {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  if (this.preferredDate && this.preferredDate < startOfToday) {
     throw new Error('Preferred date cannot be in the past');
   }
 });

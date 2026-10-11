@@ -17,6 +17,14 @@ const Technician = require('../models/Technician');
 const User = require('../models/User');
 const notify = require('../services/notificationService');
 const mongoose = require('mongoose');
+const {
+  DAY_MS,
+  COMMISSION_DUE_DAYS,
+  HIDE_AFTER_OVERDUE_DAYS,
+  UNPAID_STATUSES,
+  dueDateFor,
+  hasOverdueCommission,
+} = require('../utils/commissionDue');
 
 const COMMISSION_RATE = 0.05;
 // Reported labor below this share of the quoted labor is flagged for review
@@ -175,6 +183,17 @@ exports.createBooking = async (req, res) => {
         new Error('Technician not found or inactive'),
         'Technician not available.',
         404,
+        'createBooking'
+      );
+    }
+
+    // Technicians with an overdue commission can't receive new bookings
+    if (await hasOverdueCommission(technician._id)) {
+      return handleControllerError(
+        res,
+        new Error('Technician has overdue commission'),
+        'This technician is not accepting new bookings right now. Please choose another technician.',
+        403,
         'createBooking'
       );
     }
@@ -845,15 +864,17 @@ exports.confirmLaborPayment = async (req, res) => {
     const commissionAmount = Math.round(reportedLabor * COMMISSION_RATE * 100) / 100;
     const belowQuote = quotedLabor > 0 && reportedLabor < quotedLabor * LOW_LABOR_RATIO;
 
+    const confirmedAt = new Date();
     booking.laborPayment = {
-      confirmedAt: new Date(),
+      confirmedAt,
       amount: reportedLabor,
       notes: note || '',
     };
     booking.commission = {
       amount: commissionAmount,
       status: 'pending',
-      createdAt: new Date(),
+      createdAt: confirmedAt,
+      dueAt: new Date(confirmedAt.getTime() + COMMISSION_DUE_DAYS * DAY_MS),
       reportedLabor,
       quotedLabor,
       flagged: belowQuote,
@@ -1019,10 +1040,12 @@ exports.getTechnicianCommissions = async (req, res) => {
     const { month } = req.query;
     const technicianId = await getTechnicianId(userId);
 
-    // ✅ Include BOTH pending and invoiced (both are still owed)
+    // ✅ Include BOTH pending and invoiced (both are still owed).
+    // Every booking starts with a zero "pending" commission, so skip those.
     let filter = {
       technicianId: technicianId,
-      'commission.status': { $in: ['pending', 'invoiced'] },
+      'commission.status': { $in: UNPAID_STATUSES },
+      'commission.amount': { $gt: 0 },
     };
 
     if (month) {
@@ -1033,8 +1056,18 @@ exports.getTechnicianCommissions = async (req, res) => {
     }
 
     const bookings = await Booking.find(filter)
-      .select('_id serviceCategory subService quotation.laborCost commission.amount commission.status createdAt')
+      .select('_id serviceCategory subService quotation.laborCost laborPayment commission createdAt')
       .lean();
+
+    // Due dates: overdue blocks new bookings, and after the grace period
+    // the technician is hidden from search
+    const now = new Date();
+    const dueDates = bookings.map(dueDateFor).filter(Boolean);
+    const earliestDue = dueDates.length ? new Date(Math.min(...dueDates)) : null;
+    const isOverdue = !!earliestDue && earliestDue < now;
+    const hiddenFromSearchAt = earliestDue
+      ? new Date(earliestDue.getTime() + HIDE_AFTER_OVERDUE_DAYS * DAY_MS)
+      : null;
 
     const totalDue = bookings.reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
 
@@ -1064,14 +1097,20 @@ exports.getTechnicianCommissions = async (req, res) => {
           totalInvoiced,     // breakdown
           count: bookings.length,
           byMonth,
+          earliestDue,
+          isOverdue,                         // → no new bookings
+          hiddenFromSearchAt,                // if still unpaid by then
+          hiddenFromSearch: !!hiddenFromSearchAt && hiddenFromSearchAt < now,
         },
         commissions: bookings.map(b => ({
           bookingId: b._id,
           service: b.serviceCategory,
           subService: b.subService,
-          laborCost: b.quotation?.laborCost || 0,
+          laborCost: b.laborPayment?.amount || b.quotation?.laborCost || 0,
           commissionAmount: b.commission?.amount || 0,
           status: b.commission?.status,   // ← now visible per row
+          dueAt: dueDateFor(b),
+          isOverdue: !!dueDateFor(b) && dueDateFor(b) < now,
           createdAt: b.createdAt,
         })),
       },

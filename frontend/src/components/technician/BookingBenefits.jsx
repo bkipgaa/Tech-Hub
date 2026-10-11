@@ -17,12 +17,12 @@ const BENEFITS = [
   {
     icon: TrendingUp,
     title: 'Higher ratings, more visibility',
-    text: 'Clients see your rating, and when they sort by rating, top-rated technicians appear first.',
+    text: 'Search results rank well-rated technicians first, putting you above most other technicians.',
   },
   {
     icon: Briefcase,
     title: 'Build your portfolio',
-    text: 'Every completed booking adds to your jobs-completed count, building a track record that shows clients your experience.',
+    text: 'Every completed booking adds to the jobs-completed count on your profile. More completed jobs also raise you in search and show clients your experience.',
   },
 ];
 

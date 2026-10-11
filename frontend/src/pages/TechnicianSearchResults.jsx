@@ -17,6 +17,7 @@ import {
   X,
   Filter,
   SlidersHorizontal,
+  Briefcase,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -35,7 +36,7 @@ const TechnicianSearchResults = () => {
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [sortBy, setSortBy] = useState('distance'); // distance | rating | price | experience
+  const [sortBy, setSortBy] = useState('recommended'); // recommended | distance | rating | price | experience
 
   // Fetch technicians on mount
   useEffect(() => {
@@ -61,7 +62,8 @@ const TechnicianSearchResults = () => {
         ...(lat && { lat }),
         ...(lng && { lng }),
         sortBy,
-        sortOrder: sortBy === 'price' ? 'asc' : 'desc',
+        // Nearest / cheapest first; everything else highest first
+        sortOrder: sortBy === 'price' || sortBy === 'distance' ? 'asc' : 'desc',
       });
 
       const response = await api.get(`/search/technicians?${params.toString()}`);
@@ -131,6 +133,7 @@ const TechnicianSearchResults = () => {
                 onChange={(e) => setSortBy(e.target.value)}
                 className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:border-green-500 focus:outline-none bg-white"
               >
+                <option value="recommended">Recommended</option>
                 <option value="distance">Sort by Distance</option>
                 <option value="rating">Sort by Rating</option>
                 <option value="price">Sort by Price (Low-High)</option>
@@ -252,10 +255,19 @@ const TechnicianSearchResults = () => {
                           ({tech.rating?.count ?? 0} reviews)
                         </span>
                       </span>
+                      <span className="flex items-center gap-1">
+                        <Briefcase className="w-4 h-4 text-green-600" />
+                        {tech.completedJobs ?? 0} job{tech.completedJobs === 1 ? '' : 's'} completed
+                      </span>
                       {tech.yearsOfExperience > 0 && (
                         <span className="flex items-center gap-1">
                           <Clock className="w-4 h-4 text-blue-500" />
                           {tech.yearsOfExperience}+ years exp
+                        </span>
+                      )}
+                      {tech.acceptingBookings === false && (
+                        <span className="text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded">
+                          Not accepting bookings
                         </span>
                       )}
                       <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">

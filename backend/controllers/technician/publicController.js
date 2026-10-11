@@ -10,6 +10,7 @@
  */
 
 const Technician = require('../../models/Technician');
+const { hasOverdueCommission } = require('../../utils/commissionDue');
 
 /**
  * Get public technician profile by ID
@@ -68,6 +69,8 @@ exports.getPublicProfile = async (req, res) => {
         remoteServiceAvailable: technician.remoteServiceAvailable,
         weekendAvailable: technician.weekendAvailable,
         rating: technician.rating,
+        completedJobs: technician.statistics?.completedJobs || 0,
+        acceptingBookings: !(await hasOverdueCommission(technician._id)),
         socialLinks: technician.socialLinks,
         businessName: technician.businessName,
         settings: technician.settings,

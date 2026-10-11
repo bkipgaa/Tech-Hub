@@ -10,6 +10,7 @@
 const mongoose = require('mongoose');
 const Technician = require('../models/Technician');
 const ServiceCatalog = require('../models/ServiceCatalog');
+const { hiddenTechnicianIds, overdueTechnicianIds } = require('../utils/commissionDue');
 
 // ===========================================
 // HELPERS
@@ -135,6 +136,43 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return Math.round((R * c) * 10) / 10;
 }
 
+// ── Recommended ranking ─────────────────────────────────────────
+// Rewards good ratings and jobs completed through bookings.
+// Ratings use a Bayesian average so one 5★ review doesn't beat fifty 4.8★.
+const RATING_PRIOR = 3.5;        // assumed rating for a technician with no reviews
+const RATING_PRIOR_WEIGHT = 5;   // how many reviews the prior is worth
+const JOBS_FOR_FULL_SCORE = 50;  // completed jobs at which the jobs score maxes out
+const DISTANCE_FOR_FULL_PENALTY_KM = 50;
+
+/**
+ * Score in [0, 1] (higher = shown first).
+ * 60% rating, 40% completed jobs, minus up to 0.3 for distance when known.
+ */
+function recommendedScore(tech) {
+  const avg = tech.rating?.average || 0;
+  const count = tech.rating?.count || 0;
+  const bayesRating = (RATING_PRIOR * RATING_PRIOR_WEIGHT + avg * count) / (RATING_PRIOR_WEIGHT + count);
+  const jobs = tech.statistics?.completedJobs || 0;
+  const jobsScore = Math.min(Math.log1p(jobs) / Math.log1p(JOBS_FOR_FULL_SCORE), 1);
+  let score = 0.6 * (bayesRating / 5) + 0.4 * jobsScore;
+  if (typeof tech.distance === 'number') {
+    score -= 0.3 * Math.min(tech.distance / DISTANCE_FOR_FULL_PENALTY_KM, 1);
+  }
+  return score;
+}
+
+/**
+ * Commission standing for search: technicians overdue for longer than the
+ * grace period are hidden; any overdue technician shows as not accepting bookings.
+ */
+async function getCommissionStanding() {
+  const [hidden, blocked] = await Promise.all([hiddenTechnicianIds(), overdueTechnicianIds()]);
+  return {
+    hidden: new Set(hidden.map(String)),
+    blocked: new Set(blocked.map(String)),
+  };
+}
+
 /**
  * Build a consistent error response for the frontend and Render logs.
  * @param {Error} error - The caught error
@@ -207,8 +245,8 @@ exports.searchTechnicians = async (req, res) => {
       isAvailable = true,
       page = 1,
       limit = 20,
-      sortBy = 'distance',
-      sortOrder = 'asc'
+      sortBy = 'recommended',
+      sortOrder = 'desc'
     } = req.query;
 
     // 2. Validate at least one criterion
@@ -342,8 +380,14 @@ if (mainCategory) {
     const longitude = lng ? parseFloat(lng) : null;
     const visibleTechnicians = [];
 
+    const standing = await getCommissionStanding();
+
     for (const tech of technicians) {
       try {
+        // 7·. Unpaid commission long overdue → hidden from search
+        if (standing.hidden.has(String(tech._id))) continue;
+        tech.acceptingBookings = !standing.blocked.has(String(tech._id));
+
         // 7a. Subscription active? (includes 'test' plan now)
         if (!isSubscriptionActive(tech)) {
           console.log(`[searchTechnicians] Technician ${tech._id} skipped: subscription inactive`);
@@ -387,8 +431,10 @@ if (mainCategory) {
 
     console.log(`[searchTechnicians] ${visibleTechnicians.length} technician(s) passed filtering`);
 
-    // 8. Sorting
-    if (sortBy === 'distance' && latitude && longitude) {
+    // 8. Sorting (default: recommended — rating + completed jobs, nearer first)
+    if (sortBy === 'recommended' || (sortBy === 'distance' && !(latitude && longitude))) {
+      visibleTechnicians.sort((a, b) => recommendedScore(b) - recommendedScore(a));
+    } else if (sortBy === 'distance' && latitude && longitude) {
       visibleTechnicians.sort((a, b) => {
         if (a.distance === null) return 1;
         if (b.distance === null) return -1;
@@ -429,6 +475,8 @@ if (mainCategory) {
       skills: tech.skills,
       pricing: tech.pricing,
       rating: tech.rating,
+      completedJobs: tech.statistics?.completedJobs || 0,
+      acceptingBookings: tech.acceptingBookings !== false,
       yearsOfExperience: tech.yearsOfExperience,
       distance: tech.distance,
       visibilityRadius: tech.visibilityRadius,
@@ -513,7 +561,11 @@ exports.getTechniciansBySubService = async (req, res) => {
     const longitude = lng ? parseFloat(lng) : null;
     const visible = [];
 
+    const standing = await getCommissionStanding();
+
     for (const tech of technicians) {
+      if (standing.hidden.has(String(tech._id))) continue;
+      tech.acceptingBookings = !standing.blocked.has(String(tech._id));
       if (!isSubscriptionActive(tech)) continue;
 
       if (latitude && longitude && tech.location?.coordinates) {
@@ -533,9 +585,7 @@ exports.getTechniciansBySubService = async (req, res) => {
       }
     }
 
-    if (latitude && longitude) {
-      visible.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
-    }
+    visible.sort((a, b) => recommendedScore(b) - recommendedScore(a));
 
     const formatted = visible.map(tech => ({
       _id: tech._id,
@@ -547,6 +597,8 @@ exports.getTechniciansBySubService = async (req, res) => {
       skills: tech.skills,
       pricing: tech.pricing,
       rating: tech.rating,
+      completedJobs: tech.statistics?.completedJobs || 0,
+      acceptingBookings: tech.acceptingBookings !== false,
       yearsOfExperience: tech.yearsOfExperience,
       distance: tech.distance,
       visibilityRadius: tech.visibilityRadius,
@@ -637,7 +689,11 @@ exports.getNearbyTechnicians = async (req, res) => {
 
     const visible = [];
 
+    const standing = await getCommissionStanding();
+
     for (const tech of technicians) {
+      if (standing.hidden.has(String(tech._id))) continue;
+      tech.acceptingBookings = !standing.blocked.has(String(tech._id));
       if (!isSubscriptionActive(tech)) continue;
       if (tech.location?.coordinates) {
         const [techLng, techLat] = tech.location.coordinates;
@@ -668,6 +724,8 @@ exports.getNearbyTechnicians = async (req, res) => {
       skills: tech.skills,
       pricing: tech.pricing,
       rating: tech.rating,
+      completedJobs: tech.statistics?.completedJobs || 0,
+      acceptingBookings: tech.acceptingBookings !== false,
       yearsOfExperience: tech.yearsOfExperience,
       distance: tech.distance,
       visibilityRadius: tech.visibilityRadius,

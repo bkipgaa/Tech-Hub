@@ -70,6 +70,7 @@ exports.initializeCommissionPayment = async (req, res) => {
     const bookings = await Booking.find({
       technicianId: technician._id,
       'commission.status': { $in: ['pending', 'invoiced'] },
+      'commission.amount': { $gt: 0 },   // every booking starts with a zero commission
     });
 
     if (!bookings.length) {
