@@ -118,6 +118,18 @@ const bookingSchema = new mongoose.Schema({
     },
     invoicedAt: Date,
     paidAt: Date,
+    paymentMethod: { type: String, enum: ['card', 'mpesa'] },
+    paymentReference: String,           // Paystack reference
+
+    // M-Pesa STK push (stamped at initiation, looked up by callback / status poll)
+    mpesaCheckoutRequestID: { type: String, index: true },
+    mpesaPhone: String,
+    mpesaAmount: Number,                // KES amount requested in the STK push
+    mpesaInitiatedAt: Date,
+    mpesaReceiptNumber: String,
+    mpesaFailureReason: String,
+    mpesaFailureCode: String,
+    mpesaFailedAt: Date,
   },
 
   // ── Payment confirmation (for simplified flow, kept for compatibility) ──
