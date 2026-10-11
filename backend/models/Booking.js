@@ -113,11 +113,24 @@ const bookingSchema = new mongoose.Schema({
     amount: { type: Number, min: 0, default: 0 },
     status: {
       type: String,
-      enum: ['pending', 'invoiced', 'paid'],
+      enum: ['pending', 'invoiced', 'paid', 'waived'],
       default: 'pending'
     },
+    createdAt: Date,
     invoicedAt: Date,
     paidAt: Date,
+    reference: String,                  // set by admin "mark paid"
+    waivedAt: Date,
+    waivedReason: String,
+
+    // Labor amounts the commission is based on
+    reportedLabor: Number,              // what the technician says they received
+    quotedLabor: Number,                // labor cost from the accepted quotation
+    clientConfirmedLabor: Boolean,      // client's answer when rating
+    clientReportedLabor: Number,        // what the client says they paid, if different
+    flagged: { type: Boolean, default: false },
+    flagReasons: [{ type: String, enum: ['below_quote', 'client_disputes_amount'] }],
+
     paymentMethod: { type: String, enum: ['card', 'mpesa'] },
     paymentReference: String,           // Paystack reference
 
@@ -225,6 +238,8 @@ bookingSchema.pre('save', async function() {
 });
 
 bookingSchema.pre('save', async function() {
+  // Only when the date is being set — later status updates happen after it has passed
+  if (!this.isNew && !this.isModified('preferredDate')) return;
   if (this.preferredDate && this.preferredDate < new Date()) {
     throw new Error('Preferred date cannot be in the past');
   }

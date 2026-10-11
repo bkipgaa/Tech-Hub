@@ -18,6 +18,10 @@ const User = require('../models/User');
 const notify = require('../services/notificationService');
 const mongoose = require('mongoose');
 
+const COMMISSION_RATE = 0.05;
+// Reported labor below this share of the quoted labor is flagged for review
+const LOW_LABOR_RATIO = 0.7;
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -816,7 +820,7 @@ exports.confirmLaborPayment = async (req, res) => {
     const { amount, note } = req.body;
     const userId = req.user.userId || req.user.id || req.user._id;
 
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       return handleControllerError(res, new Error('Invalid amount'), 'Valid positive amount required', 400, 'confirmLaborPayment');
     }
 
@@ -835,17 +839,25 @@ exports.confirmLaborPayment = async (req, res) => {
       return handleControllerError(res, new Error('Already confirmed'), 'Labor payment already confirmed', 400, 'confirmLaborPayment');
     }
 
-    const laborCost = booking.quotation.laborCost || 0;
-    const commissionAmount = laborCost * 0.05;
+    // Commission is based on what the technician actually received
+    const reportedLabor = Number(amount);
+    const quotedLabor = booking.quotation?.laborCost || 0;
+    const commissionAmount = Math.round(reportedLabor * COMMISSION_RATE * 100) / 100;
+    const belowQuote = quotedLabor > 0 && reportedLabor < quotedLabor * LOW_LABOR_RATIO;
 
     booking.laborPayment = {
       confirmedAt: new Date(),
-      amount: amount,
+      amount: reportedLabor,
       notes: note || '',
     };
     booking.commission = {
       amount: commissionAmount,
       status: 'pending',
+      createdAt: new Date(),
+      reportedLabor,
+      quotedLabor,
+      flagged: belowQuote,
+      flagReasons: belowQuote ? ['below_quote'] : [],
     };
     booking.status = 'labor_paid';
 
@@ -897,6 +909,19 @@ exports.rateTechnician = async (req, res) => {
       return handleControllerError(res, new Error('Already rated'), 'You have already rated this booking.', 400, 'rateTechnician');
     }
 
+    // Client confirms (or corrects) the labor amount the technician reported.
+    // Optional so older clients can still rate; a correction flags the commission.
+    const { laborAmountConfirmed, clientLaborAmount } = req.body;
+    let clientCorrection = null;
+    if (laborAmountConfirmed === false) {
+      clientCorrection = Number(clientLaborAmount);
+      if (!Number.isFinite(clientCorrection) || clientCorrection <= 0) {
+        return handleControllerError(res, new Error('Invalid amount'), 'Please enter the labor amount you paid.', 400, 'rateTechnician');
+      }
+    } else if (laborAmountConfirmed !== undefined && laborAmountConfirmed !== true) {
+      return handleControllerError(res, new Error('Invalid confirmation'), 'laborAmountConfirmed must be true or false.', 400, 'rateTechnician');
+    }
+
     const technician = await Technician.findById(booking.technicianId);
     if (!technician) {
       return handleControllerError(res, new Error('Technician not found'), 'Technician not found.', 404, 'rateTechnician');
@@ -908,6 +933,18 @@ exports.rateTechnician = async (req, res) => {
     if (review) booking.clientReview = review.trim();
     booking.status = 'completed';
     booking.completedAt = new Date();
+    if (laborAmountConfirmed === true) {
+      booking.commission.clientConfirmedLabor = true;
+    } else if (clientCorrection !== null) {
+      booking.commission.clientConfirmedLabor = false;
+      booking.commission.clientReportedLabor = clientCorrection;
+      if (clientCorrection !== booking.laborPayment?.amount) {
+        booking.commission.flagged = true;
+        if (!booking.commission.flagReasons.includes('client_disputes_amount')) {
+          booking.commission.flagReasons.push('client_disputes_amount');
+        }
+      }
+    }
     await booking.save();
 
     technician.reviews.push({

@@ -93,6 +93,11 @@ exports.list = async (req, res) => {
       filter['commission.status'] = req.query.status;
     }
 
+    // Reported labor far below the quote, or disputed by the client
+    if (req.query.flagged === 'true') {
+      filter['commission.flagged'] = true;
+    }
+
     // Period filter — commission created within the window
     if (period !== 'all') {
       const { start, end } = buildCommissionPeriod(period);

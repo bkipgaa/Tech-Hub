@@ -44,6 +44,7 @@ import {
   Ban,
 } from 'lucide-react';
 import api from '../services/api';
+import BookingBenefits from '../components/technician/BookingBenefits';
 
 // ============================================================
 // HELPER COMPONENTS
@@ -490,6 +491,11 @@ const TechnicianBookings = () => {
               <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
           </div>
+        </div>
+
+        {/* ─── WHY USE BOOKINGS ───────────────────────────────── */}
+        <div className="mb-6">
+          <BookingBenefits />
         </div>
 
         {/* ─── ERROR BANNER ───────────────────────────────────── */}

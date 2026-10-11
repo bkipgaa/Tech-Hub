@@ -93,7 +93,9 @@ export default function Commissions() {
           adminCommissionService.list({
             page,
             limit: 20,
-            status: statusFilter,
+            ...(statusFilter === 'flagged'
+              ? { status: 'all', flagged: 'true' }
+              : { status: statusFilter }),
             period,
           }),
           adminCommissionService.stats({ period }),
@@ -323,6 +325,7 @@ export default function Commissions() {
             <option value="invoiced">Invoiced</option>
             <option value="paid">Paid</option>
             <option value="waived">Waived</option>
+            <option value="flagged">⚠ Flagged for review</option>
           </select>
         </div>
 
@@ -446,6 +449,16 @@ export default function Commissions() {
                         >
                           {b.commission?.status || 'pending'}
                         </span>
+                        {b.commission?.flagged && (
+                          <div className="mt-1 text-[10px] text-amber-700 leading-tight">
+                            {b.commission.flagReasons?.includes('below_quote') && (
+                              <p>⚠ Below quote ({KES(b.commission.quotedLabor)})</p>
+                            )}
+                            {b.commission.flagReasons?.includes('client_disputes_amount') && (
+                              <p>⚠ Client says {KES(b.commission.clientReportedLabor)}</p>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       {/* Actions */}
