@@ -521,7 +521,7 @@ const MyBookings = () => {
   const getTechnicianName = (booking) => {
     if (!booking?.technicianId) return 'Technician';
     const tech = booking.technicianId;
-    if (tech.businessName) return tech.businessName;
+    if (tech.businessName?.trim()) return tech.businessName.trim();
     if (tech.userId?.firstName) {
       return `${tech.userId.firstName} ${tech.userId.lastName || ''}`.trim();
     }

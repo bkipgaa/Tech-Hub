@@ -384,10 +384,11 @@ const BookingDetails = () => {
   const getTechnicianName = (booking) => {
     if (!booking?.technicianId) return 'Technician';
     const tech = booking.technicianId;
-    if (tech.businessName) return tech.businessName;
+    // Person's name first (business name is shown underneath)
     if (tech.userId?.firstName) {
       return `${tech.userId.firstName} ${tech.userId.lastName || ''}`.trim();
     }
+    if (tech.businessName?.trim()) return tech.businessName.trim();
     return 'Technician';
   };
 
@@ -938,6 +939,14 @@ const BookingDetails = () => {
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Booking Details</h1>
               <p className="text-sm text-gray-500 mt-0.5">#{booking._id?.slice(-8).toUpperCase()}</p>
+              {/* Whose side of the booking you're on — matters when both people are technicians */}
+              {(isClient || isTechnician) && (
+                <p className="text-sm mt-1 font-medium text-green-700">
+                  {isClient
+                    ? `You booked this service from ${getTechnicianName(booking)}`
+                    : `${getClientName(booking)} booked you for this job`}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -1177,14 +1186,21 @@ const BookingDetails = () => {
               <h2 className="text-lg font-semibold text-gray-800 mb-4">👤 People</h2>
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">Client</p>
-                  <p className="font-medium text-gray-800">{getClientName(booking)}</p>
+                  <p className="text-sm text-gray-500">Client (requested the service)</p>
+                  <p className="font-medium text-gray-800 flex items-center gap-2">
+                    {getClientName(booking)}
+                    {isClient && <span className="text-[10px] font-semibold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded">You</span>}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Technician</p>
-                  <p className="font-medium text-gray-800">{getTechnicianName(booking)}</p>
-                  {booking.technicianId?.businessName && (
-                    <p className="text-xs text-gray-400">{booking.technicianId.businessName}</p>
+                  <p className="text-sm text-gray-500">Technician (doing the work)</p>
+                  <p className="font-medium text-gray-800 flex items-center gap-2">
+                    {getTechnicianName(booking)}
+                    {isTechnician && <span className="text-[10px] font-semibold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded">You</span>}
+                  </p>
+                  {booking.technicianId?.businessName?.trim() &&
+                    booking.technicianId.businessName.trim() !== getTechnicianName(booking) && (
+                    <p className="text-xs text-gray-400">{booking.technicianId.businessName.trim()}</p>
                   )}
                 </div>
               </div>
