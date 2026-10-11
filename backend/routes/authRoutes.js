@@ -42,12 +42,13 @@ const {
 
 const { validateRegistration, validateLogin } = require('../middleware/validation');
 const { auth } = require('../middleware/auth');
+const { loginLimiter, registerLimiter, passwordResetLimiter } = require('../middleware/rateLimiters');
 
 // ==================== PUBLIC ROUTES ====================
-router.post('/register', validateRegistration, register);
-router.post('/login', validateLogin, login);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password/:token', resetPassword);
+router.post('/register', registerLimiter, validateRegistration, register);
+router.post('/login', loginLimiter, validateLogin, login);
+router.post('/forgot-password', passwordResetLimiter, forgotPassword);
+router.post('/reset-password/:token', passwordResetLimiter, resetPassword);
 
 // ============ PROTECTED ROUTES (any authenticated user) ============
 router.get('/profile', auth, getProfile);

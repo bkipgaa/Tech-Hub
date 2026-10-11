@@ -54,7 +54,7 @@ const adminAuth = async (req, res, next) => {
     // ── 2. Verify JWT signature & expiry ───────────────────
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
     } catch (err) {
       if (err.name === 'TokenExpiredError') {
         return res.status(401).json({
@@ -260,7 +260,7 @@ const optionalAdminAuth = async (req, res, next) => {
     }
 
     const token = authHeader.replace('Bearer ', '').trim();
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
 
     if (!decoded.isAdmin || !decoded.adminId) {
       return next(); // not an admin token — continue as guest

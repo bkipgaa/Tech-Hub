@@ -8,10 +8,11 @@
 const express = require('express');
 const router = express.Router();
 const { adminAuth } = require('../../middleware/AdminAuth');
+const { adminLoginLimiter } = require('../../middleware/rateLimiters');
 const adminAuthController = require('../../controllers/admin/adminAuthController');
 
 // ── Public ──────────────────────────────────────────────────
-router.post('/login', adminAuthController.login);
+router.post('/login', adminLoginLimiter, adminAuthController.login);
 
 // ── Authenticated ───────────────────────────────────────────
 router.post('/logout',            adminAuth, adminAuthController.logout);

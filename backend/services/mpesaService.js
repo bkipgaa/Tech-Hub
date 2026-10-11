@@ -245,4 +245,31 @@ const queryStatus = async (checkoutRequestID) => {
   }
 };
 
-module.exports = { getAccessToken, stkPush, queryStatus };
+/**
+ * Re-confirm an STK push result directly with Safaricom.
+ * Callbacks are unauthenticated POSTs, so their ResultCode must never be
+ * trusted on its own — only what the STK query API returns.
+ *
+ * Returns { confirmed: true, resultCode, resultDesc } when Safaricom answered,
+ * or { confirmed: false } when the query failed (status unknown).
+ */
+const confirmPayment = async (checkoutRequestID, { attempts = 2, delayMs = 2000 } = {}) => {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const data = await queryStatus(checkoutRequestID);
+      if (data && data.ResultCode !== undefined && data.ResultCode !== null) {
+        return {
+          confirmed: true,
+          resultCode: String(data.ResultCode),
+          resultDesc: data.ResultDesc,
+        };
+      }
+    } catch (err) {
+      // queryStatus already logged the details
+    }
+    if (i < attempts) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return { confirmed: false };
+};
+
+module.exports = { getAccessToken, stkPush, queryStatus, confirmPayment };

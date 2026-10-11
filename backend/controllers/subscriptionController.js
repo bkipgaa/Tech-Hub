@@ -423,13 +423,16 @@ exports.mpesaCallback = async (req, res) => {
 
     const {
       CheckoutRequestID,
-      ResultCode,
-      ResultDesc,
-      MerchantRequestID,
+      ResultCode: callbackResultCode,
       CallbackMetadata
     } = Body.stkCallback;
 
-    console.log(`M-Pesa callback: ${CheckoutRequestID}, ResultCode: ${ResultCode}`);
+    // Must be a plain string — an object here would be a query operator
+    if (typeof CheckoutRequestID !== 'string' || !CheckoutRequestID) {
+      return res.status(400).send('Invalid payload');
+    }
+
+    console.log(`M-Pesa callback: ${CheckoutRequestID}, ResultCode: ${callbackResultCode}`);
 
     const technician = await Technician.findOne({
       'paymentPending.checkoutRequestID': CheckoutRequestID,
@@ -449,18 +452,44 @@ exports.mpesaCallback = async (req, res) => {
       return res.sendStatus(200);
     }
 
-    if (ResultCode === 0) {
-      let amount = 0;
-      if (CallbackMetadata && CallbackMetadata.Item) {
-        const amountItem = CallbackMetadata.Item.find((item) => item.Name === 'Amount');
-        if (amountItem) amount = amountItem.Value;
-      }
+    // The callback is an unauthenticated POST — confirm the result with Safaricom
+    const confirmation = await mpesaService.confirmPayment(CheckoutRequestID);
+    if (!confirmation.confirmed) {
+      // Leave it pending; the authenticated status poll will retry the query.
+      console.warn(`Could not confirm M-Pesa result for ${CheckoutRequestID} with Safaricom`);
+      return res.sendStatus(200);
+    }
+    const ResultCode = confirmation.resultCode;
+    const ResultDesc = confirmation.resultDesc;
 
+    if (String(callbackResultCode) !== ResultCode) {
+      console.warn(
+        `M-Pesa callback ResultCode ${callbackResultCode} does not match Safaricom (${ResultCode}) for ${CheckoutRequestID}`
+      );
+    }
+
+    if (ResultCode === '0') {
       const { planId } = technician.paymentPending;
       const plan = subscriptionPlans[planId];
       if (!plan) {
         console.error(`Invalid plan ID: ${planId}`);
         return res.status(400).send('Invalid plan');
+      }
+
+      let amount = null;
+      if (CallbackMetadata && Array.isArray(CallbackMetadata.Item)) {
+        const amountItem = CallbackMetadata.Item.find((item) => item.Name === 'Amount');
+        if (amountItem) amount = Number(amountItem.Value);
+      }
+
+      // Amount check (allow small rounding tolerance)
+      const expected = technician.paymentPending.amount || plan.price;
+      if (!Number.isFinite(amount) || amount < plan.price || Math.abs(amount - expected) > 1) {
+        console.error(
+          `⚠️ Amount mismatch for ${CheckoutRequestID}: paid ${amount}, expected ${expected}`
+        );
+        // Do not upgrade — log for manual review
+        return res.sendStatus(200);
       }
 
       const endDate = new Date();
@@ -484,7 +513,7 @@ exports.mpesaCallback = async (req, res) => {
         paymentHistory: [
           ...(technician.subscription?.paymentHistory || []),
           {
-            amount: amount || plan.price,
+            amount,
             date: new Date(),
             transactionId: CheckoutRequestID,
             status: 'success',
@@ -506,7 +535,7 @@ exports.mpesaCallback = async (req, res) => {
             technicianEmail: techUser.email,
             technicianName: `${techUser.firstName} ${techUser.lastName}`.trim(),
             planName: plan.name,
-            amount: amount || plan.price,
+            amount,
             endDate: endDate.toLocaleDateString('en-KE', {
               day: 'numeric', month: 'long', year: 'numeric',
             }),
