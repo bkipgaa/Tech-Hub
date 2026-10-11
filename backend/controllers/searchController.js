@@ -260,8 +260,17 @@ exports.searchTechnicians = async (req, res) => {
       );
     }
 
-    // 3. Validate coordinates if provided
-    if (lat && lng && (isNaN(parseFloat(lat)) || isNaN(parseFloat(lng)))) {
+    // 3. Client location is required — results are limited to technicians near them
+    if (!lat || !lng) {
+      return handleControllerError(
+        res,
+        new Error('Location required'),
+        'Please share your location to search for technicians near you.',
+        400,
+        'searchTechnicians'
+      );
+    }
+    if (isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
       return handleControllerError(
         res,
         new Error('Invalid coordinates'),
@@ -532,6 +541,16 @@ exports.getTechniciansBySubService = async (req, res) => {
         res,
         new Error('subService is required'),
         'subService parameter is required.',
+        400,
+        'getTechniciansBySubService'
+      );
+    }
+
+    if (!lat || !lng || isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
+      return handleControllerError(
+        res,
+        new Error('Location required'),
+        'Please share your location to search for technicians near you.',
         400,
         'getTechniciansBySubService'
       );

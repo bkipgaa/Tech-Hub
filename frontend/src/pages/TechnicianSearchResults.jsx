@@ -23,7 +23,7 @@ import api from '../services/api';
 
 const TechnicianSearchResults = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Read params from URL
   const mainCategory = searchParams.get('mainCategory') || '';
@@ -38,18 +38,46 @@ const TechnicianSearchResults = () => {
   const [error, setError] = useState('');
   const [sortBy, setSortBy] = useState('recommended'); // recommended | distance | rating | price | experience
 
-  // Fetch technicians on mount
+  // Fetch technicians on mount — location is required, so ask for it first
+  // when the link didn't include it
   useEffect(() => {
     if (!mainCategory || !serviceCategory || !subService) {
       setError('Invalid search parameters.');
       setLoading(false);
       return;
     }
+    if (!lat || !lng) {
+      requestLocation();
+      return;
+    }
     fetchTechnicians();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [lat, lng]);
+
+  const requestLocation = () => {
+    const required = 'Please allow location access. We need your location to show technicians near you.';
+    if (!navigator.geolocation) {
+      setError(required);
+      setLoading(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const next = new URLSearchParams(searchParams);
+        next.set('lat', pos.coords.latitude);
+        next.set('lng', pos.coords.longitude);
+        setSearchParams(next, { replace: true }); // re-runs the effect above
+      },
+      () => {
+        setError(required);
+        setLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
 
   const fetchTechnicians = async () => {
+    if (!lat || !lng) return;
     setLoading(true);
     setError('');
 
@@ -59,8 +87,8 @@ const TechnicianSearchResults = () => {
         serviceCategory,
         subService,
         radius,
-        ...(lat && { lat }),
-        ...(lng && { lng }),
+        lat,
+        lng,
         sortBy,
         // Nearest / cheapest first; everything else highest first
         sortOrder: sortBy === 'price' || sortBy === 'distance' ? 'asc' : 'desc',
