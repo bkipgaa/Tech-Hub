@@ -252,10 +252,11 @@ const SearchPage = () => {
           default:
             errorMessage += 'Please check your location settings.';
         }
-        setSearchError(errorMessage);
+        // Location is required to search — don't fall back to a search without it
+        setSearchError(`${errorMessage} Your location is needed to show technicians near you.`);
         setGettingLocation(false);
-        performSearch();
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   };
 
@@ -263,6 +264,11 @@ const SearchPage = () => {
   // SEARCH FUNCTION
   // ============================================================
   const performSearch = async (lat, lng) => {
+    // Location is required: ask for it, and search once we have it
+    if (!(lat && lng) && !userLocation) {
+      getCurrentLocation();
+      return;
+    }
     setLoading(true);
     setSearchError('');
 
@@ -350,8 +356,6 @@ const SearchPage = () => {
     setSubServices([]);
     if (userLocation) {
       performSearch(userLocation.lat, userLocation.lng);
-    } else {
-      performSearch();
     }
   };
 

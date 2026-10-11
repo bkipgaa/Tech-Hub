@@ -160,8 +160,8 @@ exports.getJobDetails = async (req, res) => {
 
     // Let Mongoose handle validation - just try to find
     const job = await Job.findById(jobId)
-      .populate('clientId', 'firstName lastName email phone profileImage')
-      .populate('hiredTechnicianId', 'firstName lastName phone profileImage');
+      .populate('clientId', 'firstName lastName profileImage')
+      .populate('hiredTechnicianId', 'firstName lastName profileImage');
 
     if (!job) {
       return res.status(404).json({
@@ -440,7 +440,7 @@ exports.getMyJobs = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('hiredTechnicianId', 'firstName lastName email phone profileImage');
+      .populate('hiredTechnicianId', 'firstName lastName profileImage');
 
     res.json({
       success: true,
@@ -663,8 +663,8 @@ exports.getAllJobsAdmin = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('clientId', 'firstName lastName email phone')
-      .populate('hiredTechnicianId', 'firstName lastName email phone');
+      .populate('clientId', 'firstName lastName')
+      .populate('hiredTechnicianId', 'firstName lastName');
 
     res.json({
       success: true,
@@ -705,7 +705,7 @@ exports.getPendingJobs = async (req, res) => {
       .sort({ createdAt: 1 }) // Oldest first
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('clientId', 'firstName lastName email phone profileImage')
+      .populate('clientId', 'firstName lastName profileImage')
       .select('-__v');
 
     res.json({

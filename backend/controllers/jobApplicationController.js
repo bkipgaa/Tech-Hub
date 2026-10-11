@@ -107,8 +107,6 @@ exports.applyForJob = async (req, res) => {
       
       // Denormalized technician information
       technicianName: `${technician.firstName} ${technician.lastName}`,
-      technicianEmail: technician.email,
-      technicianPhone: technician.phone || '',
       technicianProfileImage: technician.profileImage || '',
       technicianRating: technician.rating || 0,
       technicianCompletedJobs: technician.completedJobs || 0,
@@ -309,7 +307,7 @@ exports.getApplicationsForMyJobs = async (req, res) => {
 
     const applications = await JobApplication.find(query)
       .populate('jobId', 'title budget location status')
-      .populate('technicianId', 'firstName lastName email phone profileImage rating')
+      .populate('technicianId', 'firstName lastName profileImage rating')
       .sort({ appliedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -585,7 +583,7 @@ exports.getApplicationDetails = async (req, res) => {
 
     const application = await JobApplication.findById(applicationId)
       .populate('jobId')
-      .populate('technicianId', 'firstName lastName email phone profileImage rating bio skills yearsOfExperience');
+      .populate('technicianId', 'firstName lastName profileImage rating bio skills yearsOfExperience');
 
     if (!application) {
       return res.status(404).json({

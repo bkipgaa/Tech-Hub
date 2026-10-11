@@ -58,6 +58,9 @@ exports.technicianClientRated = (data) =>
 exports.technicianCommissionDue = (data) =>
   dispatch(data.technicianEmail, templates.technicianCommissionDue, data, 'technician_commission_due');
 
+exports.technicianCommissionReminder = (data) =>
+  dispatch(data.technicianEmail, templates.technicianCommissionReminder, data, `technician_commission_${data.stage}`);
+
 // ─────────────────────────────────────────────────────────────
 // CLIENT NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────

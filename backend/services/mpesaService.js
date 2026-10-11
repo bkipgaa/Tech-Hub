@@ -23,9 +23,9 @@ const getBaseUrl = () => {
  *   - Publicly reachable
  * 
  * Resolution order:
- *   1. Explicit override argument
- *   2. MPESA_CALLBACK_URL env var
- *   3. BACKEND_URL + default path
+ *   1. Explicit override argument (full URL)
+ *   2. MPESA_CALLBACK_URL env var (its origin + override path, if one is given)
+ *   3. BACKEND_URL + override path or default path
  */
 const buildCallbackUrl = (overridePath) => {
   // 1. Explicit full URL
@@ -33,10 +33,12 @@ const buildCallbackUrl = (overridePath) => {
     return overridePath.replace(/\/+$/, ''); // strip trailing slashes
   }
 
-  // 2. Env var
+  // 2. Env var — a relative override path is joined onto its origin, so
+  //    commission and subscription callbacks reach their own handlers
   if (process.env.MPESA_CALLBACK_URL) {
     const url = process.env.MPESA_CALLBACK_URL.trim().replace(/\/+$/, '');
-    return url;
+    if (!overridePath) return url;
+    return `${new URL(url).origin}${overridePath}`;
   }
 
   // 3. BACKEND_URL + default path

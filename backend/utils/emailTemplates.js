@@ -219,6 +219,46 @@ exports.technicianCommissionDue = (data) => ({
   ),
 });
 
+// stage: 'due_7' | 'due_1' | 'overdue' | 'hide_7'
+exports.technicianCommissionReminder = (data) => {
+  const lines = {
+    due_7: {
+      subject: `⏰ Commission of KES ${data.amount} due in 7 days`,
+      title: 'Commission due in 7 days',
+      body: `<p>Your commission of <strong>KES ${data.amount}</strong> is due on <strong>${data.dueDate}</strong>.</p>
+             <p>If it isn't paid by then, you won't be able to receive new bookings until it is.</p>`,
+    },
+    due_1: {
+      subject: `⏰ Commission of KES ${data.amount} due tomorrow`,
+      title: 'Commission due tomorrow',
+      body: `<p>Your commission of <strong>KES ${data.amount}</strong> is due on <strong>${data.dueDate}</strong>.</p>
+             <p>Pay now to keep receiving new bookings.</p>`,
+    },
+    overdue: {
+      subject: `⚠️ Commission overdue — new bookings paused`,
+      title: 'New bookings are paused',
+      body: `<p>Your commission of <strong>KES ${data.amount}</strong> was due on <strong>${data.dueDate}</strong> and hasn't been paid.</p>
+             <p>Clients can't book you until it's paid. If it's still unpaid on <strong>${data.hideDate}</strong>, your profile will be hidden from search.</p>`,
+    },
+    hide_7: {
+      subject: `⚠️ Your profile will be hidden from search in 7 days`,
+      title: 'Your profile will be hidden in 7 days',
+      body: `<p>Your commission of <strong>KES ${data.amount}</strong> is still unpaid.</p>
+             <p>On <strong>${data.hideDate}</strong> your profile will be hidden from search. Pay now to stay visible and start receiving bookings again.</p>`,
+    },
+  }[data.stage];
+
+  return {
+    subject: lines.subject,
+    html: layout(
+      lines.title,
+      `<p>Hi <strong>${data.technicianName}</strong>,</p>${lines.body}`,
+      `${BRAND.url}/technician-dashboard/commissions`,
+      'Pay Commission'
+    ),
+  };
+};
+
 // ─────────────────────────────────────────────────────────────
 // CLIENT NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────

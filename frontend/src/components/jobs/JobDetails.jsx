@@ -27,7 +27,6 @@ const JobDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [showContact, setShowContact] = useState(false);
 
   /**
    * Fetch job details on component mount or when jobId changes
@@ -210,25 +209,15 @@ const JobDetails = () => {
                     Apply for This Job
                   </button>
                 )}
-                
-                <button
-                  onClick={() => setShowContact(!showContact)}
-                  className="w-full border border-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-50 transition"
-                >
-                  {showContact ? 'Hide Contact Info' : 'Show Contact Info'}
-                </button>
               </div>
 
-              {/* Contact Information (Conditional) */}
-              {showContact && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">Client Contact Information</h3>
-                  <p className="text-sm mb-1">📞 Phone: {job.phone}</p>
-                  <p className="text-sm mb-1">✉️ Email: {job.email}</p>
-                  <p className="text-sm">👤 Name: {job.clientName}</p>
-                  {job.companyName && <p className="text-sm">🏢 Company: {job.companyName}</p>}
-                </div>
-              )}
+              {/* Contact details are only shared through chat */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-800 mb-1">Client</h3>
+                <p className="text-sm">👤 {job.clientName}</p>
+                {job.companyName && <p className="text-sm">🏢 {job.companyName}</p>}
+                <p className="text-xs text-gray-500 mt-2">Contact details are shared through chat.</p>
+              </div>
             </div>
           </div>
         </div>

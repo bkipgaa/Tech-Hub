@@ -70,6 +70,7 @@ exports.initializeCommissionPayment = async (req, res) => {
     const bookings = await Booking.find({
       technicianId: technician._id,
       'commission.status': { $in: ['pending', 'invoiced'] },
+      'commission.amount': { $gt: 0 },   // every booking starts with a zero commission
     });
 
     if (!bookings.length) {
@@ -166,7 +167,8 @@ exports.initializeCommissionPayment = async (req, res) => {
         cleaned,
         totalKES,
         accountRef,
-        description
+        description,
+        '/api/payments/mpesa-callback'
       );
 
       if (!stkResponse?.CheckoutRequestID) {
@@ -180,6 +182,7 @@ exports.initializeCommissionPayment = async (req, res) => {
           $set: {
             'commission.mpesaCheckoutRequestID': stkResponse.CheckoutRequestID,
             'commission.mpesaPhone': cleaned,
+            'commission.mpesaAmount': totalKES,
             'commission.mpesaInitiatedAt': new Date(),
           },
         }
@@ -303,42 +306,14 @@ exports.mpesaCallback = async (req, res) => {
     }
 
     // ── Success branch ──────────────────────────────────────
-    let paidAmount = null;
-    if (Array.isArray(CallbackMetadata?.Item)) {
-      const amountItem = CallbackMetadata.Item.find((i) => i.Name === 'Amount');
-      if (amountItem) paidAmount = Number(amountItem.Value);
-    }
+    const items = Array.isArray(CallbackMetadata?.Item) ? CallbackMetadata.Item : [];
+    const amountItem = items.find((i) => i.Name === 'Amount');
 
-    const expectedKES = unpaid.reduce(
-      (sum, b) => sum + (b.commission?.amount || 0),
-      0
-    );
-
-    // Sanity check on amount (allow small rounding tolerance)
-    if (!Number.isFinite(paidAmount) || Math.abs(paidAmount - expectedKES) > 1) {
-      console.error(
-        `⚠️ Amount mismatch for ${CheckoutRequestID}: paid ${paidAmount}, expected ${expectedKES}`
-      );
-      // Do not mark paid — log for manual review
-      return res.sendStatus(200);
-    }
-
-    // Mark as paid
-    await Booking.updateMany(
-      { _id: { $in: unpaid.map((b) => b._id) } },
-      {
-        $set: {
-          'commission.status': 'paid',
-          'commission.paidAt': new Date(),
-          'commission.paymentMethod': 'mpesa',
-          'commission.mpesaReceiptNumber': CallbackMetadata.Item.find(
-            (i) => i.Name === 'MpesaReceiptNumber'
-          )?.Value || null,
-        },
-      }
-    );
-
-    console.log(`✅ Marked ${unpaid.length} commissions paid via M-Pesa for ${CheckoutRequestID}`);
+    await markMpesaCommissionsPaid(unpaid, CheckoutRequestID, {
+      paidAmount: amountItem ? Number(amountItem.Value) : null,
+      receiptNumber: items.find((i) => i.Name === 'MpesaReceiptNumber')?.Value || null,
+      source: 'callback',
+    });
     res.sendStatus(200);
   } catch (error) {
     console.error('❌ Error processing M-Pesa callback:', error);
@@ -357,9 +332,17 @@ exports.mpesaStatus = async (req, res) => {
     }
 
     // First check our own DB — has the callback marked them paid?
+    // Must be a plain string — an object here would be a query operator
+    if (typeof checkoutRequestID !== 'string') {
+      return res.status(400).json({ success: false, message: 'Invalid checkoutRequestID' });
+    }
+
+    // Only the caller's own bookings — the fallback below can mark them paid
+    const technician = await getTechnicianId(req.user.userId || req.user.id || req.user._id);
     const bookings = await Booking.find({
+      technicianId: technician._id,
       'commission.mpesaCheckoutRequestID': checkoutRequestID,
-    }).select('commission.status commission.mpesaFailureReason');
+    }).select('commission');
 
     if (!bookings.length) {
       return res.status(404).json({
@@ -392,14 +375,29 @@ exports.mpesaStatus = async (req, res) => {
     // Otherwise query Safaricom directly as a fallback
     try {
       const statusData = await mpesaService.queryStatus(checkoutRequestID);
-      const resultCode = statusData.ResultCode;
+      const resultCode =
+        statusData.ResultCode === undefined || statusData.ResultCode === null
+          ? statusData.ResultCode
+          : String(statusData.ResultCode);
 
       let status = 'pending';
       let message = 'Payment still being processed';
 
       if (resultCode === '0') {
-        status = 'success';
-        message = 'Payment successful';
+        // Callback hasn't landed (or was lost) — Safaricom's own answer is
+        // authoritative, and the STK push was for the amount we stamped
+        const unpaid = bookings.filter((b) => b.commission?.status !== 'paid');
+        const result = await markMpesaCommissionsPaid(unpaid, checkoutRequestID, {
+          paidAmount: unpaid[0]?.commission?.mpesaAmount,
+          source: 'status-poll',
+        });
+        if (result.amountMismatch) {
+          status = 'pending';
+          message = 'Payment received — awaiting manual review.';
+        } else {
+          status = 'success';
+          message = 'Payment successful';
+        }
       } else if (resultCode === '1032') {
         status = 'failed';
         message = 'Transaction cancelled by user';
@@ -425,6 +423,53 @@ exports.mpesaStatus = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ─────────────────────────────────────────────────────────────
+// SHARED: mark an M-Pesa batch as paid (idempotent) — used by the callback
+// and the status-poll fallback. Callers must already have confirmed the
+// result with Safaricom.
+// ─────────────────────────────────────────────────────────────
+async function markMpesaCommissionsPaid(
+  bookings,
+  checkoutRequestID,
+  { paidAmount, receiptNumber = null, source }
+) {
+  const unpaid = bookings.filter((b) => b.commission?.status !== 'paid');
+  if (!unpaid.length) {
+    console.log(`[mpesa ${source}] ${checkoutRequestID} already processed.`);
+    return { updated: 0, alreadyProcessed: true };
+  }
+
+  const expectedKES = unpaid.reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
+
+  // Sanity check on amount (allow small rounding tolerance)
+  if (!Number.isFinite(paidAmount) || Math.abs(paidAmount - expectedKES) > 1) {
+    console.error(
+      `[mpesa ${source}] ⚠️ Amount mismatch for ${checkoutRequestID}: paid ${paidAmount}, expected ${expectedKES}`
+    );
+    // Do not mark paid — log for manual review
+    return { updated: 0, amountMismatch: true };
+  }
+
+  // Filter on status too, so a callback and a poll racing each other
+  // can't both apply the update
+  const result = await Booking.updateMany(
+    { _id: { $in: unpaid.map((b) => b._id) }, 'commission.status': { $ne: 'paid' } },
+    {
+      $set: {
+        'commission.status': 'paid',
+        'commission.paidAt': new Date(),
+        'commission.paymentMethod': 'mpesa',
+        'commission.mpesaReceiptNumber': receiptNumber,
+      },
+    }
+  );
+
+  console.log(
+    `[mpesa ${source}] ✅ Marked ${result.modifiedCount} commissions paid for ${checkoutRequestID}`
+  );
+  return { updated: result.modifiedCount };
+}
 
 // ─────────────────────────────────────────────────────────────
 // SHARED: mark batch as paid (idempotent) — used by Paystack webhook

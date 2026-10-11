@@ -1,34 +1,49 @@
 /**
  * TechnicianCommission.jsx
  * =========================
- * Page for technicians to view and pay pending/invoiced commissions via Paystack.
+ * Page for technicians to view and pay their booking commissions.
  *
  * Flow:
- *   1. Load commissions (GET /api/bookings/commissions) — includes pending + invoiced
- *   2. Technician clicks "Pay with Card"
- *   3. POST /api/payments/commissions/initialize → returns authorization_url
- *   4. Redirect to Paystack hosted checkout
- *   5. Paystack redirects back to /payment-callback?type=commission&reference=...
- *   6. Callback page verifies via GET /api/payments/commissions/verify
- *   7. Webhook also fires (idempotent) and marks bookings paid
+ *   1. Load commissions (GET /api/bookings/commissions) — pending + invoiced,
+ *      with due dates (30 days after the work) and overdue status
+ *   2. Technician clicks "Pay Commission" and picks M-Pesa or Card
+ *   3. POST /api/payments/commissions/initialize
+ *        M-Pesa → STK prompt on the phone; poll
+ *                 GET /api/payments/commissions/mpesa-status until paid/failed
+ *        Card   → redirect to Paystack; /payment-callback verifies on return
  *
- * @version 3.1.0 – Shows pending + invoiced with breakdown
+ * Overdue commissions pause new bookings; 60 days after the due date the
+ * technician is hidden from search.
+ *
+ * @version 4.0.0 – M-Pesa STK push, due dates, overdue warnings
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
+  AlertTriangle,
   Loader2,
   CreditCard,
   ArrowLeft,
   ShieldCheck,
+  Smartphone,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import api from '../services/api';
 
+const POLL_INTERVAL_MS = 4000;
+const POLL_TIMEOUT_MS = 2 * 60 * 1000;
+
+const formatDate = (value) =>
+  value
+    ? new Date(value).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '—';
+
 // ─── STATUS BADGE COMPONENT ─────────────────────────────────
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, overdue }) => {
   const config = {
     pending: {
       label: 'Pending',
@@ -42,8 +57,12 @@ const StatusBadge = ({ status }) => {
       label: 'Paid',
       className: 'bg-green-100 text-green-800 border-green-200',
     },
+    overdue: {
+      label: 'Overdue',
+      className: 'bg-red-100 text-red-800 border-red-200',
+    },
   };
-  const { label, className } = config[status] || config.pending;
+  const { label, className } = config[overdue ? 'overdue' : status] || config.pending;
   return (
     <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium border ${className}`}>
       {label}
@@ -60,7 +79,14 @@ const TechnicianCommission = () => {
   const [error, setError] = useState('');
   const [commissionsData, setCommissionsData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [method, setMethod] = useState('mpesa'); // 'mpesa' | 'card'
+  const [phone, setPhone] = useState(user?.phone || '');
+  // M-Pesa progress: null | 'waiting' | 'success' | 'failed'
+  const [mpesaStage, setMpesaStage] = useState(null);
+  const [mpesaMessage, setMpesaMessage] = useState('');
+  const [checkoutRequestID, setCheckoutRequestID] = useState(null);
+  const pollStartedAt = useRef(null);
 
   // ─── FETCH COMMISSIONS ──────────────────────────────────────
   const fetchCommissions = async () => {
@@ -93,20 +119,72 @@ const TechnicianCommission = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── INITIATE PAYSTACK PAYMENT ─────────────────────────────
-  const handlePayWithCard = async () => {
+  // ─── POLL M-PESA STATUS ────────────────────────────────────
+  useEffect(() => {
+    if (mpesaStage !== 'waiting' || !checkoutRequestID) return undefined;
+
+    const timer = setInterval(async () => {
+      if (Date.now() - pollStartedAt.current > POLL_TIMEOUT_MS) {
+        clearInterval(timer);
+        setMpesaStage('failed');
+        setMpesaMessage(
+          "We didn't get a confirmation in time. If you completed the payment, refresh this page in a minute."
+        );
+        return;
+      }
+      try {
+        const response = await api.get('/payments/commissions/mpesa-status', {
+          params: { checkoutRequestID },
+        });
+        const { status, message } = response.data?.data || {};
+        if (status === 'success') {
+          clearInterval(timer);
+          setMpesaStage('success');
+          setMpesaMessage(message || 'Payment received. Thank you!');
+          fetchCommissions();
+        } else if (status === 'failed') {
+          clearInterval(timer);
+          setMpesaStage('failed');
+          setMpesaMessage(message || 'Payment failed. Please try again.');
+        }
+      } catch (err) {
+        // Network blip — keep polling until the timeout
+        console.warn('M-Pesa status poll error:', err.message);
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mpesaStage, checkoutRequestID]);
+
+  // ─── PAY ───────────────────────────────────────────────────
+  const handlePay = async () => {
     setSubmitting(true);
     setError('');
     try {
-      const response = await api.post('/payments/commissions/initialize', {});
-      const payload = response.data;
-
-      if (!payload?.success || !payload?.data?.authorization_url) {
-        throw new Error(
-          payload?.message || 'Could not start payment. Please try again.'
-        );
+      if (method === 'mpesa') {
+        if (!phone.trim()) throw new Error('Enter your M-Pesa phone number.');
+        const response = await api.post('/payments/commissions/initialize', {
+          paymentMethod: 'mpesa',
+          phoneNumber: phone.trim(),
+        });
+        const payload = response.data;
+        if (!payload?.success || !payload?.data?.checkoutRequestID) {
+          throw new Error(payload?.message || 'Could not send the M-Pesa prompt. Please try again.');
+        }
+        setCheckoutRequestID(payload.data.checkoutRequestID);
+        setMpesaMessage(payload.data.customerMessage || 'Check your phone and enter your M-Pesa PIN.');
+        pollStartedAt.current = Date.now();
+        setMpesaStage('waiting');
+        setSubmitting(false);
+        return;
       }
 
+      const response = await api.post('/payments/commissions/initialize', { paymentMethod: 'card' });
+      const payload = response.data;
+      if (!payload?.success || !payload?.data?.authorization_url) {
+        throw new Error(payload?.message || 'Could not start payment. Please try again.');
+      }
       window.location.href = payload.data.authorization_url;
     } catch (err) {
       console.error('Payment init error:', err);
@@ -119,8 +197,21 @@ const TechnicianCommission = () => {
     }
   };
 
+  const openPayModal = () => {
+    setError('');
+    setMpesaStage(null);
+    setMpesaMessage('');
+    setCheckoutRequestID(null);
+    setShowPayModal(true);
+  };
+
+  const closePayModal = () => {
+    if (submitting || mpesaStage === 'waiting') return;
+    setShowPayModal(false);
+  };
+
   // ─── RENDER: LOADING ───────────────────────────────────────
-  if (loading) {
+  if (loading && !commissionsData) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -155,14 +246,9 @@ const TechnicianCommission = () => {
   // ─── DERIVED VALUES ────────────────────────────────────────
   const { summary, commissions = [] } = commissionsData || {};
 
-  // New shape (post-update): totalDue / totalPending / totalInvoiced
-  // Fallback to old shape (totalPending) for backward compatibility
-  const totalDue      = summary?.totalDue      ?? summary?.totalPending ?? 0;
-  const totalPending  = summary?.totalPending  ?? summary?.totalPending ?? 0;
-  const totalInvoiced = summary?.totalInvoiced ?? 0;
-  const count         = summary?.count         || 0;
-
-  const hasInvoiced = totalInvoiced > 0;
+  const totalDue = summary?.totalDue ?? summary?.totalPending ?? 0;
+  const count = summary?.count || 0;
+  const canPay = count > 0 && totalDue > 0;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -181,6 +267,33 @@ const TechnicianCommission = () => {
           </h1>
         </div>
 
+        {/* ─── OVERDUE WARNING ────────────────────────────────── */}
+        {summary?.isOverdue && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              {summary.hiddenFromSearch ? (
+                <>
+                  <p className="font-semibold">Your profile is hidden from search.</p>
+                  <p className="mt-0.5">
+                    Your commission has been overdue since {formatDate(summary.earliestDue)}.
+                    Pay now to appear in search and receive bookings again.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold">New bookings are paused.</p>
+                  <p className="mt-0.5">
+                    Your commission was due on {formatDate(summary.earliestDue)}. Clients can't book you
+                    until it's paid. If it's still unpaid on {formatDate(summary.hiddenFromSearchAt)}, your
+                    profile will be hidden from search.
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ─── SUMMARY CARD ───────────────────────────────────── */}
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6 mb-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -193,52 +306,28 @@ const TechnicianCommission = () => {
               </p>
               <p className="text-sm text-green-600 mt-1">
                 {count} booking{count !== 1 ? 's' : ''}
-                {hasInvoiced && (
-                  <>
-                    {' '}·{' '}
-                    <span className="text-blue-700">
-                      KES {totalInvoiced.toLocaleString()} previously invoiced
-                    </span>
-                  </>
+                {summary?.earliestDue && !summary?.isOverdue && (
+                  <> · next due {formatDate(summary.earliestDue)}</>
                 )}
               </p>
             </div>
 
             <button
-              onClick={() => setShowConfirmModal(true)}
-              disabled={count === 0 || totalDue === 0}
+              onClick={openPayModal}
+              disabled={!canPay}
               className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors ${
-                count === 0 || totalDue === 0
+                !canPay
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-600 text-white hover:bg-green-700'
               }`}
             >
-              <CreditCard className="w-5 h-5" />
-              Pay with Card
+              <Smartphone className="w-5 h-5" />
+              Pay Commission
             </button>
           </div>
-
-          {/* ─── BREAKDOWN ROW (only if invoiced exists) ────── */}
-          {hasInvoiced && (
-            <div className="mt-4 pt-4 border-t border-green-200 grid grid-cols-2 gap-3">
-              <div className="bg-white/60 rounded-lg p-3">
-                <p className="text-[10px] uppercase tracking-wider text-yellow-700 font-semibold">
-                  Pending
-                </p>
-                <p className="text-lg font-bold text-yellow-800">
-                  KES {totalPending.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-white/60 rounded-lg p-3">
-                <p className="text-[10px] uppercase tracking-wider text-blue-700 font-semibold">
-                  Invoiced (submitted)
-                </p>
-                <p className="text-lg font-bold text-blue-800">
-                  KES {totalInvoiced.toLocaleString()}
-                </p>
-              </div>
-            </div>
-          )}
+          <p className="text-xs text-green-700 mt-3">
+            Commission is 5% of the labor amount you receive, payable within 30 days of completing the work.
+          </p>
         </div>
 
         {/* ─── BOOKINGS LIST ──────────────────────────────────── */}
@@ -257,10 +346,10 @@ const TechnicianCommission = () => {
                   <tr>
                     <th className="px-4 py-3 text-left">Booking</th>
                     <th className="px-4 py-3 text-left">Service</th>
-                    <th className="px-4 py-3 text-left">Labor Cost</th>
+                    <th className="px-4 py-3 text-left">Labor</th>
                     <th className="px-4 py-3 text-left">Commission (5%)</th>
                     <th className="px-4 py-3 text-left">Status</th>
-                    <th className="px-4 py-3 text-left">Date</th>
+                    <th className="px-4 py-3 text-left">Due</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -282,17 +371,10 @@ const TechnicianCommission = () => {
                         KES {booking.commissionAmount.toLocaleString()}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={booking.status} />
+                        <StatusBadge status={booking.status} overdue={booking.isOverdue} />
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {new Date(booking.createdAt).toLocaleDateString(
-                          'en-KE',
-                          {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          }
-                        )}
+                      <td className={`px-4 py-3 text-xs ${booking.isOverdue ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                        {formatDate(booking.dueAt)}
                       </td>
                     </tr>
                   ))}
@@ -314,91 +396,146 @@ const TechnicianCommission = () => {
         </div>
       </div>
 
-      {/* ─── CONFIRMATION MODAL ──────────────────────────────── */}
-      {showConfirmModal && (
+      {/* ─── PAY MODAL ───────────────────────────────────────── */}
+      {showPayModal && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => !submitting && setShowConfirmModal(false)}
+          onClick={closePayModal}
         >
           <div
             className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-xl font-bold text-gray-800 mb-4">
-              Pay Commissions
+              Pay KES {totalDue.toLocaleString()}
             </h3>
 
-            <p className="text-gray-600 mb-4">
-              You are about to pay{' '}
-              <strong>KES {totalDue.toLocaleString()}</strong> for{' '}
-              {count} commission{count !== 1 ? 's' : ''} using your card via
-              Paystack.
-            </p>
-
-            {/* Breakdown inside modal when invoiced exists */}
-            {hasInvoiced && (
-              <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Pending:</span>
-                  <span className="font-medium text-yellow-800">
-                    KES {totalPending.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Previously invoiced:</span>
-                  <span className="font-medium text-blue-800">
-                    KES {totalInvoiced.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-1 border-t border-gray-200 mt-1">
-                  <span className="text-gray-800 font-semibold">Total:</span>
-                  <span className="font-bold text-green-700">
-                    KES {totalDue.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-800 rounded-lg text-xs mb-4">
-              <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>
-                Payment is processed securely by Paystack. We never see or
-                store your card details.
-              </span>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                disabled={submitting}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePayWithCard}
-                disabled={submitting}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {submitting ? (
+            {/* M-Pesa in progress / finished */}
+            {mpesaStage ? (
+              <div className="text-center py-4">
+                {mpesaStage === 'waiting' && (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Redirecting...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="w-4 h-4" />
-                    Pay KES {totalDue.toLocaleString()}
+                    <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto" />
+                    <p className="mt-4 font-medium text-gray-800">Check your phone</p>
+                    <p className="text-sm text-gray-600 mt-1">{mpesaMessage}</p>
+                    <p className="text-xs text-gray-400 mt-3">Waiting for M-Pesa confirmation…</p>
                   </>
                 )}
-              </button>
-            </div>
-
-            {error && (
-              <div className="mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>{error}</span>
+                {mpesaStage === 'success' && (
+                  <>
+                    <CheckCircle className="w-12 h-12 text-green-600 mx-auto" />
+                    <p className="mt-4 font-medium text-gray-800">Payment received</p>
+                    <p className="text-sm text-gray-600 mt-1">{mpesaMessage}</p>
+                  </>
+                )}
+                {mpesaStage === 'failed' && (
+                  <>
+                    <XCircle className="w-12 h-12 text-red-500 mx-auto" />
+                    <p className="mt-4 font-medium text-gray-800">Payment not completed</p>
+                    <p className="text-sm text-gray-600 mt-1">{mpesaMessage}</p>
+                  </>
+                )}
+                {mpesaStage !== 'waiting' && (
+                  <div className="flex gap-3 mt-6">
+                    {mpesaStage === 'failed' && (
+                      <button
+                        onClick={() => setMpesaStage(null)}
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        Try again
+                      </button>
+                    )}
+                    <button
+                      onClick={closePayModal}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
               </div>
+            ) : (
+              <>
+                {/* Method choice */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {[
+                    { id: 'mpesa', label: 'M-Pesa', icon: Smartphone },
+                    { id: 'card', label: 'Card', icon: CreditCard },
+                  ].map(({ id, label, icon: Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setMethod(id)}
+                      disabled={submitting}
+                      className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 font-medium transition-colors ${
+                        method === id
+                          ? 'border-green-600 bg-green-50 text-green-800'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {method === 'mpesa' ? (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      M-Pesa phone number
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="07XX XXX XXX"
+                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      disabled={submitting}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      You'll get a prompt on this phone to enter your M-Pesa PIN.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-800 rounded-lg text-xs mb-4">
+                    <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>
+                      You'll be taken to Paystack to pay securely. We never see or store your card details.
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={closePayModal}
+                    disabled={submitting}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handlePay}
+                    disabled={submitting}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {method === 'mpesa' ? 'Sending prompt...' : 'Redirecting...'}
+                      </>
+                    ) : (
+                      <>Pay KES {totalDue.toLocaleString()}</>
+                    )}
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

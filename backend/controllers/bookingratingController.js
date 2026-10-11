@@ -17,6 +17,18 @@ const Technician = require('../models/Technician');
 const User = require('../models/User');
 const notify = require('../services/notificationService');
 const mongoose = require('mongoose');
+const {
+  DAY_MS,
+  COMMISSION_DUE_DAYS,
+  HIDE_AFTER_OVERDUE_DAYS,
+  UNPAID_STATUSES,
+  dueDateFor,
+  hasOverdueCommission,
+} = require('../utils/commissionDue');
+
+const COMMISSION_RATE = 0.05;
+// Reported labor below this share of the quoted labor is flagged for review
+const LOW_LABOR_RATIO = 0.7;
 
 // ============================================================
 // HELPERS
@@ -175,6 +187,17 @@ exports.createBooking = async (req, res) => {
       );
     }
 
+    // Technicians with an overdue commission can't receive new bookings
+    if (await hasOverdueCommission(technician._id)) {
+      return handleControllerError(
+        res,
+        new Error('Technician has overdue commission'),
+        'This technician is not accepting new bookings right now. Please choose another technician.',
+        403,
+        'createBooking'
+      );
+    }
+
     // Fetch the client user (for notification)
     const clientUser = await User.findById(clientId).select('firstName lastName email');
 
@@ -203,7 +226,7 @@ exports.createBooking = async (req, res) => {
     });
 
     await booking.save();
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     // ─── Send notification to technician (non-blocking) ───
@@ -311,7 +334,7 @@ exports.getMyBookings = async (req, res) => {
     const limitNum = parseInt(limit) || 20;
 
     const bookings = await Booking.find(filter)
-      .populate('clientId', 'firstName lastName email phone')
+      .populate('clientId', 'firstName lastName')
       .populate('technicianId', 'businessName mainCategory')
       .sort(sort)
       .skip(skip)
@@ -360,7 +383,7 @@ exports.getBooking = async (req, res) => {
     const isTechnician = req.user.role === 'technician';
 
     const booking = await Booking.findById(bookingId)
-      .populate('clientId', 'firstName lastName email phone')
+      .populate('clientId', 'firstName lastName')
       .populate('technicianId', 'businessName mainCategory')
       .lean();
 
@@ -442,7 +465,7 @@ exports.cancelBooking = async (req, res) => {
 
     await booking.cancel(reason || 'Cancelled', isTechnician ? 'technician' : 'client');
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Booking cancelled successfully.', data: booking });
@@ -496,7 +519,7 @@ exports.sendQuotation = async (req, res) => {
     booking.status = 'quoted';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Quotation sent', data: booking });
@@ -529,7 +552,7 @@ exports.acceptQuotation = async (req, res) => {
     booking.status = 'agreed';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Quotation accepted', data: booking });
@@ -567,7 +590,7 @@ exports.rejectQuotation = async (req, res) => {
     booking.cancellationReason = reason || 'Client rejected quotation';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Quotation rejected', data: booking });
@@ -605,7 +628,7 @@ exports.setMaterialSource = async (req, res) => {
     booking.materials.providedByClient = providedByClient;
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Material source set', data: booking });
@@ -644,7 +667,7 @@ exports.confirmMaterialsMoneyReceived = async (req, res) => {
     booking.materials.moneyReceivedAt = new Date();
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Materials money receipt confirmed', data: booking });
@@ -684,7 +707,7 @@ exports.confirmMaterialsDelivered = async (req, res) => {
     booking.status = 'materials_delivered';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Materials delivered', data: booking });
@@ -720,7 +743,7 @@ exports.confirmMaterialsReceived = async (req, res) => {
     booking.status = 'materials_confirmed';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Materials receipt confirmed by client', data: booking });
@@ -760,7 +783,7 @@ exports.startBooking = async (req, res) => {
 
     await booking.start();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Work started successfully.', data: booking });
@@ -797,7 +820,7 @@ exports.completeWork = async (req, res) => {
     booking.status = 'work_completed';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Work marked as completed', data: booking });
@@ -816,7 +839,7 @@ exports.confirmLaborPayment = async (req, res) => {
     const { amount, note } = req.body;
     const userId = req.user.userId || req.user.id || req.user._id;
 
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       return handleControllerError(res, new Error('Invalid amount'), 'Valid positive amount required', 400, 'confirmLaborPayment');
     }
 
@@ -835,23 +858,33 @@ exports.confirmLaborPayment = async (req, res) => {
       return handleControllerError(res, new Error('Already confirmed'), 'Labor payment already confirmed', 400, 'confirmLaborPayment');
     }
 
-    const laborCost = booking.quotation.laborCost || 0;
-    const commissionAmount = laborCost * 0.05;
+    // Commission is based on what the technician actually received
+    const reportedLabor = Number(amount);
+    const quotedLabor = booking.quotation?.laborCost || 0;
+    const commissionAmount = Math.round(reportedLabor * COMMISSION_RATE * 100) / 100;
+    const belowQuote = quotedLabor > 0 && reportedLabor < quotedLabor * LOW_LABOR_RATIO;
 
+    const confirmedAt = new Date();
     booking.laborPayment = {
-      confirmedAt: new Date(),
-      amount: amount,
+      confirmedAt,
+      amount: reportedLabor,
       notes: note || '',
     };
     booking.commission = {
       amount: commissionAmount,
       status: 'pending',
+      createdAt: confirmedAt,
+      dueAt: new Date(confirmedAt.getTime() + COMMISSION_DUE_DAYS * DAY_MS),
+      reportedLabor,
+      quotedLabor,
+      flagged: belowQuote,
+      flagReasons: belowQuote ? ['below_quote'] : [],
     };
     booking.status = 'labor_paid';
 
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({
@@ -897,6 +930,19 @@ exports.rateTechnician = async (req, res) => {
       return handleControllerError(res, new Error('Already rated'), 'You have already rated this booking.', 400, 'rateTechnician');
     }
 
+    // Client confirms (or corrects) the labor amount the technician reported.
+    // Optional so older clients can still rate; a correction flags the commission.
+    const { laborAmountConfirmed, clientLaborAmount } = req.body;
+    let clientCorrection = null;
+    if (laborAmountConfirmed === false) {
+      clientCorrection = Number(clientLaborAmount);
+      if (!Number.isFinite(clientCorrection) || clientCorrection <= 0) {
+        return handleControllerError(res, new Error('Invalid amount'), 'Please enter the labor amount you paid.', 400, 'rateTechnician');
+      }
+    } else if (laborAmountConfirmed !== undefined && laborAmountConfirmed !== true) {
+      return handleControllerError(res, new Error('Invalid confirmation'), 'laborAmountConfirmed must be true or false.', 400, 'rateTechnician');
+    }
+
     const technician = await Technician.findById(booking.technicianId);
     if (!technician) {
       return handleControllerError(res, new Error('Technician not found'), 'Technician not found.', 404, 'rateTechnician');
@@ -908,6 +954,18 @@ exports.rateTechnician = async (req, res) => {
     if (review) booking.clientReview = review.trim();
     booking.status = 'completed';
     booking.completedAt = new Date();
+    if (laborAmountConfirmed === true) {
+      booking.commission.clientConfirmedLabor = true;
+    } else if (clientCorrection !== null) {
+      booking.commission.clientConfirmedLabor = false;
+      booking.commission.clientReportedLabor = clientCorrection;
+      if (clientCorrection !== booking.laborPayment?.amount) {
+        booking.commission.flagged = true;
+        if (!booking.commission.flagReasons.includes('client_disputes_amount')) {
+          booking.commission.flagReasons.push('client_disputes_amount');
+        }
+      }
+    }
     await booking.save();
 
     technician.reviews.push({
@@ -982,10 +1040,12 @@ exports.getTechnicianCommissions = async (req, res) => {
     const { month } = req.query;
     const technicianId = await getTechnicianId(userId);
 
-    // ✅ Include BOTH pending and invoiced (both are still owed)
+    // ✅ Include BOTH pending and invoiced (both are still owed).
+    // Every booking starts with a zero "pending" commission, so skip those.
     let filter = {
       technicianId: technicianId,
-      'commission.status': { $in: ['pending', 'invoiced'] },
+      'commission.status': { $in: UNPAID_STATUSES },
+      'commission.amount': { $gt: 0 },
     };
 
     if (month) {
@@ -996,8 +1056,18 @@ exports.getTechnicianCommissions = async (req, res) => {
     }
 
     const bookings = await Booking.find(filter)
-      .select('_id serviceCategory subService quotation.laborCost commission.amount commission.status createdAt')
+      .select('_id serviceCategory subService quotation.laborCost laborPayment commission createdAt')
       .lean();
+
+    // Due dates: overdue blocks new bookings, and after the grace period
+    // the technician is hidden from search
+    const now = new Date();
+    const dueDates = bookings.map(dueDateFor).filter(Boolean);
+    const earliestDue = dueDates.length ? new Date(Math.min(...dueDates)) : null;
+    const isOverdue = !!earliestDue && earliestDue < now;
+    const hiddenFromSearchAt = earliestDue
+      ? new Date(earliestDue.getTime() + HIDE_AFTER_OVERDUE_DAYS * DAY_MS)
+      : null;
 
     const totalDue = bookings.reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
 
@@ -1027,14 +1097,20 @@ exports.getTechnicianCommissions = async (req, res) => {
           totalInvoiced,     // breakdown
           count: bookings.length,
           byMonth,
+          earliestDue,
+          isOverdue,                         // → no new bookings
+          hiddenFromSearchAt,                // if still unpaid by then
+          hiddenFromSearch: !!hiddenFromSearchAt && hiddenFromSearchAt < now,
         },
         commissions: bookings.map(b => ({
           bookingId: b._id,
           service: b.serviceCategory,
           subService: b.subService,
-          laborCost: b.quotation?.laborCost || 0,
+          laborCost: b.laborPayment?.amount || b.quotation?.laborCost || 0,
           commissionAmount: b.commission?.amount || 0,
           status: b.commission?.status,   // ← now visible per row
+          dueAt: dueDateFor(b),
+          isOverdue: !!dueDateFor(b) && dueDateFor(b) < now,
           createdAt: b.createdAt,
         })),
       },

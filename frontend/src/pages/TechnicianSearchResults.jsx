@@ -17,12 +17,13 @@ import {
   X,
   Filter,
   SlidersHorizontal,
+  Briefcase,
 } from 'lucide-react';
 import api from '../services/api';
 
 const TechnicianSearchResults = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Read params from URL
   const mainCategory = searchParams.get('mainCategory') || '';
@@ -35,20 +36,48 @@ const TechnicianSearchResults = () => {
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [sortBy, setSortBy] = useState('distance'); // distance | rating | price | experience
+  const [sortBy, setSortBy] = useState('recommended'); // recommended | distance | rating | price | experience
 
-  // Fetch technicians on mount
+  // Fetch technicians on mount — location is required, so ask for it first
+  // when the link didn't include it
   useEffect(() => {
     if (!mainCategory || !serviceCategory || !subService) {
       setError('Invalid search parameters.');
       setLoading(false);
       return;
     }
+    if (!lat || !lng) {
+      requestLocation();
+      return;
+    }
     fetchTechnicians();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [lat, lng]);
+
+  const requestLocation = () => {
+    const required = 'Please allow location access. We need your location to show technicians near you.';
+    if (!navigator.geolocation) {
+      setError(required);
+      setLoading(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const next = new URLSearchParams(searchParams);
+        next.set('lat', pos.coords.latitude);
+        next.set('lng', pos.coords.longitude);
+        setSearchParams(next, { replace: true }); // re-runs the effect above
+      },
+      () => {
+        setError(required);
+        setLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
 
   const fetchTechnicians = async () => {
+    if (!lat || !lng) return;
     setLoading(true);
     setError('');
 
@@ -58,10 +87,11 @@ const TechnicianSearchResults = () => {
         serviceCategory,
         subService,
         radius,
-        ...(lat && { lat }),
-        ...(lng && { lng }),
+        lat,
+        lng,
         sortBy,
-        sortOrder: sortBy === 'price' ? 'asc' : 'desc',
+        // Nearest / cheapest first; everything else highest first
+        sortOrder: sortBy === 'price' || sortBy === 'distance' ? 'asc' : 'desc',
       });
 
       const response = await api.get(`/search/technicians?${params.toString()}`);
@@ -131,6 +161,7 @@ const TechnicianSearchResults = () => {
                 onChange={(e) => setSortBy(e.target.value)}
                 className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:border-green-500 focus:outline-none bg-white"
               >
+                <option value="recommended">Recommended</option>
                 <option value="distance">Sort by Distance</option>
                 <option value="rating">Sort by Rating</option>
                 <option value="price">Sort by Price (Low-High)</option>
@@ -252,10 +283,19 @@ const TechnicianSearchResults = () => {
                           ({tech.rating?.count ?? 0} reviews)
                         </span>
                       </span>
+                      <span className="flex items-center gap-1">
+                        <Briefcase className="w-4 h-4 text-green-600" />
+                        {tech.completedJobs ?? 0} job{tech.completedJobs === 1 ? '' : 's'} completed
+                      </span>
                       {tech.yearsOfExperience > 0 && (
                         <span className="flex items-center gap-1">
                           <Clock className="w-4 h-4 text-blue-500" />
                           {tech.yearsOfExperience}+ years exp
+                        </span>
+                      )}
+                      {tech.acceptingBookings === false && (
+                        <span className="text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded">
+                          Not accepting bookings
                         </span>
                       )}
                       <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">

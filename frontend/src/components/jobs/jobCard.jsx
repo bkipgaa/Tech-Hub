@@ -22,7 +22,6 @@ import ApplyModal from '../applications/ApplyModal';
 const JobCard = ({ job, onUpdate }) => {
   const { user } = useAuth();
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [showContact, setShowContact] = useState(false);
 
   /**
    * Returns appropriate badge based on job status
@@ -150,30 +149,6 @@ const JobCard = ({ job, onUpdate }) => {
             </div>
           </div>
           
-          {/* Contact Information - Expandable section for technicians */}
-          {user?.role === 'technician' && !showContact && job.status === 'approved' && (
-            <button
-              onClick={() => setShowContact(true)}
-              className="mt-3 text-xs text-green-600 hover:text-green-700"
-            >
-              Show Client Contact Info
-            </button>
-          )}
-          
-          {user?.role === 'technician' && showContact && (
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm border border-gray-200">
-              <p className="font-semibold text-gray-700 mb-2">Client Contact Information:</p>
-              <p className="mb-1">📞 Phone: {job.phone}</p>
-              <p className="mb-1">✉️ Email: {job.email}</p>
-              <p>👤 Name: {job.clientName}{job.companyName && ` (${job.companyName})`}</p>
-              <button
-                onClick={() => setShowContact(false)}
-                className="mt-2 text-xs text-red-500 hover:text-red-700"
-              >
-                Hide Contact Info
-              </button>
-            </div>
-          )}
         </div>
       </div>
       
