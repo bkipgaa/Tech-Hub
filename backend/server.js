@@ -38,14 +38,28 @@ dotenv.config();
 // ===========================================
 // ENVIRONMENT VARIABLES VALIDATION
 // ===========================================
-const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'PAYSTACK_SECRET_KEY'];
+const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'ADMIN_JWT_SECRET', 'PAYSTACK_SECRET_KEY'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingVars.length > 0) {
   console.error(`❌ Missing required environment variables: ${missingVars.join(', ')}`);
   process.exit(1);
 }
 
+// Admin tokens are signed with their own secret so a user token can never
+// pass admin auth (and vice versa).
+if (process.env.ADMIN_JWT_SECRET === process.env.JWT_SECRET) {
+  console.error('❌ ADMIN_JWT_SECRET must be different from JWT_SECRET');
+  process.exit(1);
+}
+
 const app = express();
+
+// Behind the hosting provider's proxy, trust one hop so req.ip (used by the
+// auth rate limiters) is the real client IP. Not enabled locally, where a
+// client could otherwise spoof X-Forwarded-For.
+if (process.env.TRUST_PROXY || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', Number(process.env.TRUST_PROXY) || 1);
+}
 
 // ===========================================
 // CREATE HTTP SERVER (Required for Socket.io)
@@ -150,109 +164,6 @@ app.use('/api/search', searchRoutes);
 app.use('/api/upload', uploads);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/job-applications', jobApplicationRoutes);
-
-// ===========================================
-// DEBUG ENDPOINT — must come BEFORE the 404 handler
-// ⚠️ REMOVE THIS IN PRODUCTION
-// ===========================================
-app.get('/api/debug/mpesa-check', async (req, res) => {
-  try {
-    const { checkoutRequestID } = req.query;
-    if (!checkoutRequestID) {
-      return res.status(400).json({ error: 'checkoutRequestID required' });
-    }
-
-    const Technician = require('./models/Technician');
-    const mpesaService = require('./services/mpesaService');
-    const { subscriptionPlans } = require('./utils/subscriptionPlans');
-
-    const tech = await Technician.findOne({
-      'paymentPending.checkoutRequestID': checkoutRequestID,
-    });
-
-    if (!tech) {
-      const processed = await Technician.findOne({
-        'subscription.paymentHistory.transactionId': checkoutRequestID,
-      });
-
-      if (processed) {
-        return res.json({
-          success: true,
-          alreadyProcessed: true,
-          subscription: processed.subscription,
-        });
-      }
-
-      return res.status(404).json({ error: 'No pending transaction found' });
-    }
-
-    let safaricomResponse = null;
-    let safaricomError = null;
-    try {
-      safaricomResponse = await mpesaService.queryStatus(checkoutRequestID);
-    } catch (err) {
-      safaricomError = err.message;
-    }
-
-    let updated = false;
-    if (safaricomResponse && String(safaricomResponse.ResultCode) === '0') {
-      const planId = tech.paymentPending.planId;
-      const plan = subscriptionPlans[planId];
-
-      if (plan) {
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
-
-        tech.subscription = {
-          plan: planId,
-          planDetails: {
-            name: plan.name,
-            visibilityRadius: plan.visibilityRadius,
-            price: plan.price,
-            features: plan.features,
-          },
-          startDate: new Date(),
-          endDate,
-          isTrial: false,
-          autoRenew: false,
-          paymentMethod: 'mpesa',
-          lastPaymentDate: new Date(),
-          nextPaymentDate: endDate,
-          paymentHistory: [
-            ...(tech.subscription?.paymentHistory || []),
-            {
-              amount: tech.paymentPending.amount,
-              date: new Date(),
-              transactionId: checkoutRequestID,
-              status: 'success',
-              plan: planId,
-            },
-          ],
-        };
-
-        tech.serviceRadius = plan.visibilityRadius;
-        tech.paymentPending = undefined;
-        await tech.save();
-        updated = true;
-      }
-    }
-
-    res.json({
-      success: true,
-      pendingTransaction: {
-        planId: tech.paymentPending?.planId,
-        amount: tech.paymentPending?.amount,
-        initiatedAt: tech.paymentPending?.initiatedAt,
-      },
-      safaricomResponse,
-      safaricomError,
-      updated,
-      subscription: tech.subscription,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // ===========================================
 // BASE ROUTE
@@ -387,6 +298,13 @@ const startServer = async () => {
   });
 
   // ─── Cron jobs ─────────────────────────────────────────
+  // Set DISABLE_CRON=true on staging: it shares the production DB,
+  // so running reminders there would email everyone twice.
+  if (process.env.DISABLE_CRON === 'true') {
+    console.log('⏸️ Cron jobs disabled (DISABLE_CRON=true)');
+    return;
+  }
+
   cron.schedule('0 6 * * *', () => {
     console.log('⏰ Running daily subscription reminders...');
     sendExpiryReminders();

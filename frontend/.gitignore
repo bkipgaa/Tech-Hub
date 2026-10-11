@@ -1,4 +1,6 @@
-node_modules\ndist\n.env
+node_modules
+dist
+.env
 .env
 .env.local
 .env.*.local

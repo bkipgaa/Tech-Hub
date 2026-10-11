@@ -241,12 +241,16 @@ exports.mpesaCallback = async (req, res) => {
 
     const {
       CheckoutRequestID,
-      ResultCode,
-      ResultDesc,
+      ResultCode: callbackResultCode,
       CallbackMetadata,
     } = Body.stkCallback;
 
-    console.log(`📱 M-Pesa callback: ${CheckoutRequestID}, ResultCode: ${ResultCode}`);
+    // Must be a plain string — an object here would be a query operator
+    if (typeof CheckoutRequestID !== 'string' || !CheckoutRequestID) {
+      return res.status(400).send('Invalid payload');
+    }
+
+    console.log(`📱 M-Pesa callback: ${CheckoutRequestID}, ResultCode: ${callbackResultCode}`);
 
     // Find bookings awaiting this M-Pesa payment
     const bookings = await Booking.find({
@@ -265,8 +269,23 @@ exports.mpesaCallback = async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // The callback is an unauthenticated POST — confirm the result with Safaricom
+    const confirmation = await mpesaService.confirmPayment(CheckoutRequestID);
+    if (!confirmation.confirmed) {
+      console.warn(`⚠️ Could not confirm M-Pesa result for ${CheckoutRequestID} with Safaricom`);
+      return res.sendStatus(200);
+    }
+    const ResultCode = confirmation.resultCode;
+    const ResultDesc = confirmation.resultDesc;
+
+    if (String(callbackResultCode) !== ResultCode) {
+      console.warn(
+        `⚠️ M-Pesa callback ResultCode ${callbackResultCode} does not match Safaricom (${ResultCode}) for ${CheckoutRequestID}`
+      );
+    }
+
     // ── Failure branch ──────────────────────────────────────
-    if (ResultCode !== 0) {
+    if (ResultCode !== '0') {
       console.warn(`❌ M-Pesa payment failed: ${ResultDesc} (${ResultCode})`);
 
       await Booking.updateMany(
@@ -285,9 +304,9 @@ exports.mpesaCallback = async (req, res) => {
 
     // ── Success branch ──────────────────────────────────────
     let paidAmount = null;
-    if (CallbackMetadata?.Item) {
+    if (Array.isArray(CallbackMetadata?.Item)) {
       const amountItem = CallbackMetadata.Item.find((i) => i.Name === 'Amount');
-      if (amountItem) paidAmount = amountItem.Value;
+      if (amountItem) paidAmount = Number(amountItem.Value);
     }
 
     const expectedKES = unpaid.reduce(
@@ -296,7 +315,7 @@ exports.mpesaCallback = async (req, res) => {
     );
 
     // Sanity check on amount (allow small rounding tolerance)
-    if (paidAmount !== null && Math.abs(paidAmount - expectedKES) > 1) {
+    if (!Number.isFinite(paidAmount) || Math.abs(paidAmount - expectedKES) > 1) {
       console.error(
         `⚠️ Amount mismatch for ${CheckoutRequestID}: paid ${paidAmount}, expected ${expectedKES}`
       );
@@ -312,7 +331,7 @@ exports.mpesaCallback = async (req, res) => {
           'commission.status': 'paid',
           'commission.paidAt': new Date(),
           'commission.paymentMethod': 'mpesa',
-          'commission.mpesaReceiptNumber': Body.stkCallback?.CallbackMetadata?.Item?.find(
+          'commission.mpesaReceiptNumber': CallbackMetadata.Item.find(
             (i) => i.Name === 'MpesaReceiptNumber'
           )?.Value || null,
         },

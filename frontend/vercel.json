@@ -9,8 +9,5 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "env": {
-    "VITE_API_URL": "https://tech-hub-backend-ecno.onrender.com/api"
-  }
+  ]
 }
