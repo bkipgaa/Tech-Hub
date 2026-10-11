@@ -376,7 +376,7 @@ if (mainCategory) {
 
     // 6. Execute database query (lean, limit to 200 for safety)
     let technicians = await Technician.find(query)
-      .populate('userId', 'firstName lastName profileImage phone email')
+      .populate('userId', 'firstName lastName profileImage')
       .select('-portfolio.mediaUrl')
       .limit(200)
       .lean();
@@ -499,9 +499,8 @@ if (mainCategory) {
         _id: tech.userId._id,
         firstName: tech.userId.firstName,
         lastName: tech.userId.lastName,
-        profileImage: tech.userId.profileImage,
-        phone: tech.userId.phone,
-        email: tech.userId.email
+        profileImage: tech.userId.profileImage
+        // No phone/email: clients and technicians exchange contacts via chat
       } : null,
       portfolio: tech.portfolio?.slice(0, 3),
       createdAt: tech.createdAt
@@ -571,7 +570,7 @@ exports.getTechniciansBySubService = async (req, res) => {
     console.log(`[getTechniciansBySubService] Found ${total} total technicians for subService: "${subService}"`);
 
     let technicians = await Technician.find(query)
-      .populate('userId', 'firstName lastName profileImage phone email')
+      .populate('userId', 'firstName lastName profileImage')
       .skip(skip)
       .limit(limitNum)
       .lean();
@@ -631,9 +630,8 @@ exports.getTechniciansBySubService = async (req, res) => {
         _id: tech.userId._id,
         firstName: tech.userId.firstName,
         lastName: tech.userId.lastName,
-        profileImage: tech.userId.profileImage,
-        phone: tech.userId.phone,
-        email: tech.userId.email
+        profileImage: tech.userId.profileImage
+        // No phone/email: clients and technicians exchange contacts via chat
       } : null,
       portfolio: tech.portfolio?.slice(0, 3),
       createdAt: tech.createdAt
@@ -701,7 +699,7 @@ exports.getNearbyTechnicians = async (req, res) => {
       isAvailable: true,
       verificationStatus: { $in: ['verified', 'pending'] }
     })
-    .populate('userId', 'firstName lastName profileImage phone email')
+    .populate('userId', 'firstName lastName profileImage')
     .lean();
 
     console.log(`[getNearbyTechnicians] Found ${technicians.length} active technicians`);
@@ -758,9 +756,8 @@ exports.getNearbyTechnicians = async (req, res) => {
         _id: tech.userId._id,
         firstName: tech.userId.firstName,
         lastName: tech.userId.lastName,
-        profileImage: tech.userId.profileImage,
-        phone: tech.userId.phone,
-        email: tech.userId.email
+        profileImage: tech.userId.profileImage
+        // No phone/email: clients and technicians exchange contacts via chat
       } : null,
       portfolio: tech.portfolio?.slice(0, 3),
       createdAt: tech.createdAt

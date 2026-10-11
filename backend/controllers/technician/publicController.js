@@ -31,7 +31,7 @@ exports.getPublicProfile = async (req, res) => {
     
     // Find technician by ID and populate user data
     const technician = await Technician.findById(id)
-      .populate('userId', 'firstName lastName email phone profileImage');
+      .populate('userId', 'firstName lastName profileImage') // contacts are shared via chat only;
     
     // Check if technician exists
     if (!technician) {
@@ -71,7 +71,6 @@ exports.getPublicProfile = async (req, res) => {
         rating: technician.rating,
         completedJobs: technician.statistics?.completedJobs || 0,
         acceptingBookings: !(await hasOverdueCommission(technician._id)),
-        socialLinks: technician.socialLinks,
         businessName: technician.businessName,
         settings: technician.settings,
         isAvailable: technician.isAvailable,
@@ -156,7 +155,7 @@ exports.getAllPublicProfiles = async (req, res) => {
     
     // Get technicians with pagination
     const technicians = await Technician.find(filter)
-      .populate('userId', 'firstName lastName email phone profileImage')
+      .populate('userId', 'firstName lastName profileImage') // contacts are shared via chat only
       .sort({ createdAt: -1 }) // Newest first
       .skip(skip)
       .limit(limitNum)

@@ -23,14 +23,11 @@ import {
   Wrench,
   Clock,
   DollarSign,
-  Phone,
-  Mail,
   Calendar,
   Award,
   Languages,
   CheckCircle,
   MessageCircle,
-  PhoneCall,
   Briefcase,
   BookOpen,
   BadgeCheck,
@@ -60,7 +57,6 @@ const TechnicianProfile = () => {
   const [technician, setTechnician] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showContact, setShowContact] = useState(false);
 
   // ─── BOOKING STATE ─────────────────────────────────────────
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -174,10 +170,6 @@ const TechnicianProfile = () => {
   };
 
   // ─── CONTACT / BACK / MESSAGE ──────────────────────────────
-
-  const handleContact = () => {
-    setShowContact((prev) => !prev);
-  };
 
   const handleGoBack = () => {
     navigate(-1);
@@ -547,15 +539,8 @@ const TechnicianProfile = () => {
                   </div>
                 </div>
 
-                {/* Action Buttons: Contact, Message, Book */}
+                {/* Action Buttons: Message, Book (contact details are only shared via chat) */}
                 <div className="flex flex-wrap gap-3 mt-4">
-                  <button
-                    onClick={handleContact}
-                    className="bg-white text-green-700 px-6 py-2 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium shadow-sm"
-                  >
-                    <PhoneCall className="w-4 h-4" />
-                    {showContact ? 'Hide Contact' : 'Contact'}
-                  </button>
                   <button
                     onClick={handleMessage}
                     className="bg-white text-green-700 px-6 py-2 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium shadow-sm"
@@ -589,33 +574,9 @@ const TechnicianProfile = () => {
                   )}
                 </div>
 
-                {/* Contact info panel */}
-                {showContact && (
-                  <div className="mt-4 p-4 bg-white rounded-lg shadow-md">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Contact Information:</p>
-                    <div className="space-y-2">
-                      {technician.settings?.showPhone && technician.userId?.phone && (
-                        <div className="flex items-center gap-2 text-gray-800">
-                          <Phone className="w-4 h-4 text-green-600" />
-                          <a href={`tel:${technician.userId.phone}`} className="hover:text-green-600 transition-colors">
-                            {technician.userId.phone}
-                          </a>
-                        </div>
-                      )}
-                      {technician.settings?.showEmail && technician.userId?.email && (
-                        <div className="flex items-center gap-2 text-gray-800">
-                          <Mail className="w-4 h-4 text-green-600" />
-                          <a href={`mailto:${technician.userId.email}`} className="hover:text-green-600 transition-colors">
-                            {technician.userId.email}
-                          </a>
-                        </div>
-                      )}
-                      {!technician.settings?.showPhone && !technician.settings?.showEmail && (
-                        <p className="text-sm text-gray-500">No contact information shared</p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <p className="text-xs text-green-100 mt-3">
+                  Use Message to chat with this technician — you can share contact details there if needed.
+                </p>
               </div>
             </div>
           </div>
