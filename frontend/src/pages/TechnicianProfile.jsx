@@ -150,7 +150,7 @@ const TechnicianProfile = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await api.get('/bookings/my-bookings?status=completed&limit=50');
+      const response = await api.get('/bookings/my-bookings?as=client&status=completed&limit=50');
       if (response.data.success) {
         const bookings = response.data.data || [];
         const completed = bookings.find(
