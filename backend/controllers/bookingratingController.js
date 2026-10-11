@@ -79,6 +79,21 @@ const getTechnicianId = async (userId) => {
   return technician._id;
 };
 
+/**
+ * The user's part in a booking: 'client' (they booked it), 'technician'
+ * (it was booked with them) or null. Based on the booking itself, not the
+ * account role — technicians can also book other technicians as clients.
+ * Works whether clientId/technicianId are populated or plain ids.
+ */
+const getBookingRole = async (booking, userId) => {
+  const clientId = String(booking.clientId?._id || booking.clientId);
+  if (clientId === String(userId)) return 'client';
+  const technician = await Technician.findOne({ userId }).select('_id').lean();
+  const technicianId = String(booking.technicianId?._id || booking.technicianId);
+  if (technician && String(technician._id) === technicianId) return 'technician';
+  return null;
+};
+
 // ============================================================
 // CREATE BOOKING
 // ============================================================
@@ -183,6 +198,17 @@ exports.createBooking = async (req, res) => {
         new Error('Technician not found or inactive'),
         'Technician not available.',
         404,
+        'createBooking'
+      );
+    }
+
+    // Technicians can book other technicians, but not themselves
+    if (String(technician.userId) === String(clientId)) {
+      return handleControllerError(
+        res,
+        new Error('Self booking'),
+        'You cannot book yourself.',
+        400,
         'createBooking'
       );
     }
@@ -306,12 +332,17 @@ exports.getMyBookings = async (req, res) => {
       );
     }
 
-    const isTechnician = req.user.role === 'technician';
-    const { status, page = 1, limit = 20, sort = '-createdAt' } = req.query;
+    const { status, page = 1, limit = 20, sort = '-createdAt', as } = req.query;
+
+    // as=client → bookings this user made (technicians can book other technicians too);
+    // as=technician → bookings made with them. Default follows the account role.
+    const viewAs = as === 'client' || as === 'technician'
+      ? as
+      : req.user.role === 'technician' ? 'technician' : 'client';
 
     let filter = {};
 
-    if (isTechnician) {
+    if (viewAs === 'technician') {
       try {
         const technicianId = await getTechnicianId(userId);
         filter.technicianId = technicianId;
@@ -380,8 +411,6 @@ exports.getBooking = async (req, res) => {
       );
     }
 
-    const isTechnician = req.user.role === 'technician';
-
     const booking = await Booking.findById(bookingId)
       .populate('clientId', 'firstName lastName')
       .populate('technicianId', 'businessName mainCategory')
@@ -397,23 +426,13 @@ exports.getBooking = async (req, res) => {
       );
     }
 
-    if (isTechnician) {
-      let technicianId;
-      try {
-        technicianId = await getTechnicianId(userId);
-      } catch (err) {
-        return handleControllerError(res, err, 'Technician profile not found.', 404, 'getBooking');
-      }
-      if (booking.technicianId._id.toString() !== technicianId.toString()) {
-        return handleControllerError(res, new Error('Unauthorized'), 'You do not have permission to view this booking.', 403, 'getBooking');
-      }
-    } else {
-      if (booking.clientId._id.toString() !== userId.toString()) {
-        return handleControllerError(res, new Error('Unauthorized'), 'You do not have permission to view this booking.', 403, 'getBooking');
-      }
+    const viewerRole = await getBookingRole(booking, userId);
+    if (!viewerRole) {
+      return handleControllerError(res, new Error('Unauthorized'), 'You do not have permission to view this booking.', 403, 'getBooking');
     }
 
-    res.json({ success: true, data: booking });
+    // viewerRole tells the page which actions to show (a technician can be the client here)
+    res.json({ success: true, data: { ...booking, viewerRole } });
   } catch (error) {
     handleControllerError(res, error, 'Failed to fetch booking.', 500, 'getBooking');
   }
@@ -436,34 +455,21 @@ exports.cancelBooking = async (req, res) => {
       return handleControllerError(res, new Error('Authentication required'), 'You must be logged in to cancel a booking.', 401, 'cancelBooking');
     }
 
-    const isTechnician = req.user.role === 'technician';
-
     const booking = await Booking.findById(bookingId);
     if (!booking) {
       return handleControllerError(res, new Error('Booking not found'), 'Booking not found.', 404, 'cancelBooking');
     }
 
-    if (isTechnician) {
-      let technicianId;
-      try {
-        technicianId = await getTechnicianId(userId);
-      } catch (err) {
-        return handleControllerError(res, err, 'Technician profile not found.', 404, 'cancelBooking');
-      }
-      if (booking.technicianId.toString() !== technicianId.toString()) {
-        return handleControllerError(res, new Error('Unauthorized'), 'You are not the technician for this booking.', 403, 'cancelBooking');
-      }
-    } else {
-      if (booking.clientId.toString() !== userId.toString()) {
-        return handleControllerError(res, new Error('Unauthorized'), 'You are not the client for this booking.', 403, 'cancelBooking');
-      }
+    const bookingRole = await getBookingRole(booking, userId);
+    if (!bookingRole) {
+      return handleControllerError(res, new Error('Unauthorized'), 'You are not part of this booking.', 403, 'cancelBooking');
     }
 
     if (!['pending', 'quoted'].includes(booking.status)) {
       return handleControllerError(res, new Error('Cannot cancel'), 'Only pending or quoted bookings can be cancelled.', 400, 'cancelBooking');
     }
 
-    await booking.cancel(reason || 'Cancelled', isTechnician ? 'technician' : 'client');
+    await booking.cancel(reason || 'Cancelled', bookingRole);
 
     await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');

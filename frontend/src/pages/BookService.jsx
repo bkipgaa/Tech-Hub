@@ -89,6 +89,42 @@ const StatusBadge = ({ status }) => {
       color: 'bg-gray-100 text-gray-800 border-gray-200',
       icon: <AlertCircle className="w-3 h-3 mr-1" />,
     },
+    // Booking flow statuses
+    quoted: {
+      label: 'Quote received — review it',
+      color: 'bg-orange-100 text-orange-800 border-orange-200',
+      icon: <AlertCircle className="w-3 h-3 mr-1" />,
+    },
+    agreed: {
+      label: 'Quote accepted',
+      color: 'bg-blue-100 text-blue-800 border-blue-200',
+      icon: <CheckCircle className="w-3 h-3 mr-1" />,
+    },
+    materials_delivered: {
+      label: 'Materials delivered — confirm',
+      color: 'bg-orange-100 text-orange-800 border-orange-200',
+      icon: <AlertCircle className="w-3 h-3 mr-1" />,
+    },
+    materials_confirmed: {
+      label: 'Materials confirmed',
+      color: 'bg-blue-100 text-blue-800 border-blue-200',
+      icon: <CheckCircle className="w-3 h-3 mr-1" />,
+    },
+    in_progress: {
+      label: 'In Progress',
+      color: 'bg-purple-100 text-purple-800 border-purple-200',
+      icon: <Loader2 className="w-3 h-3 mr-1 animate-spin" />,
+    },
+    work_completed: {
+      label: 'Work completed',
+      color: 'bg-blue-100 text-blue-800 border-blue-200',
+      icon: <CheckCircle className="w-3 h-3 mr-1" />,
+    },
+    labor_paid: {
+      label: 'Rate your technician',
+      color: 'bg-orange-100 text-orange-800 border-orange-200',
+      icon: <AlertCircle className="w-3 h-3 mr-1" />,
+    },
   };
   const { label, color, icon } = config[status] || config.pending;
 
@@ -186,10 +222,10 @@ const MyBookings = () => {
       }
       setError('');
 
-      // Build URL with status filter if selected
+      // Bookings this user made (as=client: technicians can book other technicians too)
       const url = statusFilter
-        ? `/bookings/my-bookings?status=${statusFilter}`
-        : '/bookings/my-bookings';
+        ? `/bookings/my-bookings?as=client&status=${statusFilter}`
+        : '/bookings/my-bookings?as=client';
 
       const response = await api.get(url);
 

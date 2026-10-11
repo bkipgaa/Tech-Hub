@@ -882,9 +882,11 @@ const BookingDetails = () => {
 
   // ─── DETERMINE USER ROLE & ACTIONS ──────────────────────────
 
+  // Use the user's part in THIS booking (from the API), not their account role:
+  // a technician who booked another technician is the client here.
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const isClient = user?.role === 'client';
-  const isTechnician = user?.role === 'technician';
+  const isClient = booking.viewerRole ? booking.viewerRole === 'client' : user?.role === 'client';
+  const isTechnician = booking.viewerRole ? booking.viewerRole === 'technician' : user?.role === 'technician';
 
   // Status booleans
   const isPending = booking.status === 'pending';
