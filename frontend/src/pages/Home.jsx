@@ -1,11 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Wordmark } from '../components/Wordmark';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { ArrowRight, ChevronRight, X } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import BookingBenefits from '../components/technician/BookingBenefits';
+import TechnicianHome from '../components/technician/TechnicianHome';
+
+const CLIENT_STEPS = [
+  { title: 'Search for a Service', text: 'Browse categories or search for specific services you need' },
+  { title: 'Choose a Technician', text: 'Compare profiles, ratings, and prices from verified professionals' },
+  { title: 'Book & Get Service', text: 'Schedule your service and get quality work done' },
+];
+
+const TECHNICIAN_STEPS = [
+  { title: 'Get a Booking', text: 'Clients near you find you in search and send a request' },
+  { title: 'Quote & Do the Work', text: 'Send your quotation, agree with the client, and complete the job' },
+  { title: 'Get Rated', text: 'The client confirms the labor amount and rates you — ratings move you up in search' },
+  { title: 'Pay 5% Commission', text: 'Pay by M-Pesa or card within 30 days of finishing the job' },
+];
 
 const Home = () => {
   const navigate = useNavigate();
+  const { isTechnician, user } = useAuth();
+  const [showBenefits, setShowBenefits] = useState(false);
   const [mainCategories, setMainCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,6 +94,28 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Why complete jobs through bookings — benefits popup */}
+      {showBenefits && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowBenefits(false)}
+        >
+          <div
+            className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowBenefits(false)}
+              className="absolute top-3 right-3 p-1 text-gray-500 hover:text-gray-700"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <BookingBenefits />
+          </div>
+        </div>
+      )}
+
       {/* Hero Section with Background Video */}
       <div className="relative h-[500px] overflow-hidden">
         {/* Background Video */}
@@ -96,19 +136,35 @@ const Home = () => {
         
         {/* Hero Content */}
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
-          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
-            Welcome to <Wordmark className="" onDark />
-          </h1>
-          <p className="text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
-            Your trusted marketplace connecting you with verified professionals
-          </p>
-          <p className="text-gray-300 max-w-3xl mx-auto text-lg leading-relaxed animate-fadeInUp">
-            From IT solutions to home services, find qualified experts ready to help with your needs. 
-            Get matched with the best technicians in your area.
-          </p>
+          {isTechnician ? (
+            <>
+              <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
+                Welcome back{user?.firstName ? `, ${user.firstName}` : ''}
+              </h1>
+              <p className="text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
+                Here's how your business on <Wordmark className="" onDark /> is doing
+              </p>
+              <p className="text-gray-300 max-w-3xl mx-auto text-lg leading-relaxed animate-fadeInUp">
+                Need a job done outside your skills? You can find and book other technicians too.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
+                Welcome to <Wordmark className="" onDark />
+              </h1>
+              <p className="text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
+                Your trusted marketplace connecting you with verified professionals
+              </p>
+              <p className="text-gray-300 max-w-3xl mx-auto text-lg leading-relaxed animate-fadeInUp">
+                From IT solutions to home services, find qualified experts ready to help with your needs.
+                Get matched with the best technicians in your area.
+              </p>
+            </>
+          )}
           
           {/* Search CTA */}
-          <div className="mt-8 flex gap-4 animate-fadeInUp">
+          <div className="mt-8 flex flex-wrap justify-center gap-4 animate-fadeInUp">
             <button
               onClick={() => navigate('/search')}
               className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -116,21 +172,39 @@ const Home = () => {
               Find a Technician
               <ArrowRight className="w-5 h-5" />
             </button>
+            {/* Already a technician → nothing to become */}
+            {!isTechnician && (
+              <button
+                onClick={() => navigate('/become-technician')}
+                className="bg-white/20 backdrop-blur-sm text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
+              >
+                Become a Technician
+              </button>
+            )}
             <button
-              onClick={() => navigate('/become-technician')}
+              onClick={() => setShowBenefits(true)}
               className="bg-white/20 backdrop-blur-sm text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
             >
-              Become a Technician
+              Why Complete Jobs Through Bookings?
             </button>
           </div>
         </div>
       </div>
 
+      {/* Technician: business overview, plans, growth */}
+      {isTechnician && <TechnicianHome />}
+
       {/* Top Categories Section - Featured */}
       <div className="max-w-7xl mx-auto px-4 py-10">
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-1">Popular Services</h2>
-          <p className="text-gray-500 text-sm">Most requested categories by our users</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-1">
+            {isTechnician ? 'Need Help With Something Else?' : 'Popular Services'}
+          </h2>
+          <p className="text-gray-500 text-sm">
+            {isTechnician
+              ? 'Find a technician for jobs outside your skills — most requested categories'
+              : 'Most requested categories by our users'}
+          </p>
         </div>
         
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -180,35 +254,26 @@ const Home = () => {
       <div className="max-w-7xl mx-auto px-4 py-10">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-1">How It Works</h2>
-          <p className="text-gray-500 text-sm">Simple steps to get your service needs met</p>
+          <p className="text-gray-500 text-sm">
+            {isTechnician ? 'From booking to getting paid' : 'Simple steps to get your service needs met'}
+          </p>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="text-center">
-            <div className="w-10 h-10 bg-green-100 flex items-center justify-center mx-auto mb-3">
-              <span className="text-lg font-bold text-green-600">1</span>
+
+        <div className={`grid grid-cols-1 gap-6 ${isTechnician ? 'sm:grid-cols-2 md:grid-cols-4' : 'md:grid-cols-3'}`}>
+          {(isTechnician ? TECHNICIAN_STEPS : CLIENT_STEPS).map((step, index) => (
+            <div key={step.title} className="text-center">
+              <div className="w-10 h-10 bg-green-100 flex items-center justify-center mx-auto mb-3">
+                <span className="text-lg font-bold text-green-600">{index + 1}</span>
+              </div>
+              <h3 className="font-semibold text-gray-800 mb-1 text-base">{step.title}</h3>
+              <p className="text-gray-500 text-xs">{step.text}</p>
             </div>
-            <h3 className="font-semibold text-gray-800 mb-1 text-base">Search for a Service</h3>
-            <p className="text-gray-500 text-xs">Browse categories or search for specific services you need</p>
-          </div>
-          <div className="text-center">
-            <div className="w-10 h-10 bg-green-100 flex items-center justify-center mx-auto mb-3">
-              <span className="text-lg font-bold text-green-600">2</span>
-            </div>
-            <h3 className="font-semibold text-gray-800 mb-1 text-base">Choose a Technician</h3>
-            <p className="text-gray-500 text-xs">Compare profiles, ratings, and prices from verified professionals</p>
-          </div>
-          <div className="text-center">
-            <div className="w-10 h-10 bg-green-100 flex items-center justify-center mx-auto mb-3">
-              <span className="text-lg font-bold text-green-600">3</span>
-            </div>
-            <h3 className="font-semibold text-gray-800 mb-1 text-base">Book & Get Service</h3>
-            <p className="text-gray-500 text-xs">Schedule your service and get quality work done</p>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* Newsletter / CTA Bottom */}
+      {/* Newsletter / CTA Bottom — not for people who are already technicians */}
+      {!isTechnician && (
       <div className="bg-gradient-to-r from-green-700 to-green-900 py-10 mt-6">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-2xl font-bold text-white mb-2">Ready to grow your business?</h2>
@@ -221,6 +286,7 @@ const Home = () => {
           </button>
         </div>
       </div>
+      )}
 
       {/* Animation keyframes */}
       <style jsx>{`
