@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Wordmark } from '../components/Wordmark';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { ArrowRight, ChevronRight, X } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import BookingBenefits from '../components/technician/BookingBenefits';
 
 const Home = () => {
   const navigate = useNavigate();
+  const { isTechnician } = useAuth();
+  const [showBenefits, setShowBenefits] = useState(false);
   const [mainCategories, setMainCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,6 +80,28 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Why complete jobs through bookings — benefits popup */}
+      {showBenefits && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowBenefits(false)}
+        >
+          <div
+            className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowBenefits(false)}
+              className="absolute top-3 right-3 p-1 text-gray-500 hover:text-gray-700"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <BookingBenefits />
+          </div>
+        </div>
+      )}
+
       {/* Hero Section with Background Video */}
       <div className="relative h-[500px] overflow-hidden">
         {/* Background Video */}
@@ -108,7 +134,7 @@ const Home = () => {
           </p>
           
           {/* Search CTA */}
-          <div className="mt-8 flex gap-4 animate-fadeInUp">
+          <div className="mt-8 flex flex-wrap justify-center gap-4 animate-fadeInUp">
             <button
               onClick={() => navigate('/search')}
               className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -116,11 +142,20 @@ const Home = () => {
               Find a Technician
               <ArrowRight className="w-5 h-5" />
             </button>
+            {/* Already a technician → nothing to become */}
+            {!isTechnician && (
+              <button
+                onClick={() => navigate('/become-technician')}
+                className="bg-white/20 backdrop-blur-sm text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
+              >
+                Become a Technician
+              </button>
+            )}
             <button
-              onClick={() => navigate('/become-technician')}
+              onClick={() => setShowBenefits(true)}
               className="bg-white/20 backdrop-blur-sm text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
             >
-              Become a Technician
+              Why Complete Jobs Through Bookings?
             </button>
           </div>
         </div>
