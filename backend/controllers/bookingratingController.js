@@ -226,7 +226,7 @@ exports.createBooking = async (req, res) => {
     });
 
     await booking.save();
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     // ─── Send notification to technician (non-blocking) ───
@@ -334,7 +334,7 @@ exports.getMyBookings = async (req, res) => {
     const limitNum = parseInt(limit) || 20;
 
     const bookings = await Booking.find(filter)
-      .populate('clientId', 'firstName lastName email phone')
+      .populate('clientId', 'firstName lastName')
       .populate('technicianId', 'businessName mainCategory')
       .sort(sort)
       .skip(skip)
@@ -383,7 +383,7 @@ exports.getBooking = async (req, res) => {
     const isTechnician = req.user.role === 'technician';
 
     const booking = await Booking.findById(bookingId)
-      .populate('clientId', 'firstName lastName email phone')
+      .populate('clientId', 'firstName lastName')
       .populate('technicianId', 'businessName mainCategory')
       .lean();
 
@@ -465,7 +465,7 @@ exports.cancelBooking = async (req, res) => {
 
     await booking.cancel(reason || 'Cancelled', isTechnician ? 'technician' : 'client');
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Booking cancelled successfully.', data: booking });
@@ -519,7 +519,7 @@ exports.sendQuotation = async (req, res) => {
     booking.status = 'quoted';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Quotation sent', data: booking });
@@ -552,7 +552,7 @@ exports.acceptQuotation = async (req, res) => {
     booking.status = 'agreed';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Quotation accepted', data: booking });
@@ -590,7 +590,7 @@ exports.rejectQuotation = async (req, res) => {
     booking.cancellationReason = reason || 'Client rejected quotation';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Quotation rejected', data: booking });
@@ -628,7 +628,7 @@ exports.setMaterialSource = async (req, res) => {
     booking.materials.providedByClient = providedByClient;
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Material source set', data: booking });
@@ -667,7 +667,7 @@ exports.confirmMaterialsMoneyReceived = async (req, res) => {
     booking.materials.moneyReceivedAt = new Date();
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Materials money receipt confirmed', data: booking });
@@ -707,7 +707,7 @@ exports.confirmMaterialsDelivered = async (req, res) => {
     booking.status = 'materials_delivered';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Materials delivered', data: booking });
@@ -743,7 +743,7 @@ exports.confirmMaterialsReceived = async (req, res) => {
     booking.status = 'materials_confirmed';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Materials receipt confirmed by client', data: booking });
@@ -783,7 +783,7 @@ exports.startBooking = async (req, res) => {
 
     await booking.start();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Work started successfully.', data: booking });
@@ -820,7 +820,7 @@ exports.completeWork = async (req, res) => {
     booking.status = 'work_completed';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({ success: true, message: 'Work marked as completed', data: booking });
@@ -884,7 +884,7 @@ exports.confirmLaborPayment = async (req, res) => {
 
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email phone');
+    await booking.populate('clientId', 'firstName lastName');
     await booking.populate('technicianId', 'businessName mainCategory');
 
     res.json({

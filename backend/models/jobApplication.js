@@ -116,18 +116,18 @@ const jobApplicationSchema = new mongoose.Schema({
     trim: true
   },
   
-  /** Technician's email (denormalized) */
+  /** Technician's email (denormalized) — never returned: contacts are shared via chat */
   technicianEmail: {
     type: String,
-    required: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    select: false
   },
   
-  /** Technician's phone number (denormalized) */
+  /** Technician's phone number (denormalized) — never returned: contacts are shared via chat */
   technicianPhone: {
     type: String,
-    required: true
+    select: false
   },
   
   /** Technician's profile image URL (denormalized) */
@@ -816,7 +816,7 @@ jobApplicationSchema.pre('save', function(next) {
   }
   
   // Set technician denormalized fields if not set
-  if (this.technicianId && (!this.technicianName || !this.technicianEmail)) {
+  if (this.technicianId && !this.technicianName) {
     // This should be handled in pre-validate with population
   }
   
@@ -827,15 +827,13 @@ jobApplicationSchema.pre('save', function(next) {
  * Pre-validate middleware: Populate technician information
  */
 jobApplicationSchema.pre('validate', async function(next) {
-  if (this.technicianId && (!this.technicianName || !this.technicianEmail)) {
+  if (this.technicianId && !this.technicianName) {
     try {
       const User = mongoose.model('User');
       const technician = await User.findById(this.technicianId);
       
       if (technician) {
         this.technicianName = `${technician.firstName} ${technician.lastName}`;
-        this.technicianEmail = technician.email;
-        this.technicianPhone = technician.phone;
         this.technicianProfileImage = technician.profileImage || '';
         this.technicianRating = technician.rating || 0;
       }

@@ -163,8 +163,6 @@ const JobApplicationsList = ({ jobId }) => {
               )}
               <div>
                 <h4 className="font-semibold text-gray-800">{app.technicianName}</h4>
-                <p className="text-sm text-gray-500">{app.technicianEmail}</p>
-                <p className="text-sm text-gray-500">{app.technicianPhone}</p>
               </div>
             </div>
             {getStatusBadge(app.status)}
@@ -284,8 +282,7 @@ const JobApplicationsList = ({ jobId }) => {
                 <h3 className="font-bold text-lg mb-3">Technician Profile</h3>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <p><span className="font-medium">Name:</span> {selectedApp.technicianName}</p>
-                  <p><span className="font-medium">Email:</span> {selectedApp.technicianEmail}</p>
-                  <p><span className="font-medium">Phone:</span> {selectedApp.technicianPhone}</p>
+                  <p className="text-xs text-gray-500">Contact details are shared through chat.</p>
                   {selectedApp.technicianRating > 0 && (
                     <p><span className="font-medium">Rating:</span> ⭐ {selectedApp.technicianRating}/5</p>
                   )}

@@ -1177,9 +1177,6 @@ const BookingDetails = () => {
                 <div>
                   <p className="text-sm text-gray-500">Client</p>
                   <p className="font-medium text-gray-800">{getClientName(booking)}</p>
-                  {booking.clientId?.email && (
-                    <p className="text-xs text-gray-400">{booking.clientId.email}</p>
-                  )}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Technician</p>
