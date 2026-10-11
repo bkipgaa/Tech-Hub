@@ -42,6 +42,7 @@ import Header from './common/Header';
 import VerificationBanner from './common/VerificationBanner';
 import ProfileCompletionBar from './common/ProfileCompletionBar';
 import TabNavigation from './common/TabNavigation';
+import BookingBenefits from './BookingBenefits';
 
 // Import icons
 import { Edit, Save, X, Shield, Eye, Briefcase } from 'lucide-react';
@@ -676,10 +677,17 @@ const TechnicianDashboard = () => {
           technicianId={currentProfile?._id}
         />
 
-        <ProfileCompletionBar 
-          percentage={currentProfile?.profileCompletionPercentage} 
+        <ProfileCompletionBar
+          percentage={currentProfile?.profileCompletionPercentage}
           isAdminView={isAdminView}
         />
+
+        {/* Why complete jobs through bookings (speaks to the technician, so not in admin view) */}
+        {!isAdminView && (
+          <div className="mb-6">
+            <BookingBenefits />
+          </div>
+        )}
 
         <TabNavigation 
           activeTab={activeTab} 
