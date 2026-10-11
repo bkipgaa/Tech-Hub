@@ -68,10 +68,22 @@ exports.createProfile = async (req, res) => {
       });
     }
 
-    // 4. Validate coordinates
-    const coordinates = req.body.location?.coordinates || [36.8219, -1.2921];
+    // 4. Validate coordinates — required: clients only see technicians near
+    //    them, so a missing or made-up location would hide or misplace them
+    const rawCoordinates = req.body.location?.coordinates;
+    if (!Array.isArray(rawCoordinates) || rawCoordinates.length !== 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Your current location is required. Please share your location.'
+      });
+    }
+    const coordinates = rawCoordinates.map(Number);
     const [lng, lat] = coordinates;
-    if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+    if (
+      !Number.isFinite(lng) || !Number.isFinite(lat) ||
+      lng < -180 || lng > 180 || lat < -90 || lat > 90 ||
+      (lng === 0 && lat === 0)
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Invalid location coordinates'

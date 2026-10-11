@@ -19,7 +19,7 @@ import {
   Languages, Plus, Trash2, CheckCircle, AlertCircle,
   User, DollarSign, BadgeCheck as Certificate, Calendar, Globe, Settings,
   BookOpen, Image, Video, Star, Facebook, Twitter, Linkedin, Instagram, Youtube,
-  ChevronDown, ChevronUp, Loader2, Camera, FileText,
+  ChevronDown, ChevronUp, Loader2, Camera, FileText, Navigation,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -73,7 +73,7 @@ const CreateTechnicianProfile = () => {
       country: 'Kenya',
     },
     location: {
-      coordinates: [36.8219, -1.2921],
+      coordinates: null, // [lng, lat] — required, set from the device's location
       formattedAddress: '',
       placeId: '',
     },
@@ -183,7 +183,7 @@ const CreateTechnicianProfile = () => {
     certifications: false,
     portfolio: false,
     languages: false,
-    location: false,
+    location: true, // required section
     pricing: false,
     availability: false,
     social: false,
@@ -620,6 +620,72 @@ const CreateTechnicianProfile = () => {
     }));
   };
 
+  // ─── LOCATION ───────────────────────────────────────────
+  // Clients only see technicians within range of where they are, so the
+  // technician's real location is required.
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
+  const getCurrentLocation = () => {
+    setGettingLocation(true);
+    setLocationError('');
+    if (!navigator.geolocation) {
+      setLocationError('Your browser does not support location. Please use a different browser or device.');
+      setGettingLocation(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setFormData((prev) => ({
+          ...prev,
+          location: { ...prev.location, coordinates: [longitude, latitude] },
+        }));
+        await reverseGeocode(latitude, longitude);
+        setGettingLocation(false);
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocationError('Location access was blocked. Allow location for this site in your browser settings, then try again.');
+        } else if (err.code === err.TIMEOUT) {
+          setLocationError('Getting your location timed out. Please try again.');
+        } else {
+          setLocationError('Your location is unavailable right now. Please try again.');
+        }
+        setGettingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
+  // Fill in the address fields the technician hasn't typed yet
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+      );
+      const data = await response.json();
+      if (data.address) {
+        setFormData((prev) => ({
+          ...prev,
+          address: {
+            ...prev.address,
+            street: prev.address.street || data.address.road || data.address.pedestrian || '',
+            city: prev.address.city || data.address.city || data.address.town || data.address.village || '',
+            state: prev.address.state || data.address.state || data.address.county || '',
+            zipCode: prev.address.zipCode || data.address.postcode || '',
+          },
+          location: { ...prev.location, formattedAddress: data.display_name || '' },
+        }));
+      }
+    } catch (err) {
+      // Coordinates are what matter; the address can be typed by hand
+      console.warn('Reverse geocoding failed:', err.message);
+    }
+  };
+
+  const hasLocation = Array.isArray(formData.location?.coordinates) && formData.location.coordinates.length === 2;
+
   // ─── SUBMIT ─────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -634,6 +700,13 @@ const CreateTechnicianProfile = () => {
 
     if (formData.serviceCategories.length === 0) {
       setError('Please add at least one service category with sub-services');
+      setLoading(false);
+      return;
+    }
+
+    if (!hasLocation) {
+      setError('Please share your current location (Location section) so clients near you can find you.');
+      setExpandedSections((prev) => ({ ...prev, location: true }));
       setLoading(false);
       return;
     }
@@ -1935,7 +2008,8 @@ const CreateTechnicianProfile = () => {
               >
                 <h2 className="text-xl font-bold text-gray-800 flex items-center">
                   <MapPin className="w-5 h-5 mr-2 text-green-600" />
-                  Location
+                  Location <span className="text-red-500 ml-1">*</span>
+                  {hasLocation && <CheckCircle className="w-5 h-5 ml-2 text-green-600" />}
                 </h2>
                 {expandedSections.location ? (
                   <ChevronUp className="w-5 h-5" />
@@ -1945,6 +2019,40 @@ const CreateTechnicianProfile = () => {
               </button>
               {expandedSections.location && (
                 <div className="p-6">
+                  {/* Current location (required) */}
+                  <div className={`mb-6 p-4 rounded-lg border ${hasLocation ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                    <p className="text-sm font-medium text-gray-800 mb-1">
+                      Your current location <span className="text-red-500">*</span>
+                    </p>
+                    <p className="text-xs text-gray-600 mb-3">
+                      Clients only see technicians near them, so we need your real location. Share it from where you usually work.
+                    </p>
+                    {hasLocation ? (
+                      <p className="text-sm text-green-800 flex items-start gap-2 mb-3">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>
+                          Location captured
+                          {formData.location.formattedAddress ? `: ${formData.location.formattedAddress}` : ''}
+                        </span>
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={getCurrentLocation}
+                      disabled={gettingLocation}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium disabled:opacity-60"
+                    >
+                      {gettingLocation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+                      {gettingLocation ? 'Getting location…' : hasLocation ? 'Update my location' : 'Use my current location'}
+                    </button>
+                    {locationError && (
+                      <p className="text-sm text-red-600 mt-2 flex items-start gap-1">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        {locationError}
+                      </p>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
