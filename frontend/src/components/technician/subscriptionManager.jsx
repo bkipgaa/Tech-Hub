@@ -4,6 +4,7 @@ import {
   Shield, TrendingUp, MapPin, Calendar, Zap, Phone
 } from 'lucide-react';
 import api from '../../services/api';
+import { visiblePlans } from '../../utils/plans';
 
 /**
  * SubscriptionManager Component
@@ -54,7 +55,7 @@ const SubscriptionManager = () => {
         api.get('/subscription/plans'),
         api.get('/subscription/current')
       ]);
-      setPlans(plansRes.data.data);
+      setPlans(visiblePlans(plansRes.data.data)); // hides the KES 10 test plan
       setCurrentSubscription(subRes.data.data);
     } catch (error) {
       console.error('Error fetching data:', error);
