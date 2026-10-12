@@ -639,6 +639,7 @@ exports.setMaterialSource = async (req, res) => {
     }
 
     booking.materials.providedByClient = providedByClient;
+    booking.materials.sourceSetAt = new Date();
     await booking.save();
 
     await booking.populate('clientId', 'firstName lastName');

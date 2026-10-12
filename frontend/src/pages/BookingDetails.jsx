@@ -909,14 +909,51 @@ const BookingDetails = () => {
 
   // Technician actions
   const techCanSendQuotation = isPending;
-  const techCanSetMaterialSource = isAgreed;
+  // Materials steps one at a time: choose source → (money received) → delivered.
+  // Older bookings have no sourceSetAt, so treat money/delivery progress as "source chosen".
+  const materialSourceChosen = !!(booking.materials?.sourceSetAt || booking.materials?.moneyReceivedAt || booking.materials?.deliveredAt);
+  const techCanSetMaterialSource = isAgreed && !materialSourceChosen;
   // If tech buys, they must confirm money received before delivering
-  const techCanConfirmMaterialsMoneyReceived = isAgreed && booking.materials?.providedByClient === false && !booking.materials?.moneyReceivedAt;
-  const techCanConfirmMaterialsDelivered = isAgreed && (booking.materials?.providedByClient || booking.materials?.moneyReceivedAt) && !booking.materials?.deliveredAt;
+  const techCanConfirmMaterialsMoneyReceived = isAgreed && materialSourceChosen && booking.materials?.providedByClient === false && !booking.materials?.moneyReceivedAt;
+  const techCanConfirmMaterialsDelivered = isAgreed && materialSourceChosen && (booking.materials?.providedByClient || booking.materials?.moneyReceivedAt) && !booking.materials?.deliveredAt;
   const techCanStartWork = isMaterialsConfirmed;
   const techCanCompleteWork = isInProgress && !booking.workCompletedAt;
   const techCanConfirmLaborPayment = isWorkCompleted && !booking.laborPayment?.confirmedAt;
-  const techCanCancel = isPending || isQuoted || isAgreed || isMaterialsDelivered || isMaterialsConfirmed || isInProgress;
+  // Server only allows cancelling before the quotation is accepted
+  const techCanCancel = isPending || isQuoted;
+
+  // What happens next, and whose move it is — shown to both people
+  const technicianName = getTechnicianName(booking);
+  const clientName = getClientName(booking);
+  const nextStep = (() => {
+    const tech = isTechnician;
+    switch (booking.status) {
+      case 'pending':
+        return tech ? 'Your move: send a quotation.' : `Waiting for ${technicianName} to send a quotation.`;
+      case 'quoted':
+        return tech ? `Waiting for ${clientName} to accept or reject your quotation.` : 'Your move: accept or reject the quotation.';
+      case 'agreed':
+        if (!materialSourceChosen) {
+          return tech ? 'Your move: choose who provides the materials.' : `Waiting for ${technicianName} to arrange the materials.`;
+        }
+        if (booking.materials?.providedByClient === false && !booking.materials?.moneyReceivedAt) {
+          return tech ? 'Your move: confirm the client has paid you for materials.' : `Pay ${technicianName} for the materials; they will confirm receipt.`;
+        }
+        return tech ? 'Your move: confirm the materials are delivered.' : `Waiting for ${technicianName} to deliver the materials.`;
+      case 'materials_delivered':
+        return tech ? `Waiting for ${clientName} to confirm the materials.` : 'Your move: confirm you received the materials.';
+      case 'materials_confirmed':
+        return tech ? 'Your move: start the work.' : `Waiting for ${technicianName} to start the work.`;
+      case 'in_progress':
+        return tech ? 'Your move: mark the work as completed when done.' : `${technicianName} is working on it.`;
+      case 'work_completed':
+        return tech ? 'Your move: confirm the labor amount you were paid.' : `Pay ${technicianName} for the labor; they will confirm the amount.`;
+      case 'labor_paid':
+        return tech ? `Waiting for ${clientName} to rate you.` : 'Your move: rate the technician to finish the booking.';
+      default:
+        return null;
+    }
+  })();
 
   // Build timeline
   const timeline = buildStatusTimeline(booking);
@@ -961,6 +998,23 @@ const BookingDetails = () => {
             </button>
           </div>
         </div>
+
+        {/* ─── NEXT STEP ──────────────────────────────────────── */}
+        {nextStep && (isClient || isTechnician) && (
+          <div
+            className={`mb-6 p-4 rounded-xl border flex items-start gap-3 ${
+              nextStep.startsWith('Your move')
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-gray-50 border-gray-200 text-gray-700'
+            }`}
+          >
+            <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Next step</p>
+              <p className="text-sm font-medium">{nextStep}</p>
+            </div>
+          </div>
+        )}
 
         {/* ─── MAIN CONTENT ───────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
