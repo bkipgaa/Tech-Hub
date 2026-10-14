@@ -21,6 +21,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   Calendar,
   Clock,
@@ -177,8 +178,11 @@ const SkeletonLoader = () => (
  */
 const MyBookings = () => {
   const navigate = useNavigate();
+  const { isTechnician } = useAuth();
 
   // ─── STATE ────────────────────────────────────────────────────
+  // Technicians have two sides: bookings made with them, and bookings they made
+  const [viewAs, setViewAs] = useState(isTechnician ? 'technician' : 'client');
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -222,10 +226,10 @@ const MyBookings = () => {
       }
       setError('');
 
-      // Bookings this user made (as=client: technicians can book other technicians too)
+      // as=technician → bookings made with me; as=client → bookings I made
       const url = statusFilter
-        ? `/bookings/my-bookings?as=client&status=${statusFilter}`
-        : '/bookings/my-bookings?as=client';
+        ? `/bookings/my-bookings?as=${viewAs}&status=${statusFilter}`
+        : `/bookings/my-bookings?as=${viewAs}`;
 
       const response = await api.get(url);
 
@@ -280,15 +284,20 @@ const MyBookings = () => {
         setIsRefreshing(false);
       }
     }
-  }, [statusFilter, navigate]);
+  }, [statusFilter, viewAs, navigate]);
 
   // ─── EFFECTS ──────────────────────────────────────────────────
 
-  // Fetch bookings when the component mounts or filter changes
+  // Auth loads after first render on refresh — default technicians to their incoming bookings
+  useEffect(() => {
+    if (isTechnician) setViewAs('technician');
+  }, [isTechnician]);
+
+  // Fetch bookings when the component mounts, the filter or the tab changes
   useEffect(() => {
     fetchBookings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, viewAs]);
 
   /**
    * handleRefresh()
@@ -637,6 +646,29 @@ const MyBookings = () => {
           </div>
         </div>
 
+        {/* ─── TABS (technicians: both sides of their bookings) ─── */}
+        {isTechnician && (
+          <div className="flex gap-2 mb-6 border-b border-gray-200">
+            {[
+              { id: 'technician', label: 'Requests for me', hint: 'Clients who booked you' },
+              { id: 'client', label: 'Booked by me', hint: 'Services you booked from other technicians' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setViewAs(tab.id)}
+                title={tab.hint}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  viewAs === tab.id
+                    ? 'border-green-600 text-green-700'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ─── ERROR BANNER ───────────────────────────────────── */}
         {error && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-start gap-3">
@@ -665,6 +697,8 @@ const MyBookings = () => {
             <p className="text-gray-500 text-sm mt-2">
               {statusFilter
                 ? `You have no ${statusFilter} bookings. Try changing the filter.`
+                : viewAs === 'technician'
+                ? 'No clients have booked you yet. Bookings made with you will appear here.'
                 : 'You haven\'t made any bookings yet. Find a technician to get started!'}
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-3">
@@ -676,7 +710,7 @@ const MyBookings = () => {
                   View all bookings
                 </button>
               )}
-              {!statusFilter && (
+              {!statusFilter && viewAs === 'client' && (
                 <button
                   onClick={() => navigate('/search')}
                   className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
@@ -693,9 +727,11 @@ const MyBookings = () => {
           <div className="space-y-4">
             {bookings.map((booking) => {
               const isExpanded = expandedBookingId === booking._id;
-              const canCancel = ['pending', 'confirmed'].includes(booking.status);
-              const canRate = booking.status === 'completed' && !booking.clientRating;
-              const alreadyRated = booking.status === 'completed' && booking.clientRating;
+              // Cancel/Rate shortcuts are client actions; technicians act from the booking page
+              const asClient = viewAs === 'client';
+              const canCancel = asClient && ['pending', 'confirmed'].includes(booking.status);
+              const canRate = asClient && booking.status === 'completed' && !booking.clientRating;
+              const alreadyRated = asClient && booking.status === 'completed' && booking.clientRating;
 
               return (
                 <div
@@ -720,7 +756,9 @@ const MyBookings = () => {
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
                           <span className="flex items-center gap-1">
                             <User className="w-4 h-4 text-gray-400" />
-                            {getTechnicianName(booking)}
+                            {asClient
+                              ? getTechnicianName(booking)
+                              : `Client: ${`${booking.clientId?.firstName || ''} ${booking.clientId?.lastName || ''}`.trim() || 'Client'}`}
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="w-4 h-4 text-gray-400" />
