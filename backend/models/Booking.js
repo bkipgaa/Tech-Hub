@@ -95,6 +95,7 @@ const bookingSchema = new mongoose.Schema({
   // ── Materials ──────────────────────────────────────────────────
   materials: {
     providedByClient: { type: Boolean, default: false },
+    sourceSetAt: Date,            // technician chose who provides materials
     moneyReceivedAt: Date,        // technician acknowledges client paid for materials
     deliveredAt: Date,            // technician confirms materials delivered
     confirmedByClientAt: Date,    // client confirms materials received
