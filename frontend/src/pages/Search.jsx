@@ -55,6 +55,10 @@ const planConfig = {
   trial: { label: 'Trial', color: 'text-green-600', bg: 'bg-green-100', border: 'border-green-200', icon: Clock },
 };
 
+// Session cache for the service catalog (new key drops copies saved by older versions)
+const CATALOG_CACHE_KEY = 'catalogData:v2';
+const CATALOG_CACHE_MS = 10 * 60 * 1000;
+
 const SearchPage = () => {
   const navigate = useNavigate();
 
@@ -101,16 +105,20 @@ const SearchPage = () => {
     setCatalogError('');
     setUsingDefaultCatalog(false);
 
-    const cached = sessionStorage.getItem('catalogData');
+    // Session copy, refreshed every few minutes so catalog updates show up
+    const cached = sessionStorage.getItem(CATALOG_CACHE_KEY);
     if (cached) {
       try {
-        const parsed = JSON.parse(cached);
-        setCatalogData(parsed);
-        setCatalogLoading(false);
-        return;
+        const { savedAt, payload } = JSON.parse(cached);
+        if (payload && Date.now() - savedAt < CATALOG_CACHE_MS) {
+          setCatalogData(payload);
+          setCatalogLoading(false);
+          return;
+        }
       } catch {
-        sessionStorage.removeItem('catalogData');
+        /* fall through and refetch */
       }
+      sessionStorage.removeItem(CATALOG_CACHE_KEY);
     }
 
     try {
@@ -130,13 +138,14 @@ const SearchPage = () => {
             const subNames = (sc.subServices || []).map((sub) =>
               typeof sub === 'string' ? sub : sub.name || sub.subService || ''
             );
-            subServicesMap[sc.name] = subNames;
+            // Keyed by category + service category: names can repeat across categories
+            subServicesMap[`${cat.mainCategory}||${sc.name}`] = subNames;
           });
         });
 
         const payload = { mainCategories, serviceCategoriesMap, subServicesMap };
         setCatalogData(payload);
-        sessionStorage.setItem('catalogData', JSON.stringify(payload));
+        sessionStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), payload }));
       } else {
         throw new Error(response.data.message || 'Catalog data unavailable');
       }
@@ -205,7 +214,10 @@ const SearchPage = () => {
 
   useEffect(() => {
     if (filters.serviceCategory) {
-      const subs = catalogData.subServicesMap[filters.serviceCategory] || [];
+      const subs =
+        catalogData.subServicesMap[`${filters.mainCategory}||${filters.serviceCategory}`] ||
+        catalogData.subServicesMap[filters.serviceCategory] || // built-in fallback catalog
+        [];
       const subNames = subs.map((sub) =>
         typeof sub === 'string' ? sub : sub.name || sub.subService || ''
       );
@@ -364,7 +376,7 @@ const SearchPage = () => {
   const dismissSearchError = () => setSearchError('');
 
   const retryCatalogLoad = () => {
-    sessionStorage.removeItem('catalogData');
+    sessionStorage.removeItem(CATALOG_CACHE_KEY);
     fetchCatalogData();
   };
 

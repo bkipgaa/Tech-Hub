@@ -35,7 +35,7 @@ router.post('/portfolio', auth, upload.single('media'), async (req, res) => {
       bufferSize: req.file.buffer?.length,
     });
 
-    const result = await uploadPortfolioToCloudinary(req.file.buffer);
+    const result = await uploadPortfolioToCloudinary(req.file.buffer, req.file.mimetype);
 
     // Determine media type from Cloudinary result
     let mediaType = 'image';

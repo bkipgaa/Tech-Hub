@@ -232,7 +232,13 @@ exports.getSubServices = async (req, res) => {
               in: {
                 id: '$$s._id',
                 name: '$$s.name',
-                description: { $ifNull: ['$$s.description', `Professional ${'$$s.name'} services`] },
+                description: {
+                  $cond: [
+                    { $gt: [{ $strLenCP: { $ifNull: ['$$s.description', ''] } }, 0] },
+                    '$$s.description',
+                    { $concat: ['Professional ', '$$s.name', ' services'] },
+                  ],
+                },
                 suggestedPriceRange: { $ifNull: ['$$s.suggestedPriceRange', { min: 1000, max: 5000, currency: 'KES' }] },
                 typicalDuration: { $ifNull: ['$$s.typicalDuration', { value: 2, unit: 'hours' }] },
                 commonRequirements: { $ifNull: ['$$s.commonRequirements', []] },
@@ -578,7 +584,13 @@ exports.getDetailedSubServices = async (req, res) => {
               in: {
                 id: '$$s._id',
                 name: '$$s.name',
-                description: { $ifNull: ['$$s.description', `Professional ${'$$s.name'} services`] },
+                description: {
+                  $cond: [
+                    { $gt: [{ $strLenCP: { $ifNull: ['$$s.description', ''] } }, 0] },
+                    '$$s.description',
+                    { $concat: ['Professional ', '$$s.name', ' services'] },
+                  ],
+                },
                 suggestedPriceRange: { $ifNull: ['$$s.suggestedPriceRange', { min: 1000, max: 5000, currency: 'KES' }] },
                 typicalDuration: { $ifNull: ['$$s.typicalDuration', { value: 2, unit: 'hours' }] },
                 commonRequirements: { $ifNull: ['$$s.commonRequirements', []] },

@@ -22,6 +22,7 @@ import {
   ChevronDown, ChevronUp, Loader2, Camera, FileText, Navigation,
 } from 'lucide-react';
 import api from '../services/api';
+import { cldImage, cldVideoPoster, CARD_WIDTH } from '../utils/media';
 
 const CreateTechnicianProfile = () => {
   const { user, createTechnicianProfile } = useAuth();
@@ -1759,7 +1760,7 @@ const CreateTechnicianProfile = () => {
                           <div className="mt-3 p-2 bg-white rounded-lg border border-green-200">
                             {newPortfolio.mediaType === 'image' && (
                               <img
-                                src={newPortfolio.mediaUrl}
+                                src={cldImage(newPortfolio.mediaUrl, CARD_WIDTH)}
                                 alt="Preview"
                                 className="h-40 rounded object-cover"
                               />
@@ -1767,6 +1768,8 @@ const CreateTechnicianProfile = () => {
                             {newPortfolio.mediaType === 'video' && (
                               <video
                                 src={newPortfolio.mediaUrl}
+                                poster={cldVideoPoster(newPortfolio.mediaUrl, CARD_WIDTH)}
+                                preload="none"
                                 className="h-40 rounded"
                                 controls
                               />
@@ -1885,7 +1888,7 @@ const CreateTechnicianProfile = () => {
                           <div className="flex-1 min-w-0">
                             {item.mediaUrl && item.mediaType === 'image' && (
                               <img
-                                src={item.mediaUrl}
+                                src={cldImage(item.mediaUrl, CARD_WIDTH)}
                                 alt={item.title}
                                 className="w-full h-32 object-cover rounded mb-2"
                               />
@@ -1893,6 +1896,8 @@ const CreateTechnicianProfile = () => {
                             {item.mediaUrl && item.mediaType === 'video' && (
                               <video
                                 src={item.mediaUrl}
+                                poster={cldVideoPoster(item.mediaUrl, CARD_WIDTH)}
+                                preload="none"
                                 className="w-full h-32 rounded mb-2"
                                 controls
                               />

@@ -1,22 +1,31 @@
 /**
  * PortfolioTab.jsx
  * ================
- * Technician portfolio management tab.
- * Supports inline edit for every portfolio item, including media replacement.
+ * Expert portfolio: a clean gallery of past projects with a full-size viewer,
+ * plus an add/edit form (in a modal) when the profile is in edit mode.
  *
- * @version 3.1.0 – Inline edit with API persistence
+ * Every add, edit and delete is saved straight away (PUT /technician/profile/portfolio).
+ * Media is uploaded to Cloudinary via POST /upload/portfolio; the media type
+ * (image / video / document) comes from the upload itself.
+ *
+ * @version 4.0.0 – Professional layout, modal form, viewer, instant save
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  Plus, Trash2, Camera, Star, FileText, Loader2,
-  CheckCircle, AlertCircle, X, Pencil, Save,
+  Plus, Trash2, Camera, Star, FileText, Loader2, CheckCircle, AlertCircle,
+  X, Pencil, Video, Calendar, Briefcase, ExternalLink, UploadCloud, Image as ImageIcon,
 } from 'lucide-react';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { cldImage, cldVideoPoster, CARD_WIDTH, VIEWER_WIDTH } from '../../../utils/media';
 
-const EMPTY_PORTFOLIO = {
+const MAX_ITEMS = 20;
+const MAX_FILE_MB = 10;
+const MAX_TAGS = 5;
+const MAX_DESCRIPTION = 500;
+
+const EMPTY_ITEM = {
   title: '',
   description: '',
   category: '',
@@ -30,617 +39,526 @@ const EMPTY_PORTFOLIO = {
   isFeatured: false,
 };
 
-const PortfolioTab = ({ formData, setFormData, isEditing }) => {
-  const { updatePortfolio } = useAuth();
+const formatMonthYear = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  return isNaN(d) ? '' : d.toLocaleDateString('en-KE', { month: 'short', year: 'numeric' });
+};
 
-  // ─── Add-form state ─────────────────────────────────────
-  const [newPortfolio, setNewPortfolio] = useState({ ...EMPTY_PORTFOLIO });
-  const [newTag, setNewTag] = useState('');
+const toDateInput = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+};
+
+// ─── Media preview used by cards, the form and the viewer ───────────────────
+const MediaPreview = ({ item, className = '', controls = false }) => {
+  if (item.mediaType === 'video') {
+    return <video src={item.mediaUrl} poster={cldVideoPoster(item.mediaUrl, CARD_WIDTH)} preload="none" className={`${className} bg-black object-cover`} controls={controls} muted={!controls} />;
+  }
+  if (item.mediaType === 'document') {
+    return (
+      <div className={`${className} bg-gray-50 flex flex-col items-center justify-center text-gray-500`}>
+        <FileText className="w-12 h-12 mb-2 text-gray-400" />
+        <span className="text-xs font-medium">PDF document</span>
+      </div>
+    );
+  }
+  return <img src={cldImage(item.mediaUrl, CARD_WIDTH)} alt={item.title || 'Portfolio item'} className={`${className} object-cover`} loading="lazy" />;
+};
+
+// ─── Modal shell ─────────────────────────────────────────────────────────────
+const Modal = ({ title, onClose, children, wide = false }) => (
+  <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className={`relative bg-white rounded-xl shadow-2xl w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between z-10">
+        <h3 className="text-lg font-semibold text-gray-900 pr-6">{title}</h3>
+        <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600" aria-label="Close">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+      {children}
+    </div>
+  </div>
+);
+
+// ─── Add / edit form ─────────────────────────────────────────────────────────
+const ProjectForm = ({ initial, serviceOptions, onCancel, onSave, saving }) => {
+  const [item, setItem] = useState({ ...EMPTY_ITEM, ...initial, completionDate: toDateInput(initial?.completionDate) });
+  const [tagInput, setTagInput] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [formError, setFormError] = useState('');
 
-  // ─── Inline-edit state ──────────────────────────────────
-  const [editingIdx, setEditingIdx] = useState(null);
-  const [editData, setEditData] = useState({ ...EMPTY_PORTFOLIO });
-  const [editTag, setEditTag] = useState('');
-  const [editUploading, setEditUploading] = useState(false);
-  const [editUploadError, setEditUploadError] = useState('');
-  const [editSelectedFile, setEditSelectedFile] = useState(null);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [error, setError] = useState('');
+  const set = (field, value) => setItem((prev) => ({ ...prev, [field]: value }));
 
-  const formatFileSize = (bytes) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
-  // ═══════════════════════════════════════════════════════
-  // ADD FLOW
-  // ═══════════════════════════════════════════════════════
-  const addPortfolio = () => {
-    if (newPortfolio.title && newPortfolio.mediaUrl) {
-      setFormData({
-        ...formData,
-        portfolio: [...(formData.portfolio || []), newPortfolio],
-        gallery: [...(formData.gallery || []), newPortfolio.mediaUrl],
-      });
-      setNewPortfolio({ ...EMPTY_PORTFOLIO });
-      setNewTag('');
-      setUploadError('');
-      setSelectedFile(null);
-    }
-  };
-
-  const removePortfolio = async (index) => {
-    const updatedPortfolio = (formData.portfolio || []).filter((_, i) => i !== index);
-    const updatedGallery = (formData.gallery || []).filter((_, i) => i !== index);
-    setFormData({ ...formData, portfolio: updatedPortfolio, gallery: updatedGallery });
-    if (editingIdx === index) cancelEdit();
-
-    const res = await updatePortfolio(updatedPortfolio);
-    if (!res.success) setError(res.error || 'Failed to delete portfolio item');
-  };
-
-  const addTag = () => {
-    if (newTag && !newPortfolio.tags.includes(newTag)) {
-      setNewPortfolio({ ...newPortfolio, tags: [...newPortfolio.tags, newTag] });
-      setNewTag('');
-    }
-  };
-
-  const removeTag = (tagToRemove) => {
-    setNewPortfolio({ ...newPortfolio, tags: newPortfolio.tags.filter((t) => t !== tagToRemove) });
-  };
-
-  const handleMediaUpload = async (e) => {
-    const file = e.target.files[0];
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('File size must be less than 10MB');
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      setUploadError(`File is too large. The maximum is ${MAX_FILE_MB} MB.`);
       return;
     }
-    setSelectedFile(file);
     setUploading(true);
     setUploadError('');
     const fd = new FormData();
     fd.append('media', file);
     try {
       const res = await api.post('/upload/portfolio', fd);
-      if (res.data.success) {
-        setNewPortfolio((prev) => ({
-          ...prev,
-          mediaUrl: res.data.mediaUrl,
-          publicId: res.data.publicId,
-          thumbnailUrl: res.data.mediaUrl,
-          mediaType: res.data.mediaType,
-        }));
-      } else {
-        setUploadError(res.data.message || 'Upload failed');
-      }
+      if (!res.data.success) throw new Error(res.data.message || 'Upload failed');
+      setItem((prev) => ({
+        ...prev,
+        mediaUrl: res.data.mediaUrl,
+        publicId: res.data.publicId,
+        thumbnailUrl: res.data.mediaUrl,
+        mediaType: res.data.mediaType,
+      }));
     } catch (err) {
-      setUploadError(err.response?.data?.message || err.message || 'Upload failed');
+      setUploadError(err.response?.data?.message || err.message || 'Upload failed. Please try again.');
     } finally {
       setUploading(false);
     }
   };
 
-  const clearSelectedFile = () => {
-    setSelectedFile(null);
-    setNewPortfolio((prev) => ({ ...prev, mediaUrl: '', publicId: '', thumbnailUrl: '' }));
-    setUploadError('');
+  const addTag = () => {
+    const tag = tagInput.trim();
+    if (!tag || item.tags.includes(tag) || item.tags.length >= MAX_TAGS) return;
+    set('tags', [...item.tags, tag]);
+    setTagInput('');
   };
 
-  // ═══════════════════════════════════════════════════════
-  // EDIT FLOW
-  // ═══════════════════════════════════════════════════════
-  const startEdit = (idx) => {
-    const item = formData.portfolio[idx];
-    setEditingIdx(idx);
-    setEditData({ ...EMPTY_PORTFOLIO, ...item, tags: [...(item.tags || [])] });
-    setEditTag('');
-    setEditUploadError('');
-    setEditSelectedFile(null);
-    setError('');
+  const submit = () => {
+    if (!item.title.trim()) return setFormError('Please give the project a title.');
+    if (!item.mediaUrl) return setFormError('Please upload a photo, video or PDF of the project.');
+    setFormError('');
+    onSave({ ...item, title: item.title.trim(), description: item.description.trim() });
   };
 
-  const cancelEdit = () => {
-    setEditingIdx(null);
-    setEditData({ ...EMPTY_PORTFOLIO });
-    setEditTag('');
-    setEditUploadError('');
-    setEditSelectedFile(null);
-    setEditUploading(false);
-  };
+  const label = 'block text-sm font-medium text-gray-700 mb-1';
+  const input =
+    'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none';
 
-  const saveEdit = async () => {
-    if (!editData.title || !editData.mediaUrl) {
-      setError('Title and media are required');
-      return;
-    }
-    setSavingEdit(true);
-    setError('');
-
-    const previousPortfolio = formData.portfolio;
-    const previousGallery = formData.gallery;
-
-    const updatedPortfolio = [...previousPortfolio];
-    const previousUrl = updatedPortfolio[editingIdx]?.mediaUrl;
-    updatedPortfolio[editingIdx] = editData;
-
-    const updatedGallery = [...(previousGallery || [])];
-    if (previousUrl !== editData.mediaUrl) {
-      const gIdx = updatedGallery.indexOf(previousUrl);
-      if (gIdx !== -1) updatedGallery[gIdx] = editData.mediaUrl;
-    }
-
-    // Optimistic UI
-    setFormData({ ...formData, portfolio: updatedPortfolio, gallery: updatedGallery });
-
-    const res = await updatePortfolio(updatedPortfolio);
-    setSavingEdit(false);
-
-    if (res.success) {
-      cancelEdit();
-    } else {
-      // Roll back
-      setFormData({ ...formData, portfolio: previousPortfolio, gallery: previousGallery });
-      setError(res.error || 'Failed to save portfolio item');
-    }
-  };
-
-  const addEditTag = () => {
-    if (editTag && !editData.tags.includes(editTag)) {
-      setEditData((prev) => ({ ...prev, tags: [...prev.tags, editTag] }));
-      setEditTag('');
-    }
-  };
-
-  const removeEditTag = (tagToRemove) => {
-    setEditData((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tagToRemove) }));
-  };
-
-  const handleEditMediaUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setEditUploadError('File size must be less than 10MB');
-      return;
-    }
-    setEditSelectedFile(file);
-    setEditUploading(true);
-    setEditUploadError('');
-    const fd = new FormData();
-    fd.append('media', file);
-    try {
-      const res = await api.post('/upload/portfolio', fd);
-      if (res.data.success) {
-        setEditData((prev) => ({
-          ...prev,
-          mediaUrl: res.data.mediaUrl,
-          publicId: res.data.publicId,
-          thumbnailUrl: res.data.mediaUrl,
-          mediaType: res.data.mediaType,
-        }));
-      } else {
-        setEditUploadError(res.data.message || 'Upload failed');
-      }
-    } catch (err) {
-      setEditUploadError(err.response?.data?.message || err.message || 'Upload failed');
-    } finally {
-      setEditUploading(false);
-    }
-  };
-
-  // ═══════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════
   return (
-    <div className="space-y-6">
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-start gap-2">
-          <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} className="text-red-500 hover:text-red-700">✕</button>
-        </div>
-      )}
-
-      {/* ═══ Add form ═══ */}
-      {isEditing && (
-        <div className="bg-green-50 p-4 rounded-lg space-y-3 border border-green-200">
-          <h3 className="font-medium text-gray-900">Add Portfolio Item</h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input
-              type="text"
-              value={newPortfolio.title}
-              onChange={(e) => setNewPortfolio({ ...newPortfolio, title: e.target.value })}
-              placeholder="Project Title *"
-              className="p-2 border-2 border-green-300 rounded-lg"
-            />
-            <select
-              value={newPortfolio.mediaType}
-              onChange={(e) => setNewPortfolio({ ...newPortfolio, mediaType: e.target.value })}
-              className="p-2 border-2 border-green-300 rounded-lg bg-white"
-            >
-              <option value="image">Image</option>
-              <option value="video">Video</option>
-              <option value="document">Document</option>
-            </select>
-          </div>
-
-          <textarea
-            value={newPortfolio.description}
-            onChange={(e) => setNewPortfolio({ ...newPortfolio, description: e.target.value })}
-            placeholder="Describe this project..."
-            className="w-full p-2 border-2 border-green-300 rounded-lg"
-            rows="2"
-          />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input
-              type="text"
-              value={newPortfolio.clientName}
-              onChange={(e) => setNewPortfolio({ ...newPortfolio, clientName: e.target.value })}
-              placeholder="Client Name (optional)"
-              className="p-2 border-2 border-green-300 rounded-lg"
-            />
-            <input
-              type="date"
-              value={newPortfolio.completionDate}
-              onChange={(e) => setNewPortfolio({ ...newPortfolio, completionDate: e.target.value })}
-              className="p-2 border-2 border-green-300 rounded-lg"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload Media <span className="text-red-500">*</span>
+    // The dashboard wraps tabs in a <form>: Enter in a text box must not submit it
+    <div
+      className="p-5 space-y-4"
+      onKeyDown={(e) => e.key === 'Enter' && e.target.tagName === 'INPUT' && e.preventDefault()}
+    >
+      {/* Media */}
+      <div>
+        <span className={label}>
+          Photo, video or PDF <span className="text-red-500">*</span>
+        </span>
+        {item.mediaUrl ? (
+          <div className="relative rounded-lg overflow-hidden border border-gray-200">
+            <MediaPreview item={item} className="w-full h-56" controls={item.mediaType === 'video'} />
+            <label className="absolute bottom-2 right-2 cursor-pointer bg-white/95 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-lg shadow hover:bg-white inline-flex items-center gap-1">
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+              {uploading ? 'Uploading…' : 'Replace'}
+              <input type="file" accept="image/*,video/*,.pdf" onChange={handleFile} disabled={uploading} className="hidden" />
             </label>
-            <div className="flex flex-wrap items-center gap-3">
-              <label
-                className={`cursor-pointer bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 inline-flex items-center gap-2 ${
-                  uploading ? 'opacity-50' : ''
-                }`}
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Uploading…
-                  </>
-                ) : (
-                  <>
-                    <Camera className="w-4 h-4" /> Choose File
-                  </>
-                )}
-                <input
-                  type="file"
-                  accept="image/*,video/*,.pdf"
-                  onChange={handleMediaUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
-              </label>
-              {selectedFile && !newPortfolio.mediaUrl && !uploading && (
-                <span className="text-sm text-gray-600">{selectedFile.name}</span>
-              )}
-              {newPortfolio.mediaUrl && !uploading && (
-                <span className="inline-flex items-center gap-1 text-sm text-green-600 font-medium">
-                  <CheckCircle className="w-4 h-4" /> Uploaded
-                </span>
-              )}
-            </div>
-
-            {uploadError && (
-              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-red-700">{uploadError}</p>
-              </div>
+          </div>
+        ) : (
+          <label
+            className={`flex flex-col items-center justify-center h-40 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 cursor-pointer hover:border-green-400 hover:bg-green-50 transition-colors ${
+              uploading ? 'opacity-60 pointer-events-none' : ''
+            }`}
+          >
+            {uploading ? (
+              <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+            ) : (
+              <UploadCloud className="w-8 h-8 text-gray-400" />
             )}
+            <span className="mt-2 text-sm font-medium text-gray-700">{uploading ? 'Uploading…' : 'Click to upload'}</span>
+            <span className="text-xs text-gray-500">JPG, PNG, WEBP, MP4 or PDF · up to {MAX_FILE_MB} MB</span>
+            <input type="file" accept="image/*,video/*,.pdf" onChange={handleFile} disabled={uploading} className="hidden" />
+          </label>
+        )}
+        {uploadError && (
+          <p className="mt-2 text-xs text-red-600 flex items-start gap-1">
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {uploadError}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-gray-500">Tip: clear, well-lit photos of finished work get the most bookings.</p>
+      </div>
 
-            {newPortfolio.mediaUrl && (
-              <div className="mt-3 p-3 bg-white rounded-lg border border-green-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-green-700 font-medium flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" /> Ready to add
-                  </span>
-                  <button
-                    type="button"
-                    onClick={clearSelectedFile}
-                    className="text-xs text-gray-400 hover:text-red-500"
-                  >
-                    Change
-                  </button>
-                </div>
-                {newPortfolio.mediaType === 'image' && (
-                  <img src={cldImage(newPortfolio.mediaUrl, CARD_WIDTH)} alt="Preview" className="max-h-40 rounded object-contain" />
-                )}
-                {newPortfolio.mediaType === 'video' && (
-                  <video src={newPortfolio.mediaUrl} className="max-h-40 rounded" controls />
-                )}
-                {newPortfolio.mediaType === 'document' && (
-                  <div className="h-32 flex items-center justify-center bg-gray-50 rounded">
-                    <FileText className="w-10 h-10 text-gray-400" />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+      {/* Title */}
+      <div>
+        <label className={label} htmlFor="pf-title">
+          Project title <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="pf-title"
+          className={input}
+          value={item.title}
+          maxLength={80}
+          onChange={(e) => set('title', e.target.value)}
+          placeholder="e.g. Full house rewiring, 3-bedroom bungalow"
+        />
+      </div>
 
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Tags</label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                placeholder="Add tag and press Enter"
-                className="flex-1 p-2 border-2 border-green-300 rounded-lg"
-              />
-              <button
-                type="button"
-                onClick={addTag}
-                className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {newPortfolio.tags.map((tag, i) => (
-                <span key={i} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm flex items-center">
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => removeTag(tag)}
-                    className="ml-2 text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
+      {/* Service + date */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className={label} htmlFor="pf-service">Service</label>
+          <select id="pf-service" className={`${input} bg-white`} value={item.category} onChange={(e) => set('category', e.target.value)}>
+            <option value="">Select a service</option>
+            {serviceOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+            {item.category && !serviceOptions.includes(item.category) && <option value={item.category}>{item.category}</option>}
+          </select>
+        </div>
+        <div>
+          <label className={label} htmlFor="pf-date">Completed on</label>
+          <input
+            id="pf-date"
+            type="date"
+            className={input}
+            value={item.completionDate}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => set('completionDate', e.target.value)}
+          />
+        </div>
+      </div>
 
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              checked={newPortfolio.isFeatured}
-              onChange={(e) => setNewPortfolio({ ...newPortfolio, isFeatured: e.target.checked })}
-              className="h-4 w-4 text-green-600 rounded"
-            />
-            <label className="ml-2 block text-sm text-gray-900">Feature this item</label>
-          </div>
+      {/* Description */}
+      <div>
+        <label className={label} htmlFor="pf-desc">Description</label>
+        <textarea
+          id="pf-desc"
+          className={`${input} resize-y`}
+          rows="3"
+          maxLength={MAX_DESCRIPTION}
+          value={item.description}
+          onChange={(e) => set('description', e.target.value)}
+          placeholder="What was the job, what did you do, and what was the result?"
+        />
+        <p className="text-xs text-gray-400 text-right">{item.description.length}/{MAX_DESCRIPTION}</p>
+      </div>
 
+      {/* Client */}
+      <div>
+        <label className={label} htmlFor="pf-client">Client (optional)</label>
+        <input
+          id="pf-client"
+          className={input}
+          value={item.clientName}
+          maxLength={60}
+          onChange={(e) => set('clientName', e.target.value)}
+          placeholder="e.g. Greenview Apartments"
+        />
+        <p className="mt-1 text-xs text-gray-500">Only add a client's name with their permission — it is shown publicly.</p>
+      </div>
+
+      {/* Tags */}
+      <div>
+        <label className={label} htmlFor="pf-tag">Tags ({item.tags.length}/{MAX_TAGS})</label>
+        <div className="flex gap-2">
+          <input
+            id="pf-tag"
+            className={input}
+            value={tagInput}
+            maxLength={30}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+            placeholder="e.g. residential, solar, 3-phase"
+            disabled={item.tags.length >= MAX_TAGS}
+          />
           <button
             type="button"
-            onClick={addPortfolio}
-            disabled={!newPortfolio.mediaUrl || !newPortfolio.title || uploading}
-            className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+            onClick={addTag}
+            disabled={!tagInput.trim() || item.tags.length >= MAX_TAGS}
+            className="px-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
           >
-            Add to Portfolio
+            <Plus className="w-4 h-4" />
           </button>
         </div>
-      )}
-
-      {/* ═══ Grid ═══ */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {(formData.portfolio || []).map((item, index) => (
-          <div
-            key={index}
-            className="border border-green-200 rounded-lg overflow-hidden group relative bg-white shadow-sm"
-          >
-            {editingIdx === index ? (
-              <div className="p-3 space-y-2">
-                <input
-                  type="text"
-                  value={editData.title}
-                  onChange={(e) => setEditData({ ...editData, title: e.target.value })}
-                  placeholder="Project Title *"
-                  className="w-full p-2 border-2 border-green-300 rounded-lg text-sm"
-                />
-                <select
-                  value={editData.mediaType}
-                  onChange={(e) => setEditData({ ...editData, mediaType: e.target.value })}
-                  className="w-full p-2 border-2 border-green-300 rounded-lg text-sm bg-white"
-                >
-                  <option value="image">Image</option>
-                  <option value="video">Video</option>
-                  <option value="document">Document</option>
-                </select>
-                <textarea
-                  value={editData.description || ''}
-                  onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                  placeholder="Describe this project..."
-                  className="w-full p-2 border-2 border-green-300 rounded-lg text-sm"
-                  rows="2"
-                />
-                <input
-                  type="text"
-                  value={editData.clientName || ''}
-                  onChange={(e) => setEditData({ ...editData, clientName: e.target.value })}
-                  placeholder="Client Name (optional)"
-                  className="w-full p-2 border-2 border-green-300 rounded-lg text-sm"
-                />
-                <input
-                  type="date"
-                  value={editData.completionDate || ''}
-                  onChange={(e) => setEditData({ ...editData, completionDate: e.target.value })}
-                  className="w-full p-2 border-2 border-green-300 rounded-lg text-sm"
-                />
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Media (current)</label>
-                  {editData.mediaType === 'image' && editData.mediaUrl && (
-                    <img src={cldImage(editData.mediaUrl, CARD_WIDTH)} alt="Current" className="w-full h-28 object-cover rounded mb-1" />
-                  )}
-                  {editData.mediaType === 'video' && editData.mediaUrl && (
-                    <video src={editData.mediaUrl} poster={cldVideoPoster(editData.mediaUrl, CARD_WIDTH)} className="w-full h-28 object-cover rounded mb-1" preload="none" controls />
-                  )}
-                  {editData.mediaType === 'document' && editData.mediaUrl && (
-                    <div className="w-full h-20 flex items-center justify-center bg-gray-50 rounded mb-1">
-                      <FileText className="w-8 h-8 text-gray-400" />
-                    </div>
-                  )}
-                  <label
-                    className={`cursor-pointer text-xs inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 ${
-                      editUploading ? 'opacity-50' : ''
-                    }`}
-                  >
-                    {editUploading ? (
-                      <>
-                        <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
-                      </>
-                    ) : (
-                      <>
-                        <Camera className="w-3 h-3" /> Replace file
-                      </>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*,video/*,.pdf"
-                      onChange={handleEditMediaUpload}
-                      disabled={editUploading}
-                      className="hidden"
-                    />
-                  </label>
-                  {editSelectedFile && editUploading && (
-                    <p className="text-[11px] text-gray-500 mt-1 truncate">{editSelectedFile.name}</p>
-                  )}
-                  {editUploadError && <p className="text-[11px] text-red-600 mt-1">{editUploadError}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Tags</label>
-                  <div className="flex gap-1 mb-1">
-                    <input
-                      type="text"
-                      value={editTag}
-                      onChange={(e) => setEditTag(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addEditTag())}
-                      placeholder="Add tag"
-                      className="flex-1 p-1.5 border-2 border-green-300 rounded text-xs"
-                    />
-                    <button type="button" onClick={addEditTag} className="bg-green-600 text-white px-2 rounded">
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {(editData.tags || []).map((tag, i) => (
-                      <span key={i} className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs flex items-center">
-                        {tag}
-                        <button
-                          type="button"
-                          onClick={() => removeEditTag(tag)}
-                          className="ml-1 text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-2.5 h-2.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={!!editData.isFeatured}
-                    onChange={(e) => setEditData({ ...editData, isFeatured: e.target.checked })}
-                    className="h-3.5 w-3.5 text-green-600 rounded"
-                  />
-                  <label className="ml-2 text-xs text-gray-800">Feature this item</label>
-                </div>
-
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={saveEdit}
-                    disabled={savingEdit || editUploading || !editData.title || !editData.mediaUrl}
-                    className="flex-1 bg-green-600 text-white py-1.5 rounded text-xs hover:bg-green-700 inline-flex items-center justify-center gap-1 disabled:opacity-50"
-                  >
-                    {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    {savingEdit ? 'Saving…' : 'Save'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEdit}
-                    className="flex-1 bg-gray-200 text-gray-700 py-1.5 rounded text-xs hover:bg-gray-300 inline-flex items-center justify-center gap-1"
-                  >
-                    <X className="w-3.5 h-3.5" /> Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {item.mediaType === 'image' && (
-                  <a href={cldImage(item.mediaUrl, VIEWER_WIDTH)} target="_blank" rel="noopener noreferrer">
-                    <img src={cldImage(item.mediaUrl, CARD_WIDTH)} alt={item.title} className="w-full h-48 object-cover" loading="lazy" />
-                  </a>
-                )}
-                {item.mediaType === 'video' && (
-                  <video
-                    src={item.mediaUrl}
-                    poster={cldVideoPoster(item.mediaUrl, CARD_WIDTH)}
-                    className="w-full h-48 object-cover"
-                    preload="none"
-                    controls
-                  />
-                )}
-                {item.mediaType === 'document' && (
-                  <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
-                    <FileText className="w-12 h-12 text-gray-400" />
-                  </div>
-                )}
-
-                <div className="p-3">
-                  <div className="flex justify-between items-start">
-                    <h4 className="font-medium text-gray-900">{item.title}</h4>
-                    {item.isFeatured && <Star className="w-4 h-4 text-yellow-500 fill-current" />}
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.description}</p>
-                  {item.clientName && <p className="text-xs text-gray-500 mt-1">Client: {item.clientName}</p>}
-                  {item.tags && item.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {item.tags.slice(0, 3).map((tag, i) => (
-                        <span key={i} className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {isEditing && (
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(index)}
-                      className="bg-blue-500 text-white p-2 rounded-full shadow-lg hover:bg-blue-600"
-                      title="Edit"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removePortfolio(index)}
-                      className="bg-red-500 text-white p-2 rounded-full shadow-lg hover:bg-red-600"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        ))}
-
-        {(!formData.portfolio || formData.portfolio.length === 0) && (
-          <div className="col-span-full text-center py-12 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-            <Camera className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>No portfolio items yet. {isEditing ? 'Add your first project above!' : ''}</p>
+        {item.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {item.tags.map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full text-xs">
+                {tag}
+                <button type="button" onClick={() => set('tags', item.tags.filter((t) => t !== tag))} className="text-gray-400 hover:text-red-500" aria-label={`Remove ${tag}`}>
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
           </div>
         )}
       </div>
+
+      {/* Featured */}
+      <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
+        <input type="checkbox" checked={!!item.isFeatured} onChange={(e) => set('isFeatured', e.target.checked)} className="mt-0.5 h-4 w-4 text-green-600 rounded" />
+        <span>
+          <span className="block text-sm font-medium text-gray-800">Feature this project</span>
+          <span className="block text-xs text-gray-500">Featured projects are shown first on your profile.</span>
+        </span>
+      </label>
+
+      {formError && (
+        <p className="text-sm text-red-600 flex items-start gap-1">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> {formError}
+        </p>
+      )}
+
+      <div className="flex gap-3 pt-1">
+        <button type="button" onClick={onCancel} disabled={saving} className="flex-1 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-50">
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={saving || uploading}
+          className="flex-1 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          {saving ? 'Saving…' : initial?.mediaUrl ? 'Save changes' : 'Add project'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Tab ─────────────────────────────────────────────────────────────────────
+const PortfolioTab = ({ formData, setFormData, isEditing }) => {
+  const { updatePortfolio } = useAuth();
+  const portfolio = formData.portfolio || [];
+
+  const [formFor, setFormFor] = useState(null); // null | { index: number|null }
+  const [viewing, setViewing] = useState(null); // index being viewed full-size
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  // Services the expert offers, for the project's "Service" field
+  const serviceOptions = useMemo(() => {
+    const names = new Set();
+    (formData.serviceCategories || []).forEach((sc) => {
+      if (sc.categoryName) names.add(sc.categoryName);
+      (sc.subServices || []).forEach((s) => names.add(typeof s === 'string' ? s : s?.name));
+    });
+    names.delete(undefined);
+    return [...names];
+  }, [formData.serviceCategories]);
+
+  // Featured first, then newest completion date; keep original indexes for saving
+  const ordered = useMemo(
+    () =>
+      portfolio
+        .map((item, index) => ({ item, index }))
+        .sort((a, b) => {
+          if (!!b.item.isFeatured !== !!a.item.isFeatured) return b.item.isFeatured ? 1 : -1;
+          return new Date(b.item.completionDate || 0) - new Date(a.item.completionDate || 0);
+        }),
+    [portfolio]
+  );
+
+  // Save the whole list; optimistic, rolled back if the server refuses
+  const persist = async (next, successText) => {
+    const previous = portfolio;
+    setSaving(true);
+    setError('');
+    setFormData({ ...formData, portfolio: next, gallery: next.map((p) => p.mediaUrl) });
+    const res = await updatePortfolio(next);
+    setSaving(false);
+    if (res?.success === false) {
+      setFormData({ ...formData, portfolio: previous, gallery: previous.map((p) => p.mediaUrl) });
+      setError(res.error || 'Could not save your portfolio. Please try again.');
+      return false;
+    }
+    setNotice(successText);
+    setTimeout(() => setNotice(''), 3000);
+    return true;
+  };
+
+  const saveItem = async (item) => {
+    const next = [...portfolio];
+    if (formFor.index === null) next.push(item);
+    else next[formFor.index] = item;
+    if (await persist(next, formFor.index === null ? 'Project added to your portfolio.' : 'Project updated.')) setFormFor(null);
+  };
+
+  const deleteItem = async (index) => {
+    if (!window.confirm(`Delete "${portfolio[index]?.title || 'this project'}" from your portfolio? This can't be undone.`)) return;
+    if (viewing === index) setViewing(null);
+    await persist(portfolio.filter((_, i) => i !== index), 'Project deleted.');
+  };
+
+  const atLimit = portfolio.length >= MAX_ITEMS;
+  const viewed = viewing !== null ? portfolio[viewing] : null;
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Portfolio</h3>
+          <p className="text-sm text-gray-500">
+            Show clients your best work. {portfolio.length}/{MAX_ITEMS} projects
+          </p>
+        </div>
+        {isEditing ? (
+          <button
+            type="button"
+            onClick={() => setFormFor({ index: null })}
+            disabled={atLimit || saving}
+            title={atLimit ? `You can have up to ${MAX_ITEMS} projects` : ''}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" /> Add project
+          </button>
+        ) : (
+          portfolio.length > 0 && <p className="text-xs text-gray-400 self-center">Click “Edit Profile” to add or change projects.</p>
+        )}
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button type="button" onClick={() => setError('')} className="text-red-400 hover:text-red-600" aria-label="Dismiss">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      {notice && (
+        <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm flex items-center gap-2">
+          <CheckCircle className="w-4 h-4" /> {notice}
+        </div>
+      )}
+
+      {/* Gallery */}
+      {portfolio.length === 0 ? (
+        <div className="text-center py-14 px-6 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+          <ImageIcon className="w-12 h-12 mx-auto text-gray-300" />
+          <p className="mt-3 font-medium text-gray-700">No projects yet</p>
+          <p className="mt-1 text-sm text-gray-500 max-w-md mx-auto">
+            Experts with 3 or more projects in their portfolio get noticeably more bookings. Add photos of jobs you're proud of.
+          </p>
+          {isEditing ? (
+            <button
+              type="button"
+              onClick={() => setFormFor({ index: null })}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+            >
+              <Plus className="w-4 h-4" /> Add your first project
+            </button>
+          ) : (
+            <p className="mt-3 text-xs text-gray-400">Click “Edit Profile” to add projects.</p>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {ordered.map(({ item, index }) => (
+            <div key={item.publicId || item.mediaUrl || index} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
+              <button type="button" onClick={() => setViewing(index)} className="relative block w-full aspect-[4/3] overflow-hidden group" aria-label={`View ${item.title}`}>
+                <MediaPreview item={item} className="w-full h-full group-hover:scale-[1.02] transition-transform" />
+                {item.isFeatured && (
+                  <span className="absolute top-2 left-2 inline-flex items-center gap-1 bg-yellow-400 text-yellow-900 text-xs font-semibold px-2 py-0.5 rounded-full shadow">
+                    <Star className="w-3 h-3 fill-current" /> Featured
+                  </span>
+                )}
+                {item.mediaType === 'video' && (
+                  <span className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-full"><Video className="w-3.5 h-3.5" /></span>
+                )}
+              </button>
+
+              <div className="p-4 flex-1 flex flex-col">
+                <h4 className="font-semibold text-gray-900 line-clamp-1">{item.title}</h4>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                  {item.category && (
+                    <span className="inline-flex items-center gap-1"><Briefcase className="w-3.5 h-3.5" /> {item.category}</span>
+                  )}
+                  {formatMonthYear(item.completionDate) && (
+                    <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {formatMonthYear(item.completionDate)}</span>
+                  )}
+                </div>
+                {item.description && <p className="mt-2 text-sm text-gray-600 line-clamp-2">{item.description}</p>}
+                {item.tags?.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {item.tags.slice(0, 3).map((tag) => (
+                      <span key={tag} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tag}</span>
+                    ))}
+                  </div>
+                )}
+
+                {isEditing && (
+                  <div className="mt-auto pt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormFor({ index })}
+                      disabled={saving}
+                      className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteItem(index)}
+                      disabled={saving}
+                      className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-sm border border-red-200 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add / edit */}
+      {formFor && (
+        <Modal title={formFor.index === null ? 'Add a project' : 'Edit project'} onClose={() => !saving && setFormFor(null)}>
+          <ProjectForm
+            initial={formFor.index === null ? EMPTY_ITEM : portfolio[formFor.index]}
+            serviceOptions={serviceOptions}
+            onCancel={() => setFormFor(null)}
+            onSave={saveItem}
+            saving={saving}
+          />
+        </Modal>
+      )}
+
+      {/* Full-size viewer */}
+      {viewed && (
+        <Modal title={viewed.title} onClose={() => setViewing(null)} wide>
+          <div className="bg-gray-900 flex items-center justify-center">
+            {viewed.mediaType === 'image' && <img src={cldImage(viewed.mediaUrl, VIEWER_WIDTH)} alt={viewed.title} className="max-h-[60vh] w-auto object-contain" />}
+            {viewed.mediaType === 'video' && <video src={viewed.mediaUrl} poster={cldVideoPoster(viewed.mediaUrl, VIEWER_WIDTH)} className="max-h-[60vh] w-full" controls autoPlay />}
+            {viewed.mediaType === 'document' && (
+              <div className="py-12 text-center text-gray-200">
+                <FileText className="w-14 h-14 mx-auto mb-3" />
+                <a href={viewed.mediaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-900 rounded-lg font-medium hover:bg-gray-100">
+                  <ExternalLink className="w-4 h-4" /> Open document
+                </a>
+              </div>
+            )}
+          </div>
+          <div className="p-5 space-y-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+              {viewed.category && <span className="inline-flex items-center gap-1"><Briefcase className="w-4 h-4" /> {viewed.category}</span>}
+              {formatMonthYear(viewed.completionDate) && <span className="inline-flex items-center gap-1"><Calendar className="w-4 h-4" /> {formatMonthYear(viewed.completionDate)}</span>}
+              {viewed.clientName && <span>Client: {viewed.clientName}</span>}
+            </div>
+            {viewed.description && <p className="text-gray-700 whitespace-pre-line">{viewed.description}</p>}
+            {viewed.tags?.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                {viewed.tags.map((tag) => (
+                  <span key={tag} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tag}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
