@@ -360,9 +360,36 @@ function getFeaturesComparison() {
   return comparison;
 }
 
+// ═══════════════════════════════════════════════════════════
+// EFFECTIVE PLAN — what an expert actually gets right now
+// ═══════════════════════════════════════════════════════════
+// Every expert stays visible: a paid plan counts until its endDate; an ended
+// trial, a lapsed paid plan or the Free plan all mean Free (10 km), forever.
+const FREE_PLANS = ['free', 'trial'];
+
+function getEffectivePlan(subscription, now = new Date()) {
+  const plan = subscription?.plan || 'free';
+  const free = { plan: 'free', visibilityRadius: subscriptionPlans.free.visibilityRadius, paid: false };
+
+  if (plan === 'trial' || subscription?.isTrial) {
+    const trialEnd = subscription?.trialEndDate ? new Date(subscription.trialEndDate) : null;
+    return trialEnd && now < trialEnd
+      ? { plan: 'trial', visibilityRadius: subscriptionPlans.trial.visibilityRadius, paid: false }
+      : free;
+  }
+
+  if (FREE_PLANS.includes(plan) || !subscriptionPlans[plan]) return free;
+
+  const endDate = subscription?.endDate ? new Date(subscription.endDate) : null;
+  if (!endDate || endDate <= now) return free;
+
+  return { plan, visibilityRadius: subscriptionPlans[plan].visibilityRadius, paid: true };
+}
+
 module.exports = {
   subscriptionPlans,
   plansList,
+  getEffectivePlan,
   getPlanByRadius,
   getVisibilityDescription,
   isPlanActive,

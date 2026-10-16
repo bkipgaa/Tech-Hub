@@ -109,24 +109,29 @@ exports.technicianNewBooking = (data) => ({
 });
 
 exports.technicianSubscriptionExpiring = (data) => ({
-  subject: data.daysLeft === 1
-    ? `⚠️ Your subscription expires TOMORROW`
-    : `⚠️ Your subscription expires in ${data.daysLeft} days`,
+  subject: data.isTrial
+    ? (data.daysLeft === 1 ? `⏰ Your free trial ends TOMORROW` : `⏰ Your free trial ends in ${data.daysLeft} days`)
+    : (data.daysLeft === 1 ? `⚠️ Your subscription expires TOMORROW` : `⚠️ Your subscription expires in ${data.daysLeft} days`),
   html: layout(
-    data.daysLeft === 1 ? 'Your subscription expires tomorrow' : `Your subscription expires in ${data.daysLeft} days`,
+    data.isTrial
+      ? (data.daysLeft === 1 ? 'Your free trial ends tomorrow' : `Your free trial ends in ${data.daysLeft} days`)
+      : (data.daysLeft === 1 ? 'Your subscription expires tomorrow' : `Your subscription expires in ${data.daysLeft} days`),
     `
       <p>Hi <strong>${data.technicianName}</strong>,</p>
-      <p>Your <strong>${data.planName}</strong> subscription will expire on <strong>${data.endDate}</strong>.</p>
+      <p>Your <strong>${data.planName}</strong> ${data.isTrial ? 'ends' : 'subscription will expire'} on <strong>${data.endDate}</strong>.</p>
       <div style="background:#fef3c7;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid #f59e0b;">
         <p style="margin:0;color:#92400e;">
-          <strong>Important:</strong> When your subscription expires, you'll be moved to the Free plan with a 10 km visibility radius.
-          Renew now to keep your ${data.currentRadius} km visibility and other premium features.
+          ${data.isTrial
+            ? `<strong>Good to know:</strong> after your trial you stay on the Free plan, visible to clients within 10 km — at no cost.
+               Choose a paid plan to reach clients up to 1,000 km away.`
+            : `<strong>Important:</strong> When your subscription expires, you'll be moved to the Free plan with a 10 km visibility radius.
+               Renew now to keep your ${data.currentRadius} km visibility and other premium features.`}
         </p>
       </div>
-      <p>Renewing takes less than a minute with Card or M-Pesa.</p>
+      <p>${data.isTrial ? 'Upgrading' : 'Renewing'} takes less than a minute with Card or M-Pesa.</p>
     `,
     `${BRAND.url}/subscription`,
-    'Renew Subscription'
+    data.isTrial ? 'See Plans' : 'Renew Subscription'
   ),
 });
 

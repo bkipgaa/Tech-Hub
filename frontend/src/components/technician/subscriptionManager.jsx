@@ -283,7 +283,7 @@ const SubscriptionManager = () => {
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
               <span className="text-red-700 font-medium flex-1">
-                Your subscription has expired. To continue using the platform and be visible to clients, please upgrade to a paid plan.
+                Your plan has ended. You're still visible to clients within 10 km on the Free plan — upgrade to reach clients further away.
               </span>
               <button
                 onClick={() => {

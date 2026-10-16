@@ -178,6 +178,7 @@ exports.createProfile = async (req, res) => {
       isTrial: true,
       autoRenew: false
     };
+    technicianData.trialHistory = { freeTrialUsedAt: new Date() };
     // Override service radius to match trial plan (10km)
     technicianData.serviceRadius = subscriptionPlans.trial.visibilityRadius;
 

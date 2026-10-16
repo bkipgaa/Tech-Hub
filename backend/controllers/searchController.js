@@ -11,111 +11,20 @@ const mongoose = require('mongoose');
 const Technician = require('../models/Technician');
 const ServiceCatalog = require('../models/ServiceCatalog');
 const { hiddenTechnicianIds, overdueTechnicianIds } = require('../utils/commissionDue');
+const { getEffectivePlan } = require('../utils/subscriptionPlans');
 
 // ===========================================
 // HELPERS
 // ===========================================
 
 /**
- * Safely parse a date from various input formats.
- * @param {any} dateValue - Date string, object, or undefined
- * @returns {Date|null} - Parsed Date or null if invalid
- */
-const safeParseDate = (dateValue) => {
-  if (!dateValue) return null;
-  if (dateValue instanceof Date) return isNaN(dateValue.getTime()) ? null : dateValue;
-  if (typeof dateValue === 'object' && dateValue.$date) {
-    const parsed = new Date(dateValue.$date);
-    return isNaN(parsed.getTime()) ? null : parsed;
-  }
-  const parsed = new Date(dateValue);
-  return isNaN(parsed.getTime()) ? null : parsed;
-};
-
-/**
- * Determine if a technician's subscription is active.
- * 
- * - FREE, TEST, TRIAL: active for 30 days from startDate (or createdAt).
- * - PAID plans: active if endDate is in the future.
- * 
- * @param {Object} tech - The technician document (must include createdAt)
- * @returns {boolean} - True if subscription is active
- */
-const isSubscriptionActive = (tech) => {
-  // If no subscription object, treat as inactive
-  if (!tech?.subscription) {
-    console.warn(`Technician ${tech?._id} has no subscription object`);
-    return false;
-  }
-
-  const { plan, startDate, endDate, trialEndDate, isTrial } = tech.subscription;
-  const now = new Date();
-
-  // --- FREE, TEST, TRIAL: 30 days from startDate or createdAt ---
-  if (plan === 'free' || plan === 'test' || plan === 'trial' || isTrial === true) {
-    // Explicit trialEndDate takes precedence for trial plans
-    if ((plan === 'trial' || isTrial === true) && trialEndDate) {
-      const parsed = safeParseDate(trialEndDate);
-      if (!parsed) {
-        console.warn(`Technician ${tech._id} has invalid trialEndDate`);
-        return false;
-      }
-      return now < parsed;
-    }
-
-    // Otherwise use startDate or fallback to createdAt
-    let start = startDate ? safeParseDate(startDate) : tech.createdAt;
-    if (!start) {
-      console.warn(`Technician ${tech._id} has no startDate or createdAt`);
-      return false;
-    }
-    const expiry = new Date(start);
-    expiry.setDate(expiry.getDate() + 30);
-    return now < expiry;
-  }
-
-  // --- PAID PLANS: endDate must exist and be in the future ---
-  const parsedEnd = safeParseDate(endDate);
-  if (!parsedEnd) {
-    console.warn(`Technician ${tech._id} has paid plan but no valid endDate`);
-    return false;
-  }
-  return now < parsedEnd;
-};
-
-/**
- * Get visibility radius (km) based on subscription plan.
+ * Visibility radius (km) for a technician right now.
+ * A paid plan counts until its endDate; an ended trial, a lapsed paid plan
+ * or the Free plan all fall back to Free (10 km) — experts never drop out of search.
  * @param {Object} tech - Technician document
  * @returns {number} - Radius in km
  */
-const getVisibilityRadius = (tech) => {
-  const DEFAULT_RADIUS = 10;
-  if (!tech?.subscription) {
-    console.warn(`Technician ${tech?._id} has no subscription, using default radius ${DEFAULT_RADIUS}km`);
-    return DEFAULT_RADIUS;
-  }
-
-  // If planDetails has explicit radius, use it
-  if (tech.subscription.planDetails?.visibilityRadius) {
-    return tech.subscription.planDetails.visibilityRadius;
-  }
-
-  // Fallback mapping (includes 'test' at 20km)
-  const map = {
-    trial: 10,
-    free: 10,
-    test: 20,           // <-- test plan: 20km visibility
-    basic: 10,
-    basicPlus: 50,
-    'basic-plus': 50,
-    premium: 100,
-    business: 300,
-    enterprise: 600,
-    unlimited: 1000,
-  };
-  const radius = map[tech.subscription.plan] || DEFAULT_RADIUS;
-  return radius;
-};
+const getVisibilityRadius = (tech) => getEffectivePlan(tech?.subscription).visibilityRadius;
 
 /**
  * Haversine distance between two coordinates (km).
@@ -397,11 +306,7 @@ if (mainCategory) {
         if (standing.hidden.has(String(tech._id))) continue;
         tech.acceptingBookings = !standing.blocked.has(String(tech._id));
 
-        // 7a. Subscription active? (includes 'test' plan now)
-        if (!isSubscriptionActive(tech)) {
-          console.log(`[searchTechnicians] Technician ${tech._id} skipped: subscription inactive`);
-          continue;
-        }
+        // 7a. No subscription check: lapsed plans fall back to Free (10 km) via getVisibilityRadius
 
         // 7b. If coordinates given, compute distance and enforce radii
         if (latitude && longitude && tech.location?.coordinates) {
@@ -584,7 +489,6 @@ exports.getTechniciansBySubService = async (req, res) => {
     for (const tech of technicians) {
       if (standing.hidden.has(String(tech._id))) continue;
       tech.acceptingBookings = !standing.blocked.has(String(tech._id));
-      if (!isSubscriptionActive(tech)) continue;
 
       if (latitude && longitude && tech.location?.coordinates) {
         const [techLng, techLat] = tech.location.coordinates;
@@ -711,7 +615,6 @@ exports.getNearbyTechnicians = async (req, res) => {
     for (const tech of technicians) {
       if (standing.hidden.has(String(tech._id))) continue;
       tech.acceptingBookings = !standing.blocked.has(String(tech._id));
-      if (!isSubscriptionActive(tech)) continue;
       if (tech.location?.coordinates) {
         const [techLng, techLat] = tech.location.coordinates;
         if (techLat !== 0 || techLng !== 0) {

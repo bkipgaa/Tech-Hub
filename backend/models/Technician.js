@@ -341,6 +341,14 @@ const TechnicianSchema = new Schema({
     jobReminders: { type: Boolean, default: true }
   },
 
+  // Once-only offers. Kept outside `subscription`, which is replaced on every
+  // plan change, so they survive upgrades, downgrades and admin edits.
+  trialHistory: {
+    freeTrialUsedAt: Date,           // 30-day Free Trial (10 km)
+    paidPlanTrialUsedAt: Date,       // free first month on a paid plan
+    paidPlanTrialPlan: String,
+  },
+
   subscription: {
     plan: {
       type: String,
