@@ -17,20 +17,23 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const isStale = (timestamp) => Date.now() - timestamp > CACHE_TTL;
 
-// Helper to safely get enum values
-const getTechnicianCategories = () => {
-  try {
-    const path = Technician.schema.path('category');
-    if (path?.enumValues?.length) return path.enumValues;
-  } catch (e) { /* fallback below */ }
-  return [
-    'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
-    'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
-    'Laundry & Dry Cleaning', 'Cleaning Services', 'Painting & Decorating',
-    'Welding & Fabrication', 'Automotive Repair', 'Tutoring & Training',
-    'Photography & Videography', 'Event Planning', 'Construction & Renovation',
-    'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping'
-  ];
+// Display order for the original categories; categories added later by admins
+// follow alphabetically. Also the fallback when the catalog is empty/unreachable.
+const DEFAULT_CATEGORY_ORDER = [
+  'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
+  'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
+  'Laundry & Dry Cleaning', 'Cleaning Services', 'Painting & Decorating',
+  'Welding & Fabrication', 'Automotive Repair', 'Tutoring & Training',
+  'Photography & Videography', 'Event Planning', 'Construction & Renovation',
+  'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping'
+];
+
+const orderCategories = (names) => {
+  const rank = (name) => {
+    const i = DEFAULT_CATEGORY_ORDER.indexOf(name);
+    return i === -1 ? DEFAULT_CATEGORY_ORDER.length : i;
+  };
+  return [...new Set(names)].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 };
 
 const dbConnected = () => mongoose.connection.readyState === 1;
@@ -45,17 +48,24 @@ exports.getMainCategories = async (req, res) => {
       return res.json({ ...cache.mainCategories.data, cached: true });
     }
 
-    const categories = getTechnicianCategories();
     let activeCatalogs = [];
 
     if (dbConnected()) {
       // .lean() returns plain JS objects instead of heavy Mongoose docs
       activeCatalogs = await ServiceCatalog.find({ isActive: true })
-        .select('mainCategory')
+        .select('mainCategory serviceCategories.isActive')
         .lean();
     }
 
-    const activeSet = new Set(activeCatalogs.map(c => c.mainCategory));
+    // Categories come from the catalog itself, so admin-added ones appear too
+    const categories = activeCatalogs.length
+      ? orderCategories(activeCatalogs.map(c => c.mainCategory))
+      : DEFAULT_CATEGORY_ORDER;
+    const activeSet = new Set(
+      activeCatalogs
+        .filter(c => (c.serviceCategories || []).some(sc => sc.isActive !== false))
+        .map(c => c.mainCategory)
+    );
     const data = categories.map(cat => ({
       name: cat,
       hasServices: activeSet.has(cat),
@@ -77,7 +87,7 @@ exports.getMainCategories = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Unable to fetch categories',
-      data: getTechnicianCategories().map(c => ({ name: c, hasServices: false }))
+      data: DEFAULT_CATEGORY_ORDER.map(c => ({ name: c, hasServices: false }))
     });
   }
 };

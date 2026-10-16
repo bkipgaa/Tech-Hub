@@ -221,10 +221,22 @@ const ServiceCatalog = () => {
     setSubModal((p) => ({ ...p, loading: true }));
     try {
       if (mode === 'create') {
-        await adminApi.post(
-          `/catalog/${encodeURIComponent(mainCategory)}/services/${serviceId}/sub-services`,
-          form
-        );
+        // One sub-service per line, so admins can add many at once
+        const names = [...new Set(form.name.split('\n').map((n) => n.trim()).filter(Boolean))];
+        const failed = [];
+        for (const name of names) {
+          try {
+            await adminApi.post(
+              `/catalog/${encodeURIComponent(mainCategory)}/services/${serviceId}/sub-services`,
+              { ...form, name, description: names.length === 1 ? form.description : '' }
+            );
+          } catch (err) {
+            failed.push(`${name}: ${err.response?.data?.message || 'failed'}`);
+          }
+        }
+        if (failed.length) {
+          alert(`Added ${names.length - failed.length} of ${names.length}.\n\nNot added:\n${failed.join('\n')}`);
+        }
       } else {
         await adminApi.patch(
           `/catalog/${encodeURIComponent(mainCategory)}/services/${serviceId}/sub-services/${subId}`,
@@ -655,21 +667,38 @@ const ServiceCatalog = () => {
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                Name <span className="text-red-500">*</span>
+                {subModal.mode === 'create' ? 'Name(s) — one per line to add several' : 'Name'}{' '}
+                <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                autoFocus
-                value={subModal.form.name}
-                onChange={(e) =>
-                  setSubModal((p) => ({
-                    ...p,
-                    form: { ...p.form, name: e.target.value },
-                  }))
-                }
-                placeholder="e.g. WiFi Setup & Configuration"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-              />
+              {subModal.mode === 'create' ? (
+                <textarea
+                  autoFocus
+                  rows="5"
+                  value={subModal.form.name}
+                  onChange={(e) =>
+                    setSubModal((p) => ({
+                      ...p,
+                      form: { ...p.form, name: e.target.value },
+                    }))
+                  }
+                  placeholder={'e.g.\nWiFi Setup & Configuration\nRouter Installation\nNetwork Cabling'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-y"
+                />
+              ) : (
+                <input
+                  type="text"
+                  autoFocus
+                  value={subModal.form.name}
+                  onChange={(e) =>
+                    setSubModal((p) => ({
+                      ...p,
+                      form: { ...p.form, name: e.target.value },
+                    }))
+                  }
+                  placeholder="e.g. WiFi Setup & Configuration"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                />
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
