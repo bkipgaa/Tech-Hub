@@ -123,7 +123,7 @@ const TechnicianProfile = () => {
       }
     } catch (err) {
       console.error('Failed to load technician profile:', err);
-      let errorMsg = 'Could not load technician profile. ';
+      let errorMsg = 'Could not load expert profile. ';
       if (err.response) {
         errorMsg += `Server error (${err.response.status}). `;
         if (err.response.data?.message) errorMsg += err.response.data.message;
@@ -452,7 +452,7 @@ const TechnicianProfile = () => {
         <div className="text-center max-w-md mx-auto px-4">
           <div className="bg-red-100 border border-red-200 text-red-700 px-6 py-4 rounded-lg">
             <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-500" />
-            <p className="font-medium">{error || 'Technician not found'}</p>
+            <p className="font-medium">{error || 'Expert not found'}</p>
           </div>
           <button
             onClick={handleGoBack}
@@ -569,13 +569,13 @@ const TechnicianProfile = () => {
                       className="bg-yellow-500 text-white px-6 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-2 font-medium shadow-sm"
                     >
                       <Star className="w-4 h-4 fill-current" />
-                      Rate This Technician
+                      Rate This Expert
                     </button>
                   )}
                 </div>
 
                 <p className="text-xs text-green-100 mt-3">
-                  Use Message to chat with this technician — you can share contact details there if needed.
+                  Use Message to chat with this expert — you can share contact details there if needed.
                 </p>
               </div>
             </div>
@@ -743,7 +743,7 @@ const TechnicianProfile = () => {
             <CheckCircle className="w-6 h-6 text-green-600" />
             <div>
               <p className="font-semibold text-green-800">Verified Professional</p>
-              <p className="text-sm text-green-700">This technician has been verified by Webalink</p>
+              <p className="text-sm text-green-700">This expert has been verified by Webalink</p>
             </div>
           </div>
         )}
@@ -1030,7 +1030,7 @@ const TechnicianProfile = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="flex justify-between items-center p-5 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-800">Rate This Technician</h2>
+              <h2 className="text-xl font-bold text-gray-800">Rate This Expert</h2>
               <button
                 onClick={closeRatingModal}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -1094,7 +1094,7 @@ const TechnicianProfile = () => {
                   value={ratingForm.review}
                   onChange={(e) => setRatingForm((prev) => ({ ...prev, review: e.target.value }))}
                   className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 resize-y"
-                  placeholder="Share your experience with this technician..."
+                  placeholder="Share your experience with this expert..."
                   required
                 />
               </div>

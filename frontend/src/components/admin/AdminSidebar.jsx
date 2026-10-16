@@ -55,7 +55,7 @@ const MENU_SECTIONS = [
   {
     label: 'Operations',
     items: [
-      { path: '/admin/technicians',   label: 'Technicians',    icon: Wrench,     permission: 'technicians.view' },
+      { path: '/admin/technicians',   label: 'Experts',    icon: Wrench,     permission: 'technicians.view' },
       { path: '/admin/verifications', label: 'Verifications',  icon: BadgeCheck, permission: 'verifications.view' },
       { path: '/admin/bookings',      label: 'Bookings',       icon: Briefcase,  permission: 'bookings.view' },
       { path: '/admin/jobs',          label: 'Jobs',           icon: FileText,   permission: 'jobs.view' },

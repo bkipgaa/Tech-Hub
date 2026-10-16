@@ -32,6 +32,7 @@ import {
   LayoutDashboard, CreditCard, MessageSquare
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { userRoleLabel } from "../utils/roleHelpers";
 import { getSocket } from '../services/socket';
 
 const Navbar = () => {
@@ -283,7 +284,7 @@ const Navbar = () => {
                           <p className="text-sm font-semibold text-gray-800">
                             {user.fullName || `${user.firstName} ${user.lastName}`}
                           </p>
-                          <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                          <p className="text-xs text-gray-500 capitalize">{userRoleLabel(user.role)}</p>
                         </div>
 
                         <Link
@@ -316,7 +317,7 @@ const Navbar = () => {
                             className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                           >
                             <Wrench className="w-4 h-4 text-gray-500" />
-                            <span>Become a Technician</span>
+                            <span>Become an Expert</span>
                           </Link>
                         )}
 
@@ -327,7 +328,7 @@ const Navbar = () => {
                             className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                           >
                             <Wrench className="w-4 h-4 text-gray-500" />
-                            <span>Create Technician Profile</span>
+                            <span>Create Expert Profile</span>
                           </Link>
                         )}
 
@@ -339,7 +340,7 @@ const Navbar = () => {
                               className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                             >
                               <LayoutDashboard className="w-4 h-4 text-gray-500" />
-                              <span>Technician Dashboard</span>
+                              <span>Expert Dashboard</span>
                             </Link>
                             <Link
                               to="/technician-dashboard/commissions"
@@ -508,7 +509,7 @@ const Navbar = () => {
                         <p className="font-semibold text-gray-800">
                           {user.fullName || `${user.firstName} ${user.lastName}`}
                         </p>
-                        <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                        <p className="text-xs text-gray-500 capitalize">{userRoleLabel(user.role)}</p>
                       </div>
                     </div>
 
@@ -528,7 +529,7 @@ const Navbar = () => {
                         className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
                       >
                         <Wrench className="w-5 h-5 text-gray-500" />
-                        <span>Become a Technician</span>
+                        <span>Become an Expert</span>
                       </Link>
                     )}
 
@@ -539,7 +540,7 @@ const Navbar = () => {
                         className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
                       >
                         <Wrench className="w-5 h-5 text-gray-500" />
-                        <span>Create Technician Profile</span>
+                        <span>Create Expert Profile</span>
                       </Link>
                     )}
 

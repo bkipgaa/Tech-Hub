@@ -761,7 +761,7 @@ const CreateTechnicianProfile = () => {
             <Wrench className="w-12 h-12 text-white" />
             <div>
               <h1 className="text-3xl font-bold text-white">
-                Create Technician Profile
+                Create Expert Profile
               </h1>
               <p className="text-green-100">
                 Complete your profile to start offering services
@@ -2025,7 +2025,7 @@ const CreateTechnicianProfile = () => {
                       Your current location <span className="text-red-500">*</span>
                     </p>
                     <p className="text-xs text-gray-600 mb-3">
-                      Clients only see technicians near them, so we need your real location. Share it from where you usually work.
+                      Clients only see experts near them, so we need your real location. Share it from where you usually work.
                     </p>
                     {hasLocation ? (
                       <p className="text-sm text-green-800 flex items-start gap-2 mb-3">

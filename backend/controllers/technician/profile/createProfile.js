@@ -128,6 +128,7 @@ exports.createProfile = async (req, res) => {
         formattedAddress: req.body.location?.formattedAddress || '',
         placeId: req.body.location?.placeId || ''
       },
+      locationUpdatedAt: new Date(),
       // serviceRadius will be overridden by trial plan below
       serviceRadius: Number(req.body.serviceRadius) || 10,
       languages: req.body.languages || [{ name: 'English', proficiency: 'Fluent' }],

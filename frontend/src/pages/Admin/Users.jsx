@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { adminUserServiceFull } from '../../services/adminRevenueService';
 import { useAdminAuth } from '../../context/AdminAuthContext';
+import { userRoleLabel } from '../../utils/roleHelpers';
 
 // ─── Role & Status styling ────────────────────────────────
 const ROLE_BADGE = {
@@ -174,7 +175,7 @@ export default function Users() {
             <UsersIcon className="w-6 h-6 text-blue-600" /> Users
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            All clients and technicians registered on the platform.
+            All clients and experts registered on the platform.
           </p>
         </div>
         <button
@@ -206,7 +207,7 @@ export default function Users() {
           <StatCard icon={UserCheck} label="Active"         value={stats.active}       tint="bg-green-50 text-green-600" />
           <StatCard icon={UserX}     label="Suspended"      value={stats.suspended ?? stats.inactive} tint="bg-red-50 text-red-600" />
           <StatCard icon={UsersIcon} label="Clients"        value={stats.clients}      tint="bg-gray-100 text-gray-600" />
-          <StatCard icon={UsersIcon} label="Technicians"    value={stats.technicians}  tint="bg-indigo-50 text-indigo-600" />
+          <StatCard icon={UsersIcon} label="Experts"    value={stats.technicians}  tint="bg-indigo-50 text-indigo-600" />
           <StatCard icon={UserPlus}  label="New This Month" value={stats.newThisMonth} tint="bg-amber-50 text-amber-600" />
         </div>
       )}
@@ -231,7 +232,7 @@ export default function Users() {
         >
           <option value="all">All roles</option>
           <option value="client">Clients</option>
-          <option value="technician">Technicians</option>
+          <option value="technician">Experts</option>
           <option value="admin">Admins</option>
         </select>
 
@@ -310,7 +311,7 @@ export default function Users() {
                             ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-700'
                           }`}
                         >
-                          {u.role}
+                          {userRoleLabel(u.role)}
                         </span>
                       </td>
 

@@ -47,6 +47,16 @@ export const canManageRole = (actorRole, targetRole) =>
 export const assignableRoles = (actorRole) =>
   ALL_ROLES.filter((r) => canManageRole(actorRole, r));
 
+// Platform user roles as shown on screen. "technician" stays the stored
+// value; people see "Expert" since both technicians and engineers use it.
+export const USER_ROLE_LABELS = {
+  client: 'Client',
+  technician: 'Expert',
+  admin: 'Admin',
+};
+
+export const userRoleLabel = (role) => USER_ROLE_LABELS[role] || role;
+
 export const fullNameOf = (admin) =>
   admin?.fullName ||
   `${admin?.firstName || ''} ${admin?.lastName || ''}`.trim() ||

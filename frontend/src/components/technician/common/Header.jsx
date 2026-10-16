@@ -6,7 +6,7 @@ const Header = ({ technicianProfile }) => {
     <div className="mb-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
         <div>
-          <h1 className="text-3xl font-bold mb-2 text-gray-800">Technician Dashboard</h1>
+          <h1 className="text-3xl font-bold mb-2 text-gray-800">Expert Dashboard</h1>
           <p className="text-gray-600">Manage your professional profile and services</p>
         </div>
         <div className="flex space-x-4 mt-4 md:mt-0">

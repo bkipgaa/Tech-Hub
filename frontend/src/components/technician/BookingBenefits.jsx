@@ -17,7 +17,7 @@ const BENEFITS = [
   {
     icon: TrendingUp,
     title: 'Higher ratings, more visibility',
-    text: 'Search results rank well-rated technicians first, putting you above most other technicians.',
+    text: 'Search results rank well-rated experts first, putting you above most other experts.',
   },
   {
     icon: Briefcase,

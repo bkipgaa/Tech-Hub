@@ -382,14 +382,14 @@ const BookingDetails = () => {
   };
 
   const getTechnicianName = (booking) => {
-    if (!booking?.technicianId) return 'Technician';
+    if (!booking?.technicianId) return 'Expert';
     const tech = booking.technicianId;
     // Person's name first (business name is shown underneath)
     if (tech.userId?.firstName) {
       return `${tech.userId.firstName} ${tech.userId.lastName || ''}`.trim();
     }
     if (tech.businessName?.trim()) return tech.businessName.trim();
-    return 'Technician';
+    return 'Expert';
   };
 
   /**
@@ -524,7 +524,7 @@ const BookingDetails = () => {
       },
       confirmMaterialsReceived: {
         title: 'Confirm Materials Received',
-        message: 'Have you received the materials from the technician?',
+        message: 'Have you received the materials from the expert?',
         buttonText: 'Confirm Received',
         buttonColor: 'bg-green-600 hover:bg-green-700',
         needsRating: false,
@@ -559,8 +559,8 @@ const BookingDetails = () => {
         needsRating: false,
       },
       rate: {
-        title: 'Rate Your Technician',
-        message: 'Share your experience with this technician.',
+        title: 'Rate Your Expert',
+        message: 'Share your experience with this expert.',
         buttonText: 'Submit Rating',
         buttonColor: 'bg-yellow-500 hover:bg-yellow-600',
         needsRating: true,
@@ -949,7 +949,7 @@ const BookingDetails = () => {
       case 'work_completed':
         return tech ? 'Your move: confirm the labor amount you were paid.' : `Pay ${technicianName} for the labor; they will confirm the amount.`;
       case 'labor_paid':
-        return tech ? `Waiting for ${clientName} to rate you.` : 'Your move: rate the technician to finish the booking.';
+        return tech ? `Waiting for ${clientName} to rate you.` : 'Your move: rate the expert to finish the booking.';
       default:
         return null;
     }
@@ -1120,7 +1120,7 @@ const BookingDetails = () => {
                   <p className="text-sm">
                     <span className="text-gray-500">Provided by:</span>{' '}
                     <span className="font-medium">
-                      {booking.materials.providedByClient ? 'Client' : 'Technician (buys)'}
+                      {booking.materials.providedByClient ? 'Client' : 'Expert (buys)'}
                     </span>
                   </p>
                   {booking.materials.moneyReceivedAt && (
@@ -1219,7 +1219,7 @@ const BookingDetails = () => {
                 )}
                 {booking.technicianNotes && (
                   <div>
-                    <p className="text-sm text-gray-500">Technician Notes</p>
+                    <p className="text-sm text-gray-500">Expert Notes</p>
                     <p className="text-gray-700">{booking.technicianNotes}</p>
                   </div>
                 )}
@@ -1247,7 +1247,7 @@ const BookingDetails = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Technician (doing the work)</p>
+                  <p className="text-sm text-gray-500">Expert (doing the work)</p>
                   <p className="font-medium text-gray-800 flex items-center gap-2">
                     {getTechnicianName(booking)}
                     {isTechnician && <span className="text-[10px] font-semibold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded">You</span>}
@@ -1343,7 +1343,7 @@ const BookingDetails = () => {
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
                     >
                       <Star className="w-4 h-4 fill-current" />
-                      Rate Technician
+                      Rate Expert
                     </button>
                   )}
 
@@ -1548,10 +1548,10 @@ const BookingDetails = () => {
                         onChange={() => setActionModal((prev) => ({ ...prev, providedByClient: false }))}
                         disabled={actionModal.loading}
                       />
-                      Technician buys
+                      Expert buys
                     </label>
                   </div>
-                  <p className="text-xs text-gray-400">If the technician buys, they will need to confirm money received.</p>
+                  <p className="text-xs text-gray-400">If the expert buys, they will need to confirm money received.</p>
                 </div>
               )}
 
@@ -1683,7 +1683,7 @@ const BookingDetails = () => {
                   {booking.laborPayment?.amount > 0 && (
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <p className="text-sm font-medium text-gray-700 mb-2">
-                        The technician says you paid{' '}
+                        The expert says you paid{' '}
                         <strong>{formatCurrency(booking.laborPayment.amount)}</strong> for labor. Is this correct?{' '}
                         <span className="text-red-500">*</span>
                       </p>

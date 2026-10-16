@@ -279,7 +279,7 @@ const JobApplicationsList = ({ jobId }) => {
             <div className="p-6 space-y-6">
               {/* Technician Profile Section */}
               <div>
-                <h3 className="font-bold text-lg mb-3">Technician Profile</h3>
+                <h3 className="font-bold text-lg mb-3">Expert Profile</h3>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <p><span className="font-medium">Name:</span> {selectedApp.technicianName}</p>
                   <p className="text-xs text-gray-500">Contact details are shared through chat.</p>

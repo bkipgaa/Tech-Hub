@@ -38,6 +38,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import api from '../services/api';
+import RadiusPicker from '../components/RadiusPicker';
 
 // ============================================================
 // PLAN CONFIGURATION (matching backend subscription plans)
@@ -253,7 +254,7 @@ const SearchPage = () => {
             errorMessage += 'Please check your location settings.';
         }
         // Location is required to search — don't fall back to a search without it
-        setSearchError(`${errorMessage} Your location is needed to show technicians near you.`);
+        setSearchError(`${errorMessage} Your location is needed to show experts near you.`);
         setGettingLocation(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
@@ -297,7 +298,7 @@ const SearchPage = () => {
       if (response.data.success) {
         setTechnicians(response.data.data || []);
         if (response.data.data?.length === 0) {
-          setSearchError('No technicians match your criteria. Try broadening your search.');
+          setSearchError('No experts match your criteria. Try broadening your search.');
         }
       } else {
         setTechnicians([]);
@@ -431,7 +432,7 @@ const SearchPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Find a Technician</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-6">Find an Expert</h1>
 
         {/* ===== CATALOG FALLBACK WARNING ===== */}
         {usingDefaultCatalog && (
@@ -493,33 +494,20 @@ const SearchPage = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Search Radius <span className="text-gray-400">(up to 1000km)</span>
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    value={filters.radius}
-                    onChange={(e) => setFilters({ ...filters, radius: parseInt(e.target.value) })}
-                    min="1"
-                    max="1000"
-                    step="10"
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  />
+              <div className="md:col-span-3">
+                <div className="flex items-center gap-3 mb-2">
+                  <label htmlFor="searchRadius" className="text-sm font-medium text-gray-700">
+                    Search Radius
+                  </label>
                   <span className={`text-sm font-medium px-2 py-1 rounded-full ${getRadiusColor()}`}>
                     {getRadiusText()}
                   </span>
                 </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>1 km</span>
-                  <span>10 km</span>
-                  <span>50 km</span>
-                  <span>100 km</span>
-                  <span>300 km</span>
-                  <span>600 km</span>
-                  <span>1000 km</span>
-                </div>
+                <RadiusPicker
+                  id="searchRadius"
+                  value={filters.radius}
+                  onChange={(km) => setFilters((f) => ({ ...f, radius: km }))}
+                />
               </div>
 
               <div className="flex items-end">
@@ -631,7 +619,7 @@ const SearchPage = () => {
           <div className="mb-4 text-sm text-gray-500 flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200">
             <MapPin className="w-4 h-4 text-green-600" />
             <span>
-              Showing technicians within <strong>{filters.radius} km</strong> of your location
+              Showing experts within <strong>{filters.radius} km</strong> of your location
             </span>
             {filters.radius > 100 && (
               <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
@@ -645,7 +633,7 @@ const SearchPage = () => {
         {technicians.length === 0 && !loading && !searchError && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No technicians found matching your criteria</p>
+            <p className="text-gray-500">No experts found matching your criteria</p>
             <p className="text-sm text-gray-400 mt-2">
               Try adjusting your filters or increasing the search radius
             </p>
@@ -732,7 +720,7 @@ const SearchPage = () => {
                               )}
                             </div>
                             <p className="text-gray-600 mt-1">
-                              {tech.profileHeadline || tech.businessName || 'Professional Technician'}
+                              {tech.profileHeadline || tech.businessName || 'Expert'}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 bg-yellow-50 px-3 py-1 rounded-full">

@@ -311,7 +311,7 @@ export default function Commissions() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by technician name or email…"
+              placeholder="Search by expert name or email…"
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none"
             />
           </div>
@@ -364,7 +364,7 @@ export default function Commissions() {
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-3 text-left">Booking</th>
-                  <th className="px-4 py-3 text-left">Technician</th>
+                  <th className="px-4 py-3 text-left">Expert</th>
                   <th className="px-4 py-3 text-left">Service</th>
                   <th className="px-4 py-3 text-right">Labor</th>
                   <th className="px-4 py-3 text-right">Commission</th>
@@ -414,7 +414,7 @@ export default function Commissions() {
                           </>
                         ) : (
                           <p className="text-xs text-gray-400 italic">
-                            Technician unavailable
+                            Expert unavailable
                           </p>
                         )}
                       </td>

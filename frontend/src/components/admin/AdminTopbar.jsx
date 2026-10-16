@@ -23,7 +23,7 @@ import { useAdminAuth } from '../../context/AdminAuthContext';
 // ─────────────────────────────────────────────────────────────
 const PAGE_TITLES = {
   'dashboard':      'Dashboard',
-  'technicians':    'Technicians',
+  'technicians':    'Experts',
   'verifications':  'Verifications',
   'subscriptions':  'Subscriptions',
   'bookings':       'Bookings',

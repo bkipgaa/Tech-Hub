@@ -248,7 +248,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Become technician error:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to upgrade to technician',
+        error: error.response?.data?.message || 'Failed to upgrade to expert',
       };
     }
   };
@@ -312,7 +312,7 @@ export const AuthProvider = ({ children }) => {
       if (!token) {
         return {
           success: false,
-          error: 'Please login first to create a technician profile'
+          error: 'Please login first to create an expert profile'
         };
       }
 
@@ -338,7 +338,7 @@ export const AuthProvider = ({ children }) => {
       
       return { 
         success: false, 
-        error: response.data.message || 'Failed to create technician profile' 
+        error: response.data.message || 'Failed to create expert profile' 
       };
     } catch (error) {
       console.error('Create profile error:', error);
@@ -352,7 +352,7 @@ export const AuthProvider = ({ children }) => {
       
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to create technician profile',
+        error: error.response?.data?.message || 'Failed to create expert profile',
       };
     }
   };
@@ -373,13 +373,13 @@ export const AuthProvider = ({ children }) => {
       
       return { 
         success: false, 
-        error: response.data.message || 'Failed to update technician profile' 
+        error: response.data.message || 'Failed to update expert profile' 
       };
     } catch (error) {
       console.error('Update profile error:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to update technician profile',
+        error: error.response?.data?.message || 'Failed to update expert profile',
       };
     }
   };
@@ -399,13 +399,13 @@ export const AuthProvider = ({ children }) => {
       
       return { 
         success: false, 
-        error: response.data.message || 'Technician not found' 
+        error: response.data.message || 'Expert not found' 
       };
     } catch (error) {
       console.error('Error fetching technician:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to fetch technician',
+        error: error.response?.data?.message || 'Failed to fetch expert',
       };
     }
   };
@@ -638,7 +638,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to fetch technicians',
+        error: error.response?.data?.message || 'Failed to fetch experts',
       };
     }
   };
@@ -656,7 +656,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to verify technician',
+        error: error.response?.data?.message || 'Failed to verify expert',
       };
     }
   };
@@ -674,7 +674,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to reject technician',
+        error: error.response?.data?.message || 'Failed to reject expert',
       };
     }
   };
