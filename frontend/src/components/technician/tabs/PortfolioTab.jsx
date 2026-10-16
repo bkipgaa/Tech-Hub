@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+import { cldImage, cldVideoPoster, CARD_WIDTH, VIEWER_WIDTH } from '../../../utils/media';
 
 const EMPTY_PORTFOLIO = {
   title: '',
@@ -351,7 +352,7 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
                   </button>
                 </div>
                 {newPortfolio.mediaType === 'image' && (
-                  <img src={newPortfolio.mediaUrl} alt="Preview" className="max-h-40 rounded object-contain" />
+                  <img src={cldImage(newPortfolio.mediaUrl, CARD_WIDTH)} alt="Preview" className="max-h-40 rounded object-contain" />
                 )}
                 {newPortfolio.mediaType === 'video' && (
                   <video src={newPortfolio.mediaUrl} className="max-h-40 rounded" controls />
@@ -470,10 +471,10 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Media (current)</label>
                   {editData.mediaType === 'image' && editData.mediaUrl && (
-                    <img src={editData.mediaUrl} alt="Current" className="w-full h-28 object-cover rounded mb-1" />
+                    <img src={cldImage(editData.mediaUrl, CARD_WIDTH)} alt="Current" className="w-full h-28 object-cover rounded mb-1" />
                   )}
                   {editData.mediaType === 'video' && editData.mediaUrl && (
-                    <video src={editData.mediaUrl} className="w-full h-28 object-cover rounded mb-1" controls />
+                    <video src={editData.mediaUrl} poster={cldVideoPoster(editData.mediaUrl, CARD_WIDTH)} className="w-full h-28 object-cover rounded mb-1" preload="none" controls />
                   )}
                   {editData.mediaType === 'document' && editData.mediaUrl && (
                     <div className="w-full h-20 flex items-center justify-center bg-gray-50 rounded mb-1">
@@ -571,10 +572,18 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
             ) : (
               <>
                 {item.mediaType === 'image' && (
-                  <img src={item.mediaUrl} alt={item.title} className="w-full h-48 object-cover" loading="lazy" />
+                  <a href={cldImage(item.mediaUrl, VIEWER_WIDTH)} target="_blank" rel="noopener noreferrer">
+                    <img src={cldImage(item.mediaUrl, CARD_WIDTH)} alt={item.title} className="w-full h-48 object-cover" loading="lazy" />
+                  </a>
                 )}
                 {item.mediaType === 'video' && (
-                  <video src={item.mediaUrl} className="w-full h-48 object-cover" controls />
+                  <video
+                    src={item.mediaUrl}
+                    poster={cldVideoPoster(item.mediaUrl, CARD_WIDTH)}
+                    className="w-full h-48 object-cover"
+                    preload="none"
+                    controls
+                  />
                 )}
                 {item.mediaType === 'document' && (
                   <div className="w-full h-48 bg-gray-100 flex items-center justify-center">

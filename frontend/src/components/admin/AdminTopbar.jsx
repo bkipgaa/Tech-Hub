@@ -16,6 +16,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Menu, ChevronDown, UserCircle, LogOut, Shield } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 // ─────────────────────────────────────────────────────────────
 // PAGE TITLE MAPPING
@@ -107,7 +108,7 @@ const AdminTopbar = ({ onMenuClick }) => {
           >
             {admin?.profileImage ? (
               <img
-                src={admin.profileImage}
+                src={cldImage(admin.profileImage, AVATAR_WIDTH)}
                 alt={admin.fullName}
                 className="w-8 h-8 rounded-full object-cover"
               />

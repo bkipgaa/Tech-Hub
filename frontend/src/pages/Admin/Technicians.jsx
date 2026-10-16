@@ -14,6 +14,7 @@ import {
 import adminApi from '../../services/adminApi';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import PermissionGate from '../../components/admin/PermissionGate';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 // ─── HELPERS ────────────────────────────────────────────────
 const planBadge = (plan) => {
@@ -298,7 +299,7 @@ const Technicians = () => {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {t.user?.profileImage ? (
-                          <img src={t.user.profileImage} alt="" className="w-9 h-9 rounded-full object-cover" />
+                          <img src={cldImage(t.user.profileImage, AVATAR_WIDTH)} alt="" className="w-9 h-9 rounded-full object-cover" />
                         ) : (
                           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                             {t.user?.firstName?.[0]}{t.user?.lastName?.[0]}

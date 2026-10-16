@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import adminApi from '../../services/adminApi';
 import PermissionGate from '../../components/admin/PermissionGate';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 // ─── HELPERS ────────────────────────────────────────────────
 const STATUS_LABELS = {
@@ -512,7 +513,7 @@ const Detail = ({ label, value }) => (
 const PersonCard = ({ user, subtitle, extra }) => (
   <div className="flex items-start gap-3">
     {user?.profileImage ? (
-      <img src={user.profileImage} alt="" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+      <img src={cldImage(user.profileImage, AVATAR_WIDTH)} alt="" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
     ) : (
       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0">
         {user?.firstName?.[0]}{user?.lastName?.[0]}

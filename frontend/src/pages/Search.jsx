@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import RadiusPicker from '../components/RadiusPicker';
+import { cldImage, AVATAR_WIDTH } from '../utils/media';
 
 // ============================================================
 // PLAN CONFIGURATION (matching backend subscription plans)
@@ -673,7 +674,7 @@ const SearchPage = () => {
                       <div className="flex-shrink-0">
                         {tech.user?.profileImage ? (
                           <img
-                            src={tech.user.profileImage}
+                            src={cldImage(tech.user.profileImage, AVATAR_WIDTH)}
                             alt={tech.user.firstName}
                             className="w-24 h-24 rounded-full object-cover"
                           />

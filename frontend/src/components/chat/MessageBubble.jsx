@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, CheckCheck } from 'lucide-react';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 /**
  * MessageBubble
@@ -64,7 +65,7 @@ const MessageBubble = ({ message, isOwn, showAvatar }) => {
           <div className="flex-shrink-0 self-end">
             {message.sender?.profileImage ? (
               <img 
-                src={message.sender.profileImage} 
+                src={cldImage(message.sender.profileImage, AVATAR_WIDTH)} 
                 alt="" 
                 className="w-8 h-8 rounded-full object-cover"
               />

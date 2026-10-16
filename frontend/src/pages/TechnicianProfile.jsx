@@ -41,6 +41,7 @@ import {
   Check,
 } from 'lucide-react';
 import api from '../services/api';
+import { cldImage, cldVideoPoster, AVATAR_WIDTH, CARD_WIDTH, VIEWER_WIDTH } from '../utils/media';
 
 /**
  * TechnicianProfile Component
@@ -494,7 +495,7 @@ const TechnicianProfile = () => {
               <div className="flex-shrink-0">
                 {technician.userId?.profileImage ? (
                   <img
-                    src={technician.userId.profileImage}
+                    src={cldImage(technician.userId.profileImage, AVATAR_WIDTH)}
                     alt={`${technician.userId.firstName || ''} ${technician.userId.lastName || ''}`.trim()}
                     className="w-28 h-28 rounded-full border-4 border-white object-cover bg-white shadow-md"
                   />
@@ -670,15 +671,23 @@ const TechnicianProfile = () => {
               {technician.portfolio.map((item, idx) => (
                 <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
                   {item.mediaType === 'image' && (
-                    <img
-                      src={item.mediaUrl}
-                      alt={item.title || 'Portfolio item'}
-                      className="w-full h-40 object-cover"
-                      loading="lazy"
-                    />
+                    <a href={cldImage(item.mediaUrl, VIEWER_WIDTH)} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={cldImage(item.mediaUrl, CARD_WIDTH)}
+                        alt={item.title || 'Portfolio item'}
+                        className="w-full h-40 object-cover"
+                        loading="lazy"
+                      />
+                    </a>
                   )}
                   {item.mediaType === 'video' && (
-                    <video src={item.mediaUrl} className="w-full h-40 object-cover" preload="metadata" />
+                    <video
+                      src={item.mediaUrl}
+                      poster={cldVideoPoster(item.mediaUrl, CARD_WIDTH)}
+                      className="w-full h-40 object-cover"
+                      preload="none"
+                      controls
+                    />
                   )}
                   <div className="p-3">
                     <h3 className="font-semibold text-gray-800">{item.title}</h3>

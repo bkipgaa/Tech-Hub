@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Camera, Save, Loader2 } from 'lucide-react';
 // Import your configured axios instance that has baseURL and auth headers set up
 import api from '../services/api';
+import { cldImage, AVATAR_WIDTH } from '../utils/media';
 
 // Define the Profile functional component
 const Profile = () => {
@@ -154,7 +155,7 @@ const Profile = () => {
                   {formData.profileImage ? (
                     <img 
                       // Source is the Cloudinary URL stored in formData
-                      src={formData.profileImage} 
+                      src={cldImage(formData.profileImage, AVATAR_WIDTH)}
                       // Alt text for accessibility
                       alt="Profile"
                       // Fixed size, circular crop, object-cover prevents distortion, green border
