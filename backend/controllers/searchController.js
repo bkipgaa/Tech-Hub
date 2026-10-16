@@ -765,14 +765,6 @@ exports.getSearchSuggestions = async (req, res) => {
 // GET CATEGORIES
 // ===========================================
 
-const DEFAULT_CATEGORIES = [
-  'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
-  'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
-  'Laundry & Dry Cleaning', 'Cleaning Services', 'Painting & Decorating',
-  'Welding & Fabrication', 'Automotive Repair', 'Tutoring & Training',
-  'Photography & Videography', 'Event Planning', 'Construction & Renovation',
-  'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping'
-];
 
 /**
  * Get all distinct main categories.
@@ -789,7 +781,10 @@ exports.getCategories = async (req, res) => {
 
     res.json({
       success: true,
-      categories: categories.length > 0 ? categories : DEFAULT_CATEGORIES
+      // No experts yet → fall back to the categories defined in the service catalog
+      categories: categories.length > 0
+        ? categories
+        : await ServiceCatalog.distinct('mainCategory', { isActive: true })
     });
   } catch (error) {
     handleControllerError(res, error, 'An error occurred while fetching categories.', 500, 'getCategories');

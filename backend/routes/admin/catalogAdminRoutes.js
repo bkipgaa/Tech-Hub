@@ -11,8 +11,19 @@ const express = require('express');
 const router = express.Router();
 const { adminAuth, requirePermission } = require('../../middleware/AdminAuth');
 const ctrl = require('../../controllers/admin/catalogAdminController');
+const { clearCatalogCache } = require('../../controllers/serviceCatalogController');
 
 router.use(adminAuth);
+
+// Any successful change → drop the public catalog cache so users see it at once
+router.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    res.on('finish', () => {
+      if (res.statusCode < 400) clearCatalogCache();
+    });
+  }
+  next();
+});
 
 // ── Main categories ─────────────────────────────────────
 router.get('/',                requirePermission('catalog.view'),   ctrl.listCatalogs);

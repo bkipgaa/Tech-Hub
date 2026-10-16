@@ -5,14 +5,6 @@ const ServiceCatalogSchema = new Schema({
   mainCategory: {
     type: String,
     required: true,
-    enum: [
-      'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
-      'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
-      'Laundry & Dry Cleaning', 'Cleaning Services', 'Painting & Decorating',
-      'Welding & Fabrication', 'Automotive Repair', 'Tutoring & Training',
-      'Photography & Videography', 'Event Planning', 'Construction & Renovation',
-      'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping'
-    ]
   },
   serviceCategories: [{
     name: { type: String, required: true, trim: true },

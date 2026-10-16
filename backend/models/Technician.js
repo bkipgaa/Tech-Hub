@@ -17,28 +17,8 @@ const Schema = mongoose.Schema;
 // CONSTANTS
 // ============================================================
 
-const MAIN_CATEGORIES = [
-  'IT & Networking',
-  'Electrical Services',
-  'Mechanical Services',
-  'Plumbing',
-  'Programming & AI',
-  'Hairdressing & Beauty',
-  'Carpentry & Furniture',
-  'Laundry & Dry Cleaning',
-  'Cleaning Services',
-  'Painting & Decorating',
-  'Welding & Fabrication',
-  'Automotive Repair',
-  'Tutoring & Training',
-  'Photography & Videography',
-  'Event Planning',
-  'Construction & Renovation',
-  'HVAC Services',
-  'Appliance Repair',
-  'Moving & Logistics',
-  'Gardening & Landscaping'
-];
+// Main categories are not fixed here: they come from the ServiceCatalog
+// collection, so admins can add new ones without a code change.
 
 // ============================================================
 // SCHEMA DEFINITION
@@ -75,21 +55,17 @@ const TechnicianSchema = new Schema({
 
   mainCategory: {
     type: String,
-    enum: MAIN_CATEGORIES,
     required: true,
-    default: MAIN_CATEGORIES[0]
   },
 
   mainCategories: [{
     type: String,
-    enum: MAIN_CATEGORIES,
     trim: true
   }],
 
   serviceCategories: [{
     mainCategory: {
       type: String,
-      enum: MAIN_CATEGORIES,
       required: true
     },
     categoryName: {
