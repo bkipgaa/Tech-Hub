@@ -365,6 +365,7 @@ const TechnicianSchema = new Schema({
     endDate: Date,
     trialEndDate: Date,
     isTrial: { type: Boolean, default: false },
+    isFreeMonth: { type: Boolean, default: false },   // paid plan's free first month (no payment)
     autoRenew: { type: Boolean, default: true },
     paymentHistory: [{
       amount: Number,

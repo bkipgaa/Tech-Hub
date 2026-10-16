@@ -188,6 +188,11 @@ const TechnicianHome = () => {
             <h2 className="text-2xl font-bold text-gray-800 mb-1">Reach More Clients</h2>
             <p className="text-gray-500 text-sm">
               Your plan sets how far away clients can find you. Every plan runs for 30 days.
+              {subscription?.freeMonthAvailable && (
+                <span className="block mt-1 font-semibold text-green-700">
+                  Your first month on any plan is free — once. No payment details needed.
+                </span>
+              )}
             </p>
           </div>
 
@@ -217,7 +222,7 @@ const TechnicianHome = () => {
                       onClick={() => navigate('/subscription')}
                       className="mt-3 text-sm font-semibold bg-green-600 text-white rounded-lg py-1.5 hover:bg-green-700 transition-colors"
                     >
-                      Upgrade
+                      {subscription?.freeMonthAvailable ? 'Try free' : 'Upgrade'}
                     </button>
                   )}
                 </div>

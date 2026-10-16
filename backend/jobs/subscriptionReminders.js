@@ -52,6 +52,7 @@ const sendExpiryReminders = async () => {
         endDate: formatDate(endDate),
         daysLeft,
         isTrial,
+        isFreeMonth: !!tech.subscription.isFreeMonth,
         currentRadius: plan?.visibilityRadius || 10,
       });
       sent++;
