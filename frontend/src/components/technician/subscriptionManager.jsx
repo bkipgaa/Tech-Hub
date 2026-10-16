@@ -1,10 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, CheckCircle, AlertCircle, Crown, 
-  Shield, TrendingUp, MapPin, Calendar, Zap, Phone
+  Shield, TrendingUp, MapPin, Calendar, Zap, Phone, HelpCircle, X
 } from 'lucide-react';
 import api from '../../services/api';
 import { visiblePlans } from '../../utils/plans';
+
+// Closable popup used for "How subscriptions work" and "Current plan"
+const InfoPopup = ({ title, onClose, children }) => (
+  <div
+    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    onClick={onClose}
+  >
+    <div
+      className="relative bg-white rounded-lg max-w-lg w-full max-h-[85vh] overflow-y-auto p-6"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-3 right-3 p-1 text-gray-500 hover:text-gray-700"
+        aria-label="Close"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <h2 className="text-lg font-semibold text-gray-800 mb-4 pr-8">{title}</h2>
+      {children}
+      <button
+        onClick={onClose}
+        className="mt-6 w-full py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+);
 
 /**
  * SubscriptionManager Component
@@ -23,6 +52,7 @@ const SubscriptionManager = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [freeMonthPlan, setFreeMonthPlan] = useState(null); // plan picked for the free month
+  const [popup, setPopup] = useState(null); // 'how' | 'current' | null
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   
@@ -247,115 +277,136 @@ const SubscriptionManager = () => {
       <h1 className="text-2xl font-bold mb-2">Subscription Management</h1>
       <p className="text-gray-600 mb-6">Choose a plan that fits your business needs</p>
 
-      {/* How subscriptions work */}
-      <div className="mb-8 rounded-lg border border-green-200 bg-green-50 p-5">
-        <h2 className="text-base font-semibold text-green-900 mb-3">How subscriptions work</h2>
-        <ul className="space-y-2 text-sm text-green-900">
-          <li>
-            <strong>Free Trial:</strong> every new expert gets 30 days free, visible to clients within 10 km.
-          </li>
-          <li>
-            <strong>Free plan, forever:</strong> when a trial or plan ends you stay on the Free plan, still visible within 10 km — at no cost.
-          </li>
-          <li>
-            <strong>Paid plans</strong> let clients further away find you (20 km up to 1,000 km). Each runs for 30 days and you pay by Card or M-Pesa.
-            You're never charged automatically — to continue, simply pay again.
-          </li>
-          <li>
-            <strong>Your first month on a paid plan is free — once.</strong> Pick any plan and try it for 30 days with no payment details.
-            This can only be used once, whichever plan you choose. When the month ends you return to the Free plan (10 km) unless you subscribe.
-          </li>
-          <li>
-            <strong>Reminders:</strong> we email you 7, 3 and 1 day before any plan or trial ends.
-          </li>
-          <li>
-            <strong>Ranking:</strong> your plan sets how far away clients can see you; your position in results comes from your ratings and completed jobs.
-          </li>
-        </ul>
+      {/* How it works + current plan: buttons that open closable popups */}
+      <div className="mb-8 flex flex-wrap gap-3">
+        <button
+          onClick={() => setPopup('how')}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-green-300 bg-green-50 text-green-800 font-medium hover:bg-green-100 transition-colors"
+        >
+          <HelpCircle className="w-5 h-5" />
+          How subscriptions work
+        </button>
+        {currentSubscription && (
+          <button
+            onClick={() => setPopup('current')}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-300 bg-blue-50 text-blue-800 font-medium hover:bg-blue-100 transition-colors"
+          >
+            <Crown className="w-5 h-5 text-yellow-500" />
+            Current plan: {currentSubscription.planDetails?.name || currentSubscription.plan || 'Free'}
+            {currentSubscription.isFreeMonth && <span className="text-xs font-normal">(free month)</span>}
+          </button>
+        )}
       </div>
 
-      {/* Current Subscription Card */}
-      {currentSubscription && (
-        <div className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
-          <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Current Plan</h3>
-              <div className="flex items-center gap-2 mb-2">
-                <Crown className="w-5 h-5 text-yellow-500" />
-                <span className="text-xl font-bold">
-                  {currentSubscription.planDetails?.name || currentSubscription.plan || 'Free'}
-                </span>
-                <span className={`px-2 py-1 text-xs rounded-full ${currentSubscription.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {currentSubscription.isActive ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              <div className="space-y-1 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  <span>Visibility Radius: <strong>{currentSubscription.visibilityRadius}km</strong></span>
-                </div>
-                {currentSubscription.daysRemaining > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    <span>
-                      {currentSubscription.daysRemaining} days remaining
-                      {currentSubscription.isFreeMonth && ' of your free month — then the Free plan (10 km) unless you subscribe'}
-                    </span>
-                  </div>
-                )}
-                {!currentSubscription.freeMonthAvailable && (
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Free month already used</span>
-                  </div>
-                )}
-                {currentSubscription.autoRenew && (
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    <span>Auto-renewal enabled</span>
-                  </div>
-                )}
-              </div>
+      {popup === 'how' && (
+        <InfoPopup title="How subscriptions work" onClose={() => setPopup(null)}>
+          <ul className="space-y-2 text-sm text-gray-700">
+            <li>
+              <strong>Free Trial:</strong> every new expert gets 30 days free, visible to clients within 10 km.
+            </li>
+            <li>
+              <strong>Free plan, forever:</strong> when a trial or plan ends you stay on the Free plan, still visible within 10 km — at no cost.
+            </li>
+            <li>
+              <strong>Paid plans</strong> let clients further away find you (20 km up to 1,000 km). Each runs for 30 days and you pay by Card or M-Pesa.
+              You're never charged automatically — to continue, simply pay again.
+            </li>
+            <li>
+              <strong>Your first month on a paid plan is free — once.</strong> Pick any plan and try it for 30 days with no payment details.
+              This can only be used once, whichever plan you choose. When the month ends you return to the Free plan (10 km) unless you subscribe.
+            </li>
+            <li>
+              <strong>Reminders:</strong> we email you 7, 3 and 1 day before any plan or trial ends.
+            </li>
+            <li>
+              <strong>Ranking:</strong> your plan sets how far away clients can see you; your position in results comes from your ratings and completed jobs.
+            </li>
+          </ul>
+        </InfoPopup>
+      )}
+
+      {popup === 'current' && currentSubscription && (
+        <InfoPopup title="Current plan" onClose={() => setPopup(null)}>
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Current Plan</h3>
+            <div className="flex items-center gap-2 mb-2">
+              <Crown className="w-5 h-5 text-yellow-500" />
+              <span className="text-xl font-bold">
+                {currentSubscription.planDetails?.name || currentSubscription.plan || 'Free'}
+              </span>
+              <span className={`px-2 py-1 text-xs rounded-full ${currentSubscription.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {currentSubscription.isActive ? 'Active' : 'Inactive'}
+              </span>
             </div>
-            <div className="flex gap-3">
-              {currentSubscription.plan !== 'trial' && currentSubscription.canActivateTrial && (
-                <button
-                  onClick={activateTrial}
-                  disabled={processing}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                >
-                  Start Free Trial
-                </button>
+            <div className="space-y-1 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                <span>Visibility Radius: <strong>{currentSubscription.visibilityRadius}km</strong></span>
+              </div>
+              {currentSubscription.daysRemaining > 0 && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  <span>
+                    {currentSubscription.daysRemaining} days remaining
+                    {currentSubscription.isFreeMonth && ' of your free month — then the Free plan (10 km) unless you subscribe'}
+                  </span>
+                </div>
+              )}
+              {!currentSubscription.freeMonthAvailable && (
+                <div className="flex items-center gap-2 text-gray-500">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Free month already used</span>
+                </div>
               )}
               {currentSubscription.autoRenew && (
-                <button
-                  onClick={cancelAutoRenew}
-                  className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
-                >
-                  Cancel Auto-Renewal
-                </button>
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4" />
+                  <span>Auto-renewal enabled</span>
+                </div>
               )}
             </div>
           </div>
-
-          {/* Upgrade prompt when subscription is inactive */}
-          {!currentSubscription.isActive && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              <span className="text-red-700 font-medium flex-1">
-                Your plan has ended. You're still visible to clients within 10 km on the Free plan — upgrade to reach clients further away.
-              </span>
+          <div className="flex gap-3">
+            {currentSubscription.plan !== 'trial' && currentSubscription.canActivateTrial && (
               <button
-                onClick={() => {
-                  document.getElementById('plans-grid')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                onClick={activateTrial}
+                disabled={processing}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
               >
-                Upgrade Now
+                Start Free Trial
               </button>
-            </div>
-          )}
+            )}
+            {currentSubscription.autoRenew && (
+              <button
+                onClick={cancelAutoRenew}
+                className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
+              >
+                Cancel Auto-Renewal
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Upgrade prompt when subscription is inactive */}
+        {!currentSubscription.isActive && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            <span className="text-red-700 font-medium flex-1">
+              Your plan has ended. You're still visible to clients within 10 km on the Free plan — upgrade to reach clients further away.
+            </span>
+            <button
+              onClick={() => {
+                setPopup(null);
+                document.getElementById('plans-grid')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Upgrade Now
+            </button>
+          </div>
+        )}
+        </InfoPopup>
       )}
 
       {/* Message Display */}
