@@ -15,6 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import applicationService from '../../services/applicationService';
 import Loader from '../common/Loader';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 const JobApplicationsList = ({ jobId }) => {
   const { user } = useAuth();
@@ -150,7 +151,7 @@ const JobApplicationsList = ({ jobId }) => {
               {/* Profile Image or Initials */}
               {app.technicianId?.profileImage ? (
                 <img
-                  src={app.technicianId.profileImage}
+                  src={cldImage(app.technicianId.profileImage, AVATAR_WIDTH)}
                   alt={app.technicianName}
                   className="w-12 h-12 rounded-full object-cover"
                 />

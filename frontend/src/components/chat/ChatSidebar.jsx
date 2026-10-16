@@ -1,5 +1,6 @@
 import React from 'react';
 import { MessageSquare } from 'lucide-react';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 /**
  * ChatSidebar
@@ -69,7 +70,7 @@ const ChatSidebar = ({ conversations, activeConversationId, onSelect, currentUse
                 {/* Avatar with unread badge */}
                 <div className="relative flex-shrink-0">
                   {other?.profileImage ? (
-                    <img src={other.profileImage} alt="" className="w-12 h-12 rounded-full object-cover" />
+                    <img src={cldImage(other.profileImage, AVATAR_WIDTH)} alt="" className="w-12 h-12 rounded-full object-cover" />
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-semibold">
                       {other?.firstName?.[0]}{other?.lastName?.[0]}

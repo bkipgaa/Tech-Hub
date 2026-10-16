@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+import { cldImage, cldVideoPoster, CARD_WIDTH, VIEWER_WIDTH } from '../../../utils/media';
 
 const MAX_ITEMS = 20;
 const MAX_FILE_MB = 10;
@@ -53,7 +54,7 @@ const toDateInput = (value) => {
 // ─── Media preview used by cards, the form and the viewer ───────────────────
 const MediaPreview = ({ item, className = '', controls = false }) => {
   if (item.mediaType === 'video') {
-    return <video src={item.mediaUrl} className={`${className} bg-black object-cover`} controls={controls} muted={!controls} />;
+    return <video src={item.mediaUrl} poster={cldVideoPoster(item.mediaUrl, CARD_WIDTH)} preload="none" className={`${className} bg-black object-cover`} controls={controls} muted={!controls} />;
   }
   if (item.mediaType === 'document') {
     return (
@@ -63,7 +64,7 @@ const MediaPreview = ({ item, className = '', controls = false }) => {
       </div>
     );
   }
-  return <img src={item.mediaUrl} alt={item.title || 'Portfolio item'} className={`${className} object-cover`} loading="lazy" />;
+  return <img src={cldImage(item.mediaUrl, CARD_WIDTH)} alt={item.title || 'Portfolio item'} className={`${className} object-cover`} loading="lazy" />;
 };
 
 // ─── Modal shell ─────────────────────────────────────────────────────────────
@@ -530,8 +531,8 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
       {viewed && (
         <Modal title={viewed.title} onClose={() => setViewing(null)} wide>
           <div className="bg-gray-900 flex items-center justify-center">
-            {viewed.mediaType === 'image' && <img src={viewed.mediaUrl} alt={viewed.title} className="max-h-[60vh] w-auto object-contain" />}
-            {viewed.mediaType === 'video' && <video src={viewed.mediaUrl} className="max-h-[60vh] w-full" controls autoPlay />}
+            {viewed.mediaType === 'image' && <img src={cldImage(viewed.mediaUrl, VIEWER_WIDTH)} alt={viewed.title} className="max-h-[60vh] w-auto object-contain" />}
+            {viewed.mediaType === 'video' && <video src={viewed.mediaUrl} poster={cldVideoPoster(viewed.mediaUrl, VIEWER_WIDTH)} className="max-h-[60vh] w-full" controls autoPlay />}
             {viewed.mediaType === 'document' && (
               <div className="py-12 text-center text-gray-200">
                 <FileText className="w-14 h-14 mx-auto mb-3" />

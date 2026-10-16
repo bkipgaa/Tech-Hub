@@ -34,6 +34,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { userRoleLabel } from "../utils/roleHelpers";
 import { getSocket } from '../services/socket';
+import { cldImage, AVATAR_WIDTH } from '../utils/media';
 
 const Navbar = () => {
   // ─── LOCAL UI STATE ───────────────────────────
@@ -264,7 +265,7 @@ const Navbar = () => {
                     >
                       {user.profileImage ? (
                         <img
-                          src={user.profileImage}
+                          src={cldImage(user.profileImage, AVATAR_WIDTH)}
                           alt={user.fullName}
                           className="w-8 h-8 rounded-full object-cover"
                         />
@@ -496,7 +497,7 @@ const Navbar = () => {
                     <div className="flex items-center space-x-3 px-3 py-2.5 bg-gray-50 rounded-lg">
                       {user.profileImage ? (
                         <img
-                          src={user.profileImage}
+                          src={cldImage(user.profileImage, AVATAR_WIDTH)}
                           alt=""
                           className="w-10 h-10 rounded-full object-cover"
                         />

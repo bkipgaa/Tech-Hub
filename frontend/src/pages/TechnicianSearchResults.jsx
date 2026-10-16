@@ -20,6 +20,7 @@ import {
   Briefcase,
 } from 'lucide-react';
 import api from '../services/api';
+import { cldImage, AVATAR_WIDTH } from '../utils/media';
 
 const TechnicianSearchResults = () => {
   const navigate = useNavigate();
@@ -222,7 +223,7 @@ const TechnicianSearchResults = () => {
                   <div className="flex-shrink-0">
                     {tech.user?.profileImage ? (
                       <img
-                        src={tech.user.profileImage}
+                        src={cldImage(tech.user.profileImage, AVATAR_WIDTH)}
                         alt={`${tech.user?.firstName ?? 'Expert'} profile`}
                         className="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
                         onError={(e) => {

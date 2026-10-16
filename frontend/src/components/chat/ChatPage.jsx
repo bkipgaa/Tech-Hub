@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import ChatSidebar from './ChatSidebar';
 import MessageBubble from './MessageBubble';
 import { initSocket, getSocket } from '../../services/socket';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 /**
  * ChatPage
@@ -309,7 +310,7 @@ const ChatPage = () => {
                     <div className="relative">
                       {otherParty.profileImage ? (
                         <img 
-                          src={otherParty.profileImage} 
+                          src={cldImage(otherParty.profileImage, AVATAR_WIDTH)} 
                           alt="" 
                           className="w-10 h-10 rounded-full object-cover" 
                         />

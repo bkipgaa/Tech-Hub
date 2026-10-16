@@ -15,6 +15,7 @@ import {
 import { adminUserServiceFull } from '../../services/adminRevenueService';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { userRoleLabel } from '../../utils/roleHelpers';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 // ─── Role & Status styling ────────────────────────────────
 const ROLE_BADGE = {
@@ -285,7 +286,7 @@ export default function Users() {
                         <div className="flex items-center gap-3">
                           {u.profileImage ? (
                             <img
-                              src={u.profileImage}
+                              src={cldImage(u.profileImage, AVATAR_WIDTH)}
                               alt=""
                               className="w-9 h-9 rounded-full object-cover"
                             />

@@ -7,6 +7,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Star, Wrench, Award, User, Crown, Zap, Globe, Briefcase } from 'lucide-react';
+import { cldImage, AVATAR_WIDTH } from '../utils/media';
 
 // Plan configuration
 const planConfig = {
@@ -43,7 +44,7 @@ const TechnicianCard = ({ technician, distance, showDistance = true, onViewProfi
         <div className="flex-shrink-0">
           {technician.userId?.profileImage ? (
             <img 
-              src={technician.userId.profileImage} 
+              src={cldImage(technician.userId.profileImage, AVATAR_WIDTH)} 
               alt={`${technician.userId.firstName} ${technician.userId.lastName}`} 
               className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"
             />

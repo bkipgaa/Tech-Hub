@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import adminApi from '../../services/adminApi';
 import PermissionGate from '../../components/admin/PermissionGate';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 // ─── PERIOD OPTIONS ─────────────────────────────────────────
 const PERIODS = [
@@ -474,7 +475,7 @@ const Subscriptions = () => {
                         <div className="flex items-center gap-3">
                           {s.user?.profileImage ? (
                             <img
-                              src={s.user.profileImage}
+                              src={cldImage(s.user.profileImage, AVATAR_WIDTH)}
                               alt=""
                               className="w-9 h-9 rounded-full object-cover"
                             />

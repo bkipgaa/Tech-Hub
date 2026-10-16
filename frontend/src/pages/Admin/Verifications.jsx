@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import adminApi from '../../services/adminApi';
 import PermissionGate from '../../components/admin/PermissionGate';
+import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 // ─── HELPERS ────────────────────────────────────────────────
 const formatDate = (d) =>
@@ -313,7 +314,7 @@ const Verifications = () => {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           {t.userId?.profileImage ? (
-                            <img src={t.userId.profileImage} alt="" className="w-9 h-9 rounded-full object-cover" />
+                            <img src={cldImage(t.userId.profileImage, AVATAR_WIDTH)} alt="" className="w-9 h-9 rounded-full object-cover" />
                           ) : (
                             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                               {t.userId?.firstName?.[0]}{t.userId?.lastName?.[0]}
@@ -433,7 +434,7 @@ const Verifications = () => {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="flex items-start gap-4">
                     {selected.userId?.profileImage ? (
-                      <img src={selected.userId.profileImage} alt="" className="w-16 h-16 rounded-full object-cover" />
+                      <img src={cldImage(selected.userId.profileImage, AVATAR_WIDTH)} alt="" className="w-16 h-16 rounded-full object-cover" />
                     ) : (
                       <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
                         {selected.userId?.firstName?.[0]}{selected.userId?.lastName?.[0]}

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import RadiusPicker from '../components/RadiusPicker';
+import { cldImage, AVATAR_WIDTH } from '../utils/media';
 
 /**
  * Main component for displaying technician search results.
@@ -628,7 +629,7 @@ const Technicians = () => {
                         {/* ✅ FIX: use tech.user (not userId) */}
                         {tech.user?.profileImage ? (
                           <img
-                            src={tech.user.profileImage}
+                            src={cldImage(tech.user.profileImage, AVATAR_WIDTH)}
                             alt="Profile"
                             className="w-full h-full object-cover"
                           />
