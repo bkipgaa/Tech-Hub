@@ -76,11 +76,22 @@ const uploadBufferToCloudinary = (buffer, options = {}) => {
 };
 
 // ─── Convenience wrappers ───────────────────────────────────
-const uploadPortfolioToCloudinary = (buffer) =>
-  uploadBufferToCloudinary(buffer, {
+// Photos are resized on upload (max 1920 px, automatic quality): a 5 MB phone
+// photo is stored as roughly 0.3–0.6 MB and still looks sharp on any screen.
+// Videos are capped at 1280 px wide; PDFs are stored as they are.
+const uploadPortfolioToCloudinary = (buffer, mimetype = '') => {
+  let transformation;
+  if (mimetype.startsWith('image/')) {
+    transformation = [{ width: 1920, height: 1920, crop: 'limit', quality: 'auto' }];
+  } else if (mimetype.startsWith('video/')) {
+    transformation = [{ width: 1280, crop: 'limit', quality: 'auto' }];
+  }
+  return uploadBufferToCloudinary(buffer, {
     folder: 'technicians/portfolio',
     resource_type: 'auto',
+    transformation,
   });
+};
 
 const uploadProfileToCloudinary = (buffer) =>
   uploadBufferToCloudinary(buffer, {
