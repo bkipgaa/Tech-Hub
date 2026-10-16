@@ -59,6 +59,12 @@ router.get('/current', subscriptionController.getCurrentSubscription);
 router.post('/trial', subscriptionController.activateTrial);
 
 /**
+ * POST /api/subscription/free-month  { planId }
+ * First month of any paid plan free, once per expert, no payment details.
+ */
+router.post('/free-month', subscriptionController.startFreeMonth);
+
+/**
  * Initiate payment for subscription upgrade
  * @route POST /api/subscription/upgrade
  * 

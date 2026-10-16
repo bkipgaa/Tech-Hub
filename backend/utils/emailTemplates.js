@@ -108,27 +108,54 @@ exports.technicianNewBooking = (data) => ({
   ),
 });
 
-exports.technicianSubscriptionExpiring = (data) => ({
-  subject: data.daysLeft === 1
-    ? `⚠️ Your subscription expires TOMORROW`
-    : `⚠️ Your subscription expires in ${data.daysLeft} days`,
-  html: layout(
-    data.daysLeft === 1 ? 'Your subscription expires tomorrow' : `Your subscription expires in ${data.daysLeft} days`,
-    `
+// Reminder 7/3/1 days before a plan ends: free trial, free month of a paid plan, or a paid plan
+exports.technicianSubscriptionExpiring = (data) => {
+  const when = data.daysLeft === 1 ? 'tomorrow' : `in ${data.daysLeft} days`;
+  const kind = data.isTrial ? 'trial' : data.isFreeMonth ? 'freeMonth' : 'paid';
+  const copy = {
+    trial: {
+      subject: `⏰ Your free trial ends ${when}`,
+      title: `Your free trial ends ${when}`,
+      ends: `Your <strong>${data.planName}</strong> ends on <strong>${data.endDate}</strong>.`,
+      note: `<strong>Good to know:</strong> after your trial you stay on the Free plan, visible to clients within 10 km — at no cost.
+             Choose a paid plan to reach clients up to 1,000 km away.`,
+      cta: 'See Plans',
+    },
+    freeMonth: {
+      subject: `⏰ Your free month of ${data.planName} ends ${when}`,
+      title: `Your free month of ${data.planName} ends ${when}`,
+      ends: `Your free month of <strong>${data.planName}</strong> ends on <strong>${data.endDate}</strong>.`,
+      note: `<strong>Nothing will be charged.</strong> After it ends you go back to the Free plan, visible within 10 km.
+             Subscribe to ${data.planName} to keep your ${data.currentRadius} km visibility.`,
+      cta: `Subscribe to ${data.planName}`,
+    },
+    paid: {
+      subject: data.daysLeft === 1 ? '⚠️ Your subscription expires TOMORROW' : `⚠️ Your subscription expires ${when}`,
+      title: `Your subscription expires ${when}`,
+      ends: `Your <strong>${data.planName}</strong> subscription will expire on <strong>${data.endDate}</strong>.`,
+      note: `<strong>Important:</strong> When your subscription expires, you'll be moved to the Free plan with a 10 km visibility radius.
+             Renew now to keep your ${data.currentRadius} km visibility and other premium features.`,
+      cta: 'Renew Subscription',
+    },
+  }[kind];
+
+  return {
+    subject: copy.subject,
+    html: layout(
+      copy.title,
+      `
       <p>Hi <strong>${data.technicianName}</strong>,</p>
-      <p>Your <strong>${data.planName}</strong> subscription will expire on <strong>${data.endDate}</strong>.</p>
+      <p>${copy.ends}</p>
       <div style="background:#fef3c7;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid #f59e0b;">
-        <p style="margin:0;color:#92400e;">
-          <strong>Important:</strong> When your subscription expires, you'll be moved to the Free plan with a 10 km visibility radius.
-          Renew now to keep your ${data.currentRadius} km visibility and other premium features.
-        </p>
+        <p style="margin:0;color:#92400e;">${copy.note}</p>
       </div>
-      <p>Renewing takes less than a minute with Card or M-Pesa.</p>
+      <p>Subscribing takes less than a minute with Card or M-Pesa.</p>
     `,
-    `${BRAND.url}/subscription`,
-    'Renew Subscription'
-  ),
-});
+      `${BRAND.url}/subscription`,
+      copy.cta
+    ),
+  };
+};
 
 exports.technicianSubscriptionRenewed = (data) => ({
   subject: `✅ Subscription renewed — ${data.planName}`,

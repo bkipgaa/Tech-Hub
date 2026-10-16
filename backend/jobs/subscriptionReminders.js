@@ -1,85 +1,67 @@
 /**
  * subscriptionReminders.js
  * ========================
- * Daily scan for expiring subscriptions.
- * Sends reminder emails at 7 days and 1 day before expiry.
- * 
+ * Daily scan for plans that are about to end — paid plans (endDate) and the
+ * free trial (trialEndDate). Sends a reminder 7, 3 and 1 day(s) before.
+ * When a plan ends the expert stays visible on the Free plan (10 km).
+ *
  * Run via node-cron in server.js.
  */
 
 const Technician = require('../models/Technician');
-const User = require('../models/User');
 const notify = require('../services/notificationService');
 const { subscriptionPlans } = require('../utils/subscriptionPlans');
 
+const REMINDER_DAYS = [7, 3, 1];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const formatDate = (d) =>
+  d.toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' });
+
 const sendExpiryReminders = async () => {
   try {
-    console.log('⏰ [cron] Checking expiring subscriptions...');
+    console.log('⏰ [cron] Checking plans that are about to end...');
 
     const now = new Date();
-    const days7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const days1 = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() + Math.max(...REMINDER_DAYS) * DAY_MS);
 
-    // Find paid subscriptions expiring in exactly 7 days (window)
-    const expiring7 = await Technician.find({
-      'subscription.plan': { $nin: ['free', 'trial'] },
-      'subscription.endDate': { $gte: now, $lte: days7 },
+    const technicians = await Technician.find({
+      $or: [
+        // Paid plans
+        { 'subscription.plan': { $nin: ['free', 'trial'] }, 'subscription.endDate': { $gt: now, $lte: windowEnd } },
+        // Free trial
+        { 'subscription.plan': 'trial', 'subscription.trialEndDate': { $gt: now, $lte: windowEnd } },
+      ],
     }).populate('userId', 'email firstName lastName');
 
-    // Find expiring in 1 day
-    const expiring1 = await Technician.find({
-      'subscription.plan': { $nin: ['free', 'trial'] },
-      'subscription.endDate': { $gte: now, $lte: days1 },
-    }).populate('userId', 'email firstName lastName');
-
-    let count7 = 0;
-    let count1 = 0;
-
-    for (const tech of expiring7) {
+    let sent = 0;
+    for (const tech of technicians) {
       if (!tech.userId?.email) continue;
 
-      const endDate = new Date(tech.subscription.endDate);
-      const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
-
-      // Only send on day 7 (avoid duplicate daily sends)
-      if (daysLeft !== 7) continue;
+      const isTrial = tech.subscription.plan === 'trial';
+      const endDate = new Date(isTrial ? tech.subscription.trialEndDate : tech.subscription.endDate);
+      // ceil: sends once per reminder day when the job runs daily
+      const daysLeft = Math.ceil((endDate - now) / DAY_MS);
+      if (!REMINDER_DAYS.includes(daysLeft)) continue;
 
       const plan = subscriptionPlans[tech.subscription.plan];
       await notify.technicianSubscriptionExpiring({
         technicianEmail: tech.userId.email,
         technicianName: `${tech.userId.firstName} ${tech.userId.lastName}`.trim(),
         planName: plan?.name || tech.subscription.plan,
-        endDate: endDate.toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' }),
-        daysLeft: 7,
+        endDate: formatDate(endDate),
+        daysLeft,
+        isTrial,
+        isFreeMonth: !!tech.subscription.isFreeMonth,
         currentRadius: plan?.visibilityRadius || 10,
       });
-      count7++;
+      sent++;
     }
 
-    for (const tech of expiring1) {
-      if (!tech.userId?.email) continue;
-
-      const endDate = new Date(tech.subscription.endDate);
-      const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
-
-      if (daysLeft !== 1) continue;
-
-      const plan = subscriptionPlans[tech.subscription.plan];
-      await notify.technicianSubscriptionExpiring({
-        technicianEmail: tech.userId.email,
-        technicianName: `${tech.userId.firstName} ${tech.userId.lastName}`.trim(),
-        planName: plan?.name || tech.subscription.plan,
-        endDate: endDate.toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' }),
-        daysLeft: 1,
-        currentRadius: plan?.visibilityRadius || 10,
-      });
-      count1++;
-    }
-
-    console.log(`⏰ [cron] Sent ${count7} 7-day reminders, ${count1} 1-day reminders`);
+    console.log(`⏰ [cron] Sent ${sent} plan reminder(s)`);
   } catch (err) {
-    console.error('⏰ [cron] Expiry reminders FAILED:', err);
+    console.error('⏰ [cron] Plan reminders FAILED:', err);
   }
 };
 
-module.exports = { sendExpiryReminders };
+module.exports = { sendExpiryReminders, REMINDER_DAYS };
