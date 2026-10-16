@@ -9,7 +9,7 @@ import TechnicianHome from '../components/technician/TechnicianHome';
 
 const CLIENT_STEPS = [
   { title: 'Search for a Service', text: 'Browse categories or search for specific services you need' },
-  { title: 'Choose a Technician', text: 'Compare profiles, ratings, and prices from verified professionals' },
+  { title: 'Choose an Expert', text: 'Compare profiles, ratings, and prices from verified professionals' },
   { title: 'Book & Get Service', text: 'Schedule your service and get quality work done' },
 ];
 
@@ -145,7 +145,7 @@ const Home = () => {
                 Here's how your business on <Wordmark className="" onDark /> is doing
               </p>
               <p className="text-gray-300 max-w-3xl mx-auto text-lg leading-relaxed animate-fadeInUp">
-                Need a job done outside your skills? You can find and book other technicians too.
+                Need a job done outside your skills? You can find and book other experts too.
               </p>
             </>
           ) : (
@@ -158,7 +158,7 @@ const Home = () => {
               </p>
               <p className="text-gray-300 max-w-3xl mx-auto text-lg leading-relaxed animate-fadeInUp">
                 From IT solutions to home services, find qualified experts ready to help with your needs.
-                Get matched with the best technicians in your area.
+                Get matched with the best experts in your area.
               </p>
             </>
           )}
@@ -169,7 +169,7 @@ const Home = () => {
               onClick={() => navigate('/search')}
               className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
             >
-              Find a Technician
+              Find an Expert
               <ArrowRight className="w-5 h-5" />
             </button>
             {/* Already a technician → nothing to become */}
@@ -178,7 +178,7 @@ const Home = () => {
                 onClick={() => navigate('/become-technician')}
                 className="bg-white/20 backdrop-blur-sm text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
               >
-                Become a Technician
+                Become an Expert
               </button>
             )}
             <button
@@ -202,7 +202,7 @@ const Home = () => {
           </h2>
           <p className="text-gray-500 text-sm">
             {isTechnician
-              ? 'Find a technician for jobs outside your skills — most requested categories'
+              ? 'Find an expert for jobs outside your skills — most requested categories'
               : 'Most requested categories by our users'}
           </p>
         </div>
@@ -282,7 +282,7 @@ const Home = () => {
             onClick={() => navigate('/become-technician')}
             className="bg-white text-green-700 px-6 py-2.5 rounded-md font-semibold hover:bg-gray-100 transition-colors text-sm"
           >
-            Become a Technician Today
+            Become an Expert Today
           </button>
         </div>
       </div>

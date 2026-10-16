@@ -265,7 +265,7 @@ const BookingDetail = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <Detail
                   label="Provided by"
-                  value={booking.materials.providedByClient ? 'Client' : 'Technician'}
+                  value={booking.materials.providedByClient ? 'Client' : 'Expert'}
                 />
                 {booking.materials.moneyReceivedAt && (
                   <Detail label="Money received" value={formatDateTime(booking.materials.moneyReceivedAt)} />
@@ -333,7 +333,7 @@ const BookingDetail = () => {
               )}
               {booking.technicianNotes && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Technician</p>
+                  <p className="text-xs text-gray-500 mb-0.5">Expert</p>
                   <p className="text-sm text-gray-700">{booking.technicianNotes}</p>
                 </div>
               )}
@@ -385,10 +385,10 @@ const BookingDetail = () => {
           </Card>
 
           {/* Technician */}
-          <Card title="Technician" icon={Wrench}>
+          <Card title="Expert" icon={Wrench}>
             <PersonCard
               user={techUser}
-              subtitle={tech.businessName || tech.mainCategory || 'Technician'}
+              subtitle={tech.businessName || tech.mainCategory || 'Expert'}
               extra={tech.mainCategory}
             />
           </Card>

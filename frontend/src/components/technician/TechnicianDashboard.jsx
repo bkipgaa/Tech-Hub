@@ -40,6 +40,7 @@ import SettingsTab from './tabs/SettingsTab';
 // Import common UI components
 import Header from './common/Header';
 import VerificationBanner from './common/VerificationBanner';
+import LocationReminder from './common/LocationReminder';
 import ProfileCompletionBar from './common/ProfileCompletionBar';
 import TabNavigation from './common/TabNavigation';
 import BookingBenefits from './BookingBenefits';
@@ -236,7 +237,7 @@ const TechnicianDashboard = () => {
             setViewingTechnician(response.data);
             console.log('✅ Technician loaded for admin view');
           } else {
-            setError('Technician not found');
+            setError('Expert not found');
             navigate('/admin/technicians');
           }
         } 
@@ -479,7 +480,7 @@ const TechnicianDashboard = () => {
     e.preventDefault();
     
     if (isAdminView) {
-      setError('Admins cannot edit technician profiles. This is read-only mode.');
+      setError('Admins cannot edit expert profiles. This is read-only mode.');
       console.warn('⚠️ Admin attempted to edit technician profile - blocked');
       return;
     }
@@ -544,7 +545,7 @@ const TechnicianDashboard = () => {
       } else {
         // If admin viewing another technician, show a message
         console.warn('⚠️ Admins cannot view job requests for other technicians');
-        setError('Admins cannot view job requests for other technicians. Please switch to your own profile.');
+        setError('Admins cannot view job requests for other experts. Please switch to your own profile.');
       }
     } catch (err) {
       console.error('❌ Navigation error:', err);
@@ -596,12 +597,12 @@ const TechnicianDashboard = () => {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-50">
           <div className="text-center">
-            <p className="text-xl text-gray-700">Technician profile not found</p>
+            <p className="text-xl text-gray-700">Expert profile not found</p>
             <button
               onClick={() => navigate('/admin/technicians')}
               className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
             >
-              Back to Technicians
+              Back to Experts
             </button>
           </div>
         </div>
@@ -645,7 +646,7 @@ const TechnicianDashboard = () => {
                 onClick={() => navigate('/admin/technicians')}
                 className="ml-auto bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
               >
-                Back to Technicians
+                Back to Experts
               </button>
             </div>
           </div>
@@ -659,7 +660,7 @@ const TechnicianDashboard = () => {
               <div>
                 <p className="text-purple-800 font-semibold">👁️ Admin View</p>
                 <p className="text-purple-600 text-sm">
-                  You are viewing your own technician profile. You have full edit access.
+                  You are viewing your own expert profile. You have full edit access.
                 </p>
               </div>
             </div>
@@ -676,6 +677,9 @@ const TechnicianDashboard = () => {
           isAdminView={isAdminView}
           technicianId={currentProfile?._id}
         />
+
+        {/* Experts must keep their location current, or nearby clients will not see them */}
+        {!isAdminView && <LocationReminder profile={currentProfile} />}
 
         <ProfileCompletionBar
           percentage={currentProfile?.profileCompletionPercentage}

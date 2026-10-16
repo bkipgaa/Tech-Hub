@@ -55,7 +55,7 @@ const TechnicianSearchResults = () => {
   }, [lat, lng]);
 
   const requestLocation = () => {
-    const required = 'Please allow location access. We need your location to show technicians near you.';
+    const required = 'Please allow location access. We need your location to show experts near you.';
     if (!navigator.geolocation) {
       setError(required);
       setLoading(false);
@@ -101,14 +101,14 @@ const TechnicianSearchResults = () => {
       if (payload.success) {
         setTechnicians(Array.isArray(data) ? data : []);
         if (data.length === 0) {
-          setError('No technicians found for this service within the selected distance.');
+          setError('No experts found for this service within the selected distance.');
         }
       } else {
-        setError(payload.message || 'Failed to fetch technicians.');
+        setError(payload.message || 'Failed to fetch experts.');
       }
     } catch (err) {
       console.error('Search error:', err);
-      setError('Could not load technicians. Please try again.');
+      setError('Could not load experts. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -142,7 +142,7 @@ const TechnicianSearchResults = () => {
                 Back to Services
               </button>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
-                Technicians for {subService}
+                Experts for {subService}
               </h1>
               <p className="text-sm text-gray-500 mt-1">
                 {mainCategory} &rsaquo; {serviceCategory} &rsaquo; {subService}
@@ -177,7 +177,7 @@ const TechnicianSearchResults = () => {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-10 h-10 text-green-600 animate-spin mb-4" />
-            <p className="text-gray-600">Finding technicians near you...</p>
+            <p className="text-gray-600">Finding experts near you...</p>
           </div>
         ) : error ? (
           <div className="max-w-xl mx-auto text-center py-16">
@@ -223,7 +223,7 @@ const TechnicianSearchResults = () => {
                     {tech.user?.profileImage ? (
                       <img
                         src={tech.user.profileImage}
-                        alt={`${tech.user?.firstName ?? 'Technician'} profile`}
+                        alt={`${tech.user?.firstName ?? 'Expert'} profile`}
                         className="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
                         onError={(e) => {
                           e.target.style.display = 'none';
@@ -260,7 +260,7 @@ const TechnicianSearchResults = () => {
                         <p className="text-sm text-gray-600">
                           {tech.profileHeadline ||
                             tech.businessName ||
-                            'Professional Technician'}
+                            'Expert'}
                         </p>
                       </div>
 

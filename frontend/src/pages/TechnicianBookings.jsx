@@ -45,6 +45,8 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import BookingBenefits from '../components/technician/BookingBenefits';
+import LocationReminder from '../components/technician/common/LocationReminder';
+import { useAuth } from '../context/AuthContext';
 
 // ============================================================
 // HELPER COMPONENTS
@@ -140,6 +142,7 @@ const TechnicianBookings = () => {
   const navigate = useNavigate();
 
   // ─── STATE ────────────────────────────────────────────────────
+  const { technicianProfile } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -438,7 +441,7 @@ const TechnicianBookings = () => {
       <div className="min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Technician Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Expert Dashboard</h1>
           </div>
           <SkeletonLoader />
         </div>
@@ -454,7 +457,7 @@ const TechnicianBookings = () => {
         {/* ─── HEADER ─────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Technician Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Expert Dashboard</h1>
             {!loading && bookings.length > 0 && (
               <p className="text-sm text-gray-500 mt-1">
                 Showing {bookings.length} booking{bookings.length > 1 ? 's' : ''}
@@ -492,6 +495,9 @@ const TechnicianBookings = () => {
             </button>
           </div>
         </div>
+
+        {/* ─── LOCATION REMINDER ──────────────────────────────── */}
+        <LocationReminder profile={technicianProfile} />
 
         {/* ─── WHY USE BOOKINGS ───────────────────────────────── */}
         <div className="mb-6">

@@ -135,6 +135,14 @@ exports.updateProfile = async (req, res) => {
     // ============================================================
     // 6. MERGE REMAINING FIELDS
     // ============================================================
+    // Only a real move counts as a location update; the client may echo the old date back
+    delete req.body.locationUpdatedAt;
+    const newCoords = req.body.location?.coordinates;
+    const oldCoords = technician.location?.coordinates || [];
+    if (Array.isArray(newCoords) && (newCoords[0] !== oldCoords[0] || newCoords[1] !== oldCoords[1])) {
+      technician.locationUpdatedAt = new Date();
+    }
+
     Object.assign(technician, req.body);
     technician.lastActive = new Date();
 

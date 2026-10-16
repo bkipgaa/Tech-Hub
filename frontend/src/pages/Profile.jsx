@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 // Import the useAuth hook from your auth context to access user data and update function
 import { useAuth } from '../context/AuthContext';
+import { userRoleLabel } from '../utils/roleHelpers';
 // Import useNavigate from react-router-dom for redirecting if user is not logged in
 import { useNavigate } from 'react-router-dom';
 // Import icon components from lucide-react for the UI
@@ -191,8 +192,8 @@ const Profile = () => {
                 <h2 className="text-xl font-bold text-gray-800 mt-4">
                   {user.fullName || `${user.firstName} ${user.lastName}`}
                 </h2>
-                {/* Display user's role (e.g., technician, client) in green, capitalized */}
-                <p className="text-green-600 font-medium capitalize">{user.role}</p>
+                {/* Display user's role (e.g., Expert, Client) in green, capitalized */}
+                <p className="text-green-600 font-medium capitalize">{userRoleLabel(user.role)}</p>
                 {/* Show membership date formatted to local string */}
                 <p className="text-sm text-gray-500 mt-2">Member since {new Date(user.createdAt).toLocaleDateString()}</p>
                 {/* Display any image upload error message in red */}

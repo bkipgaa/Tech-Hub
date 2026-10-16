@@ -25,6 +25,7 @@ import {
   Info,
 } from 'lucide-react';
 import api from '../services/api';
+import RadiusPicker from '../components/RadiusPicker';
 
 /**
  * Main component for displaying technician search results.
@@ -99,7 +100,7 @@ const Technicians = () => {
         console.error('Location error:', error);
         if (error.code === error.PERMISSION_DENIED) {
           setLocationPermissionDenied(true);
-          setError('Location access denied. Please enable location services to find nearby technicians.');
+          setError('Location access denied. Please enable location services to find nearby experts.');
         } else {
           setError('Unable to get your location. Please check your device settings.');
         }
@@ -225,7 +226,7 @@ const Technicians = () => {
     } catch (err) {
       console.error('Search failed:', err);
       // Display user-friendly error message
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to find technicians. Please try again.';
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to find experts. Please try again.';
       setError(errorMsg);
       setLoading(false);
     }
@@ -376,7 +377,7 @@ const Technicians = () => {
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Finding technicians near you...</p>
+          <p className="mt-4 text-gray-600">Finding experts near you...</p>
         </div>
       </div>
     );
@@ -388,7 +389,7 @@ const Technicians = () => {
         {/* ===== PAGE HEADER ===== */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
-            {subService || serviceCategory || mainCategory || 'Technicians'} Near You
+            {subService || serviceCategory || mainCategory || 'Experts'} Near You
           </h1>
           {/* Display selected categories as badges */}
           {mainCategory && (
@@ -409,7 +410,7 @@ const Technicians = () => {
           {userLocation && (
             <p className="text-gray-500 text-sm flex items-center gap-1 mt-2">
               <MapPin className="w-3 h-3" />
-              Showing technicians within your search radius of {radius}km (subject to their plan limits)
+              Showing experts within your search radius of {radius}km (subject to their plan limits)
             </p>
           )}
         </div>
@@ -420,7 +421,7 @@ const Technicians = () => {
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <Navigation className="w-5 h-5 text-blue-600" />
-                <span className="text-blue-800 text-sm">Enable location to find technicians near you</span>
+                <span className="text-blue-800 text-sm">Enable location to find experts near you</span>
               </div>
               <button
                 onClick={getCurrentLocation}
@@ -440,7 +441,7 @@ const Technicians = () => {
               <span className="text-yellow-800 font-medium">Location access denied</span>
             </div>
             <p className="text-yellow-700 text-sm mb-3">
-              Please enable location access in your browser settings to find technicians near you.
+              Please enable location access in your browser settings to find experts near you.
             </p>
             <button
               onClick={getCurrentLocation}
@@ -464,16 +465,16 @@ const Technicians = () => {
             <div className="flex items-start gap-2">
               <Info className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
               <div className="text-xs text-gray-600">
-                <p className="font-medium mb-1">How technician visibility works:</p>
+                <p className="font-medium mb-1">How expert visibility works:</p>
                 <ul className="space-y-0.5">
-                  <li>• <span className="font-medium">Free plan</span> technicians: Visible within <span className="font-bold">10km</span></li>
-                  <li>• <span className="font-medium">Test plan</span> technicians: Visible within <span className="font-bold">20km</span></li>  {/* <-- ADDED */}
-                  <li>• <span className="font-medium">Basic plan</span> technicians: Visible within <span className="font-bold">10km</span></li>
-                  <li>• <span className="font-medium">Basic-Plus plan</span> technicians: Visible within <span className="font-bold">50km</span></li>
-                  <li>• <span className="font-medium">Premium plan</span> technicians: Visible within <span className="font-bold">100km</span></li>
-                  <li>• <span className="font-medium">Business plan</span> technicians: Visible within <span className="font-bold">300km</span></li>
-                  <li>• <span className="font-medium">Enterprise plan</span> technicians: Visible within <span className="font-bold">600km</span></li>
-                  <li>• <span className="font-medium">Unlimited plan</span> technicians: Visible within <span className="font-bold">1000km</span></li>
+                  <li>• <span className="font-medium">Free plan</span> experts: Visible within <span className="font-bold">10km</span></li>
+                  <li>• <span className="font-medium">Test plan</span> experts: Visible within <span className="font-bold">20km</span></li>  {/* <-- ADDED */}
+                  <li>• <span className="font-medium">Basic plan</span> experts: Visible within <span className="font-bold">10km</span></li>
+                  <li>• <span className="font-medium">Basic-Plus plan</span> experts: Visible within <span className="font-bold">50km</span></li>
+                  <li>• <span className="font-medium">Premium plan</span> experts: Visible within <span className="font-bold">100km</span></li>
+                  <li>• <span className="font-medium">Business plan</span> experts: Visible within <span className="font-bold">300km</span></li>
+                  <li>• <span className="font-medium">Enterprise plan</span> experts: Visible within <span className="font-bold">600km</span></li>
+                  <li>• <span className="font-medium">Unlimited plan</span> experts: Visible within <span className="font-bold">1000km</span></li>
                 </ul>
               </div>
             </div>
@@ -499,32 +500,15 @@ const Technicians = () => {
             {showFilters && (
               <div className="mb-5 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
                 <div className="space-y-4">
-                  {/* Radius slider */}
+                  {/* Search radius */}
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-medium text-gray-700">Your Search Radius</label>
+                      <label htmlFor="techRadius" className="text-sm font-medium text-gray-700">Your Search Radius</label>
                       <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
                         {getRadiusText()}
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      value={radius}
-                      onChange={(e) => setRadius(parseInt(e.target.value))}
-                      min="1"
-                      max="1000"
-                      step="10"
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 mt-2">
-                      <span>1km</span>
-                      <span className="font-medium">10km<br/>(Free/Basic)</span>
-                      <span>50km<br/>(Basic-Plus)</span>
-                      <span className="font-medium">100km<br/>(Premium)</span>
-                      <span>300km<br/>(Business)</span>
-                      <span>600km<br/>(Enterprise)</span>
-                      <span>1000km<br/>(Unlimited)</span>
-                    </div>
+                    <RadiusPicker id="techRadius" value={radius} onChange={setRadius} />
                   </div>
 
                   {/* Minimum rating */}
@@ -595,9 +579,9 @@ const Technicians = () => {
         {technicians.length === 0 && !loading && userLocation && !error && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Technicians Found</h3>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Experts Found</h3>
             <p className="text-gray-500 text-sm max-w-md mx-auto">
-              No technicians found for {subService || 'this service'} within your search radius of {radius}km.
+              No experts found for {subService || 'this service'} within your search radius of {radius}km.
             </p>
             {radius < 1000 && (
               <button
@@ -708,7 +692,7 @@ const Technicians = () => {
 
                       {/* ✅ FIX: use tech.aboutMe (not bio) */}
                       <p className="text-gray-600 text-sm mt-2 line-clamp-2">
-                        {tech.aboutMe || 'Professional technician ready to help with your service needs.'}
+                        {tech.aboutMe || 'Professional expert ready to help with your service needs.'}
                       </p>
 
                       {/* Service categories and sub-services */}

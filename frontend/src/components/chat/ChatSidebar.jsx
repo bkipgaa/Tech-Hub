@@ -107,7 +107,7 @@ const ChatSidebar = ({ conversations, activeConversationId, onSelect, currentUse
                   {/* Trade category tag (e.g. "Electrician") */}
                   {conv.technicianProfile && (
                     <span className="inline-block mt-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                      {conv.technicianProfile.mainCategory || 'Technician'}
+                      {conv.technicianProfile.mainCategory || 'Expert'}
                     </span>
                   )}
                 </div>

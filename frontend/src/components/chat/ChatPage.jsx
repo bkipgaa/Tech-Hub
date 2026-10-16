@@ -431,7 +431,7 @@ const ChatPage = () => {
               </div>
               <h3 className="text-xl font-semibold text-gray-800 mb-2">Your Messages</h3>
               <p className="text-gray-500 max-w-sm">
-                Select a conversation from the sidebar or start messaging a technician from their profile.
+                Select a conversation from the sidebar or start messaging an expert from their profile.
               </p>
             </div>
           </div>

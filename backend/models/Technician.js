@@ -212,6 +212,9 @@ const TechnicianSchema = new Schema({
     placeId: String
   },
 
+  // When the expert last set their location; the dashboard reminds them when it gets old
+  locationUpdatedAt: Date,
+
   serviceRadius: {
     type: Number,
     default: 10,

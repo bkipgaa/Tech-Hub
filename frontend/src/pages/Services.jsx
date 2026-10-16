@@ -15,7 +15,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Wrench,
-  ChevronDown,
   Clock,
   DollarSign,
   MapPin,
@@ -26,6 +25,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import api from '../services/api';
+import RadiusPicker from '../components/RadiusPicker';
 
 const Services = () => {
   const navigate = useNavigate();
@@ -160,7 +160,7 @@ const Services = () => {
       return;
     }
     if (!userLocation) {
-      alert('Please allow location access to find nearby technicians.');
+      alert('Please allow location access to find nearby experts.');
       requestUserLocation();
       return;
     }
@@ -269,7 +269,7 @@ const Services = () => {
             Browse Services
           </h1>
           <p className="text-sm md:text-base text-gray-600 mt-1">
-            Pick a category → choose a service → set your distance → book a technician.
+            Pick a category → choose a service → set your distance → book an expert.
           </p>
         </div>
 
@@ -394,31 +394,16 @@ const Services = () => {
                 {/* Distance selector */}
                 <div className="flex-1">
                   <label
-                    htmlFor="distanceSelect"
+                    htmlFor="distanceInput"
                     className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"
                   >
                     Search Radius
                   </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    <select
-                      id="distanceSelect"
-                      value={maxDistance}
-                      onChange={(e) => setMaxDistance(e.target.value)}
-                      className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none bg-white text-gray-800 font-medium appearance-none cursor-pointer"
-                    >
-                      <option value="">Select distance…</option>
-                      <option value="5">Within 5 km</option>
-                      <option value="10">Within 10 km</option>
-                      <option value="20">Within 20 km</option>
-                      <option value="50">Within 50 km</option>
-                      <option value="100">Within 100 km</option>
-                      <option value="200">Within 200 km</option>
-                      <option value="500">Within 500 km</option>
-                      <option value="1000">Within 1000 km</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  </div>
+                  <RadiusPicker
+                    id="distanceInput"
+                    value={maxDistance === '' ? '' : Number(maxDistance)}
+                    onChange={(km) => setMaxDistance(String(km))}
+                  />
                 </div>
 
                 {/* Location status */}
@@ -467,13 +452,13 @@ const Services = () => {
               <p className="text-xs text-gray-500 mt-3">
                 {!maxDistance &&
                   locationStatus === 'success' &&
-                  '👉 Pick a distance to unlock the "View Technicians" buttons'}
+                  '👉 Pick a distance to unlock the "View Experts" buttons'}
                 {maxDistance &&
                   locationStatus !== 'success' &&
-                  '👉 Enable location so we can find technicians near you'}
+                  '👉 Enable location so we can find experts near you'}
                 {maxDistance &&
                   locationStatus === 'success' &&
-                  '✅ Ready! Pick a service below to see technicians'}
+                  '✅ Ready! Pick a service below to see experts'}
               </p>
             </div>
           </section>
@@ -541,7 +526,7 @@ const Services = () => {
                         'Enable location'
                       ) : (
                         <>
-                          View Technicians
+                          View Experts
                           <ArrowRight className="w-3.5 h-3.5" />
                         </>
                       )}
