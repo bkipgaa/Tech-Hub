@@ -107,6 +107,15 @@ exports.updateProfile = async (req, res) => {
       const oldPortfolio = technician.portfolio || [];
       const newPortfolio = req.body.portfolio || [];
 
+      // Keeps profiles focused on the best work and storage predictable
+      const MAX_PORTFOLIO_ITEMS = 20;
+      if (newPortfolio.length > MAX_PORTFOLIO_ITEMS && newPortfolio.length > oldPortfolio.length) {
+        return res.status(400).json({
+          success: false,
+          message: `You can have up to ${MAX_PORTFOLIO_ITEMS} portfolio projects. Remove one to add another.`,
+        });
+      }
+
       // Find items that were removed (exist in old but not in new)
       const removedItems = oldPortfolio.filter(oldItem => 
         !newPortfolio.some(newItem => 
@@ -117,13 +126,14 @@ exports.updateProfile = async (req, res) => {
 
       // Delete removed items from Cloudinary
       for (const item of removedItems) {
+        const resourceType = item.mediaType === 'video' ? 'video' : 'image';
         if (item.publicId) {
-          await deleteFromCloudinary(item.publicId);
+          await deleteFromCloudinary(item.publicId, resourceType);
         } else if (item.mediaUrl && item.mediaUrl.includes('cloudinary.com')) {
           // Fallback: extract public_id from URL if publicId field is missing
           const publicIdMatch = item.mediaUrl.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[^.]+)?$/);
           if (publicIdMatch) {
-            await deleteFromCloudinary(publicIdMatch[1]);
+            await deleteFromCloudinary(publicIdMatch[1], resourceType);
           }
         }
       }
