@@ -550,6 +550,13 @@ const addServiceCategory = async (categoryData) => {
  * // Remove by category name and main category (recommended)
  * await removeServiceCategory('Residential Electrical', 'Electrical Services');
  */
+/**
+ * Replace the services offered under one of the expert's service categories (single save)
+ * @returns {Object} { success, technician, error }
+ */
+const updateServiceCategoryServices = (mainCategory, categoryName, subServices) =>
+  updateProfileSection('/technician/profile/service-category', { mainCategory, categoryName, subServices });
+
 const removeServiceCategory = async (categoryName, mainCategory) => {
   try {
     const token = localStorage.getItem('token');
@@ -1002,6 +1009,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     getTechnicianById,
      addServiceCategory,        // ✅ New
   removeServiceCategory,
+    updateServiceCategoryServices,
     
     // Section-specific update functions
     updateBasicInfo,

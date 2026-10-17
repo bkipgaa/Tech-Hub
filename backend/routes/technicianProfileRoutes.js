@@ -25,7 +25,7 @@ const { updateSkills } = require('../controllers/technician/profile/updateSkills
 const { updateSocialLinks } = require('../controllers/technician/profile/updateSocialLinks');
 const { getPublicProfile } = require('../controllers/technician/publicController');
 const { getCompleteCatalog } = require('../controllers/serviceCatalogController');
-const { addServiceCategory, removeServiceCategory } = require('../controllers/technician/profile/addService-category');
+const { addServiceCategory, removeServiceCategory, updateServiceCategory } = require('../controllers/technician/profile/addService-category');
 
 
 // ==================== PUBLIC ROUTES ====================
@@ -63,6 +63,7 @@ protectedRouter.put('/profile/availability', updateAvailability);
 protectedRouter.put('/profile/settings', updateSettings);
 protectedRouter.put('/profile/status', updateProfileStatus);
 protectedRouter.post('/profile/service-category', addServiceCategory);
+protectedRouter.put('/profile/service-category', updateServiceCategory);
 protectedRouter.delete('/profile/service-category/:categoryName', removeServiceCategory);
 
 // Mount the protected routes
