@@ -62,6 +62,12 @@ exports.addServiceCategory = async (req, res) => {
       displayOrder: technician.serviceCategories.length
     });
 
+    // Offering services in a category makes it one of the expert's categories
+    if (!(technician.mainCategories || []).includes(mainCategory)) {
+      technician.mainCategories = [...(technician.mainCategories || []), mainCategory];
+    }
+    if (!technician.mainCategory) technician.mainCategory = mainCategory;
+
     await technician.save();
 
     // Optionally update completion stats
@@ -134,5 +140,44 @@ exports.removeServiceCategory = async (req, res) => {
       success: false,
       message: 'Server error while removing service category'
     });
+  }
+};
+
+/**
+ * Replace the sub-services of one of the expert's service categories in a
+ * single save (the dashboard used to remove and re-add the whole category).
+ * PUT /api/technician/profile/service-category
+ * Body: { mainCategory, categoryName, subServices: [String] }
+ */
+exports.updateServiceCategory = async (req, res) => {
+  try {
+    const { mainCategory, categoryName, subServices } = req.body;
+    if (!mainCategory || !categoryName) {
+      return res.status(400).json({ success: false, message: 'Main category and service category are required' });
+    }
+    const cleaned = Array.isArray(subServices)
+      ? [...new Set(subServices.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()))]
+      : [];
+    if (cleaned.length === 0) {
+      return res.status(400).json({ success: false, message: 'Keep at least one service, or remove the whole category' });
+    }
+
+    const technician = await Technician.findOne({ userId: req.user.userId });
+    if (!technician) {
+      return res.status(404).json({ success: false, message: 'Technician profile not found' });
+    }
+    const category = technician.serviceCategories.find(
+      (c) => c.categoryName === categoryName && c.mainCategory === mainCategory
+    );
+    if (!category) {
+      return res.status(404).json({ success: false, message: `"${categoryName}" is not in your services` });
+    }
+
+    category.subServices = cleaned;
+    await technician.save();
+    res.json({ success: true, data: technician });
+  } catch (error) {
+    console.error('Update service category error:', error);
+    res.status(500).json({ success: false, message: 'Server error while updating service category' });
   }
 };

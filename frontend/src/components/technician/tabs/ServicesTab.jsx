@@ -1,699 +1,326 @@
 /**
  * ServicesTab.jsx
  * ================
- * Technician services & pricing tab.
- * Supports inline editing of service categories (edit sub-services).
+ * The services an expert offers, grouped by category.
  *
- * @version 3.0.0 – Inline edit for service categories
+ * - "Add services": pick any catalog category → service category → tick the
+ *   services (with search and select-all). Saved straight away.
+ * - Edit a service category's services in one save (PUT /profile/service-category),
+ *   remove a single service, or remove the whole service category.
+ * - Adding services under a category also adds that category to the profile.
+ *
+ * @version 4.0.0 – Grouped cards, modal picker, single-save edits
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  Plus, Trash2, ChevronDown, ChevronUp, CheckCircle, AlertCircle,
-  Loader2, Pencil, Save, X,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Wrench, Layers, Search, Loader2, X, CheckCircle } from 'lucide-react';
 import api from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
+import { Section, Field, EmptyState, AddButton, RowActions, Banner, FormModal, inputClass } from './ui';
 
-const ServicesTab = ({
-  formData,
-  setFormData,
-  isEditing,
-  isReadOnly,
-  handleInputChange,
-  onAddServiceCategory,
-  onRemoveServiceCategory,
-  isSaving,
-}) => {
-  // ── Catalog state ──────────────────────────────────────
+const subServicesUrl = (main, sc) =>
+  `/service-catalog/${encodeURIComponent(main)}/${encodeURIComponent(sc)}/sub-services/detailed`;
+
+const readSubServices = (res) => {
+  const subs = res.data?.data?.subServices || res.data?.subServices || res.data?.data || [];
+  return Array.isArray(subs) ? subs : [];
+};
+
+// ─── Checklist with search + select all ──────────────────────────────────────
+const ServiceChecklist = ({ options, selected, onChange, loading }) => {
+  const [query, setQuery] = useState('');
+  const visible = options.filter((o) => o.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const toggle = (name) => onChange(selected.includes(name) ? selected.filter((s) => s !== name) : [...selected, name]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-10 text-sm text-gray-500">
+        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading services…
+      </div>
+    );
+  }
+  if (options.length === 0) {
+    return <p className="text-sm text-gray-500 py-6 text-center">No services listed under this yet.</p>;
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input className={`${inputClass} pl-9`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search services" />
+        </div>
+        <button type="button" onClick={() => onChange([...new Set([...selected, ...visible.map((o) => o.name)])])}
+          className="text-sm text-green-700 hover:underline">Select all</button>
+        <button type="button" onClick={() => onChange([])} className="text-sm text-gray-500 hover:underline">Clear</button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-72 overflow-y-auto border border-gray-200 rounded-lg p-2">
+        {visible.map((o) => {
+          const on = selected.includes(o.name);
+          return (
+            <label key={o.name} className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer text-sm ${on ? 'bg-green-50' : 'hover:bg-gray-50'}`}>
+              <input type="checkbox" className="mt-0.5 h-4 w-4 text-green-600 rounded" checked={on} onChange={() => toggle(o.name)} />
+              <span className="text-gray-800">{o.name}</span>
+            </label>
+          );
+        })}
+        {visible.length === 0 && <p className="col-span-full text-sm text-gray-500 p-2">No services match “{query}”.</p>}
+      </div>
+      <p className="text-xs text-gray-500">{selected.length} selected</p>
+    </div>
+  );
+};
+
+// ─── Tab ─────────────────────────────────────────────────────────────────────
+const ServicesTab = ({ formData, setFormData, isEditing, isReadOnly, onAddServiceCategory, onRemoveServiceCategory, isSaving }) => {
+  const { updateServiceCategoryServices } = useAuth();
+  const canEdit = isEditing && !isReadOnly;
+
   const [catalog, setCatalog] = useState([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
+  const [modal, setModal] = useState(null); // { mode: 'add'|'edit', main, sc, selected, options, loading }
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
-  // ── Add-form state ─────────────────────────────────────
-  const [selectedMainCategory, setSelectedMainCategory] = useState('');
-  const [selectedServiceCategory, setSelectedServiceCategory] = useState('');
-  const [availableServiceCategories, setAvailableServiceCategories] = useState([]);
-  const [availableSubServices, setAvailableSubServices] = useState([]);
-  const [selectedSubServices, setSelectedSubServices] = useState([]);
-  const [subServicesLoading, setSubServicesLoading] = useState(false);
-
-  // ── Inline-edit state ──────────────────────────────────
-  const [editingCategoryKey, setEditingCategoryKey] = useState(null); // "mainCat||serviceCat"
-  const [editAvailableSubs, setEditAvailableSubs] = useState([]);      // all options
-  const [editSelectedSubs, setEditSelectedSubs] = useState([]);        // checked ones
-  const [editSubsLoading, setEditSubsLoading] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
-
-  // ── Misc UI state ──────────────────────────────────────
-  const [expandedCategories, setExpandedCategories] = useState({});
-  const [validationError, setValidationError] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
-
-  // ── Memoized ───────────────────────────────────────────
-  const mainCategories = useMemo(() => formData.mainCategories || [], [formData.mainCategories]);
   const serviceCategories = useMemo(() => formData.serviceCategories || [], [formData.serviceCategories]);
+  const busy = saving || isSaving;
 
-  const groupedServices = useMemo(() => {
+  const loadCatalog = () => {
+    setCatalogError('');
+    api
+      .get('/service-catalog/categories-with-counts')
+      .then((res) => {
+        const data = res.data?.data || res.data?.categories || res.data;
+        if (Array.isArray(data)) setCatalog(data);
+        else setCatalogError('Could not load the service list.');
+      })
+      .catch(() => setCatalogError('Could not load the service list.'));
+  };
+  useEffect(loadCatalog, []);
+
+  const grouped = useMemo(() => {
     const groups = {};
-    serviceCategories.forEach((item) => {
-      const key = item.mainCategory || 'Uncategorized';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(item);
+    serviceCategories.forEach((sc) => {
+      const key = sc.mainCategory || 'Other';
+      (groups[key] = groups[key] || []).push(sc);
     });
     return groups;
   }, [serviceCategories]);
 
-  // ═══════════════════════════════════════════════════════
-  // EFFECTS — catalog fetch
-  // ═══════════════════════════════════════════════════════
-  useEffect(() => {
-    const abortController = new AbortController();
-    const fetchCatalog = async () => {
-      try {
-        setCatalogLoading(true);
-        const response = await api.get('/service-catalog/categories-with-counts', {
-          signal: abortController.signal,
-        });
-        if (response.data?.success !== false) {
-          const data = response.data?.data || response.data?.categories || response.data;
-          if (Array.isArray(data)) setCatalog(data);
-          else setCatalogError('Invalid catalog format');
-        } else {
-          setCatalogError(response.data?.message || 'Failed to load catalog');
-        }
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          console.error(err);
-          setCatalogError('Could not load services.');
-        }
-      } finally {
-        setCatalogLoading(false);
-      }
-    };
-    fetchCatalog();
-    return () => abortController.abort();
-  }, []);
+  const totalServices = serviceCategories.reduce((n, sc) => n + (sc.subServices?.length || 0), 0);
 
-  useEffect(() => {
-    if (selectedMainCategory && catalog.length) {
-      const cat = catalog.find((c) => c.mainCategory === selectedMainCategory);
-      setAvailableServiceCategories(cat?.serviceCategories || []);
-      setSelectedServiceCategory('');
-      setAvailableSubServices([]);
-      setSelectedSubServices([]);
+  // Expert's own categories first in the picker
+  const categoryOptions = useMemo(() => {
+    const own = formData.mainCategories || [];
+    const names = catalog.map((c) => c.mainCategory);
+    return [...own.filter((c) => names.includes(c)), ...names.filter((c) => !own.includes(c))];
+  }, [catalog, formData.mainCategories]);
+
+  const flash = (text) => {
+    setNotice(text);
+    setTimeout(() => setNotice(''), 3000);
+  };
+
+  const syncFromProfile = (technician) => {
+    if (!technician) return;
+    setFormData((prev) => ({
+      ...prev,
+      serviceCategories: technician.serviceCategories || prev.serviceCategories,
+      mainCategories: technician.mainCategories?.length ? technician.mainCategories : prev.mainCategories,
+    }));
+  };
+
+  // ── Modal helpers ──────────────────────────────────────
+  const loadOptions = async (main, sc, keep = []) => {
+    setModal((m) => ({ ...m, loading: true, options: [] }));
+    try {
+      const subs = readSubServices(await api.get(subServicesUrl(main, sc)));
+      // Keep services the expert already has, even if no longer in the catalog
+      const names = new Set(subs.map((s) => s.name));
+      const extra = keep.filter((n) => !names.has(n)).map((name) => ({ name }));
+      setModal((m) => ({ ...m, loading: false, options: [...subs, ...extra] }));
+    } catch {
+      setModal((m) => ({ ...m, loading: false, options: keep.map((name) => ({ name })) }));
+    }
+  };
+
+  const openAdd = () => {
+    setFormError('');
+    setModal({ mode: 'add', main: '', sc: '', selected: [], options: [], loading: false });
+  };
+
+  const openEdit = (item) => {
+    setFormError('');
+    setModal({ mode: 'edit', main: item.mainCategory, sc: item.categoryName, selected: [...(item.subServices || [])], options: [], loading: true });
+    loadOptions(item.mainCategory, item.categoryName, item.subServices || []);
+  };
+
+  const chooseMain = (main) => setModal((m) => ({ ...m, main, sc: '', selected: [], options: [] }));
+  const chooseSc = (sc) => {
+    setModal((m) => ({ ...m, sc, selected: [] }));
+    if (sc) loadOptions(modal.main, sc);
+  };
+
+  const availableSc = useMemo(() => {
+    if (!modal?.main) return [];
+    const entry = catalog.find((c) => c.mainCategory === modal.main);
+    return entry?.serviceCategories || [];
+  }, [catalog, modal?.main]);
+
+  const alreadyAdded = (main, sc) => serviceCategories.some((x) => x.mainCategory === main && x.categoryName === sc);
+
+  const submit = async () => {
+    const { mode, main, sc, selected } = modal;
+    if (!main) return setFormError('Choose a category.');
+    if (!sc) return setFormError('Choose a service category.');
+    if (selected.length === 0) {
+      return setFormError(mode === 'edit' ? 'Keep at least one service, or remove the whole service category.' : 'Tick at least one service you offer.');
+    }
+    setSaving(true);
+    setFormError('');
+    const res = mode === 'add'
+      ? await onAddServiceCategory({ mainCategory: main, categoryName: sc, subServices: selected })
+      : await updateServiceCategoryServices(main, sc, selected);
+    setSaving(false);
+    if (res?.success === false) return setFormError(res.error || 'Could not save. Please try again.');
+    if (mode === 'add') {
+      // The server also adds the category to the profile; mirror it so "Save Changes" keeps it
+      setFormData((prev) => ({
+        ...prev,
+        mainCategories: (prev.mainCategories || []).includes(main) ? prev.mainCategories : [...(prev.mainCategories || []), main],
+      }));
     } else {
-      setAvailableServiceCategories([]);
-      setSelectedServiceCategory('');
-      setAvailableSubServices([]);
-      setSelectedSubServices([]);
+      syncFromProfile(res.technician);
     }
-  }, [selectedMainCategory, catalog]);
-
-  useEffect(() => {
-    if (selectedMainCategory && selectedServiceCategory) {
-      fetchSubServicesWithLoading(selectedMainCategory, selectedServiceCategory);
-    } else {
-      setAvailableSubServices([]);
-      setSelectedSubServices([]);
-    }
-  }, [selectedServiceCategory, selectedMainCategory]);
-
-  // ═══════════════════════════════════════════════════════
-  // HELPERS
-  // ═══════════════════════════════════════════════════════
-  const fetchSubServicesWithLoading = useCallback(async (mainCat, serviceCat) => {
-    if (!mainCat || !serviceCat) return [];
-    try {
-      setSubServicesLoading(true);
-      const encodedMain = encodeURIComponent(mainCat);
-      const encodedService = encodeURIComponent(serviceCat);
-      const response = await api.get(
-        `/service-catalog/${encodedMain}/${encodedService}/sub-services/detailed`
-      );
-      let subs =
-        response.data?.data?.subServices ||
-        response.data?.subServices ||
-        response.data?.data ||
-        [];
-      if (!Array.isArray(subs)) subs = [];
-      setAvailableSubServices(subs);
-      return subs;
-    } catch (err) {
-      console.error(err);
-      setAvailableSubServices([]);
-      if (err.response?.status !== 404) setValidationError('Failed to load sub-services.');
-      return [];
-    } finally {
-      setSubServicesLoading(false);
-    }
-  }, []);
-
-  const toggleSubService = (subName) => {
-    setSelectedSubServices((prev) =>
-      prev.includes(subName) ? prev.filter((s) => s !== subName) : [...prev, subName]
-    );
-    if (validationError) setValidationError('');
+    setModal(null);
+    flash(mode === 'add' ? `${sc} added to your services.` : 'Services updated.');
   };
 
-  const toggleEditSubService = (subName) => {
-    setEditSelectedSubs((prev) =>
-      prev.includes(subName) ? prev.filter((s) => s !== subName) : [...prev, subName]
-    );
+  const removeCategory = async (item) => {
+    if (!window.confirm(`Remove “${item.categoryName}” and all its services from your profile?`)) return;
+    setSaving(true);
+    const res = await onRemoveServiceCategory(item.categoryName, item.mainCategory);
+    setSaving(false);
+    if (res?.success === false) setError(res.error || 'Could not remove it. Please try again.');
+    else flash(`${item.categoryName} removed.`);
   };
 
-  const toggleCategoryExpand = useCallback((key) => {
-    setExpandedCategories((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
-
-  // ═══════════════════════════════════════════════════════
-  // ADD FLOW
-  // ═══════════════════════════════════════════════════════
-  const addServiceCategory = useCallback(async () => {
-    if (isAdding || isSaving) return;
-    if (!selectedMainCategory) return setValidationError('Please select a main category to add services under.');
-    if (!selectedServiceCategory) return setValidationError('Please select a service category.');
-    if (selectedSubServices.length === 0) return setValidationError('Please select at least one sub-service.');
-
-    const exists = serviceCategories.some(
-      (sc) => sc.categoryName === selectedServiceCategory && sc.mainCategory === selectedMainCategory
-    );
-    if (exists)
-      return setValidationError(
-        `"${selectedServiceCategory}" is already added under "${selectedMainCategory}".`
-      );
-
-    setIsAdding(true);
-    try {
-      const payload = {
-        mainCategory: selectedMainCategory,
-        categoryName: selectedServiceCategory,
-        subServices: [...selectedSubServices],
-      };
-      const result = await onAddServiceCategory(payload);
-      if (result.success) {
-        setSelectedServiceCategory('');
-        setSelectedSubServices([]);
-        setAvailableSubServices([]);
-        setValidationError('');
-      } else {
-        setValidationError(result.error || 'Failed to add service category');
-      }
-    } catch (err) {
-      console.error(err);
-      setValidationError('Failed to add service category.');
-    } finally {
-      setIsAdding(false);
-    }
-  }, [
-    isAdding, isSaving, selectedMainCategory, selectedServiceCategory,
-    selectedSubServices, serviceCategories, onAddServiceCategory,
-  ]);
-
-  // ═══════════════════════════════════════════════════════
-  // DELETE FLOW
-  // ═══════════════════════════════════════════════════════
-  const removeServiceCategory = useCallback(
-    async (index) => {
-      const item = serviceCategories[index];
-      if (!item) return;
-      if (!window.confirm(`Remove "${item.categoryName}" from "${item.mainCategory}"? This will remove all its sub-services.`))
-        return;
-
-      setIsAdding(true);
-      try {
-        const result = await onRemoveServiceCategory(item.categoryName, item.mainCategory);
-        if (!result.success) setValidationError(result.error || 'Failed to remove service category');
-      } catch (err) {
-        console.error(err);
-        setValidationError('Failed to remove service category.');
-      } finally {
-        setIsAdding(false);
-      }
-    },
-    [serviceCategories, onRemoveServiceCategory]
-  );
-
-  const removeSubService = useCallback(
-    (categoryIndex, subIndex) => {
-      setFormData((prev) => {
-        const updated = [...(prev.serviceCategories || [])];
-        if (!updated[categoryIndex]) return prev;
-        updated[categoryIndex].subServices.splice(subIndex, 1);
-        if (updated[categoryIndex].subServices.length === 0) updated.splice(categoryIndex, 1);
-        return { ...prev, serviceCategories: updated };
-      });
-    },
-    [setFormData]
-  );
-
-  // ═══════════════════════════════════════════════════════
-  // INLINE EDIT FLOW
-  // ═══════════════════════════════════════════════════════
-  const startEditCategory = async (item) => {
-    setValidationError('');
-    const key = `${item.mainCategory}||${item.categoryName}`;
-    setEditingCategoryKey(key);
-    setEditSelectedSubs([...(item.subServices || [])]);
-    setEditSubsLoading(true);
-    setEditAvailableSubs([]);
-
-    try {
-      const response = await api.get(
-        `/service-catalog/${encodeURIComponent(item.mainCategory)}/${encodeURIComponent(item.categoryName)}/sub-services/detailed`
-      );
-      let subs =
-        response.data?.data?.subServices ||
-        response.data?.subServices ||
-        response.data?.data ||
-        [];
-      if (!Array.isArray(subs)) subs = [];
-
-      // Merge any currently-selected sub-services that are missing from the catalog
-      // (e.g. legacy entries) so the user doesn't lose them on save.
-      const catalogNames = new Set(subs.map((s) => s.name));
-      const missing = (item.subServices || [])
-        .filter((n) => !catalogNames.has(n))
-        .map((n) => ({ name: n, description: '(not in catalog)' }));
-
-      setEditAvailableSubs([...subs, ...missing]);
-    } catch (err) {
-      console.error('Failed to load sub-services for edit:', err);
-      // Fall back to showing only what's already saved
-      setEditAvailableSubs((item.subServices || []).map((n) => ({ name: n })));
-      if (err.response?.status !== 404) setValidationError('Could not load sub-services for editing.');
-    } finally {
-      setEditSubsLoading(false);
-    }
+  const removeOne = async (item, name) => {
+    const remaining = (item.subServices || []).filter((s) => s !== name);
+    if (remaining.length === 0) return removeCategory(item);
+    setSaving(true);
+    const res = await updateServiceCategoryServices(item.mainCategory, item.categoryName, remaining);
+    setSaving(false);
+    if (res?.success === false) return setError(res.error || 'Could not remove it. Please try again.');
+    syncFromProfile(res.technician);
+    flash(`${name} removed.`);
   };
 
-  const cancelEditCategory = () => {
-    setEditingCategoryKey(null);
-    setEditAvailableSubs([]);
-    setEditSelectedSubs([]);
-  };
-
-  const saveEditCategory = async (item) => {
-    if (editSelectedSubs.length === 0) {
-      setValidationError('A service category must have at least one sub-service.');
-      return;
-    }
-
-    setSavingEdit(true);
-    setValidationError('');
-
-    try {
-      // 1) Remove the old category
-      const removeRes = await onRemoveServiceCategory(item.categoryName, item.mainCategory);
-      if (!removeRes.success) {
-        setValidationError(removeRes.error || 'Failed to update service category');
-        setSavingEdit(false);
-        return;
-      }
-
-      // 2) Re-add with the new sub-services
-      const addRes = await onAddServiceCategory({
-        mainCategory: item.mainCategory,
-        categoryName: item.categoryName,
-        subServices: [...editSelectedSubs],
-      });
-      if (!addRes.success) {
-        // Roll back: re-add the original sub-services
-        await onAddServiceCategory({
-          mainCategory: item.mainCategory,
-          categoryName: item.categoryName,
-          subServices: [...(item.subServices || [])],
-        });
-        setValidationError(addRes.error || 'Failed to save sub-service changes');
-        setSavingEdit(false);
-        return;
-      }
-
-      cancelEditCategory();
-    } catch (err) {
-      console.error(err);
-      setValidationError('Failed to save changes.');
-    } finally {
-      setSavingEdit(false);
-    }
-  };
-
-  // ═══════════════════════════════════════════════════════
-  // RENDER — guards
-  // ═══════════════════════════════════════════════════════
-  if (catalogLoading) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <Loader2 className="w-8 h-8 text-gray-600 animate-spin" />
-        <span className="ml-2 text-gray-600">Loading services...</span>
-      </div>
-    );
-  }
-
-  if (catalogError) {
-    return (
-      <div className="bg-red-50 text-red-700 p-4 rounded-lg flex items-start gap-2">
-        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="font-semibold">Error loading services</p>
-          <p className="text-sm">{catalogError}</p>
-          <button
-            onClick={() => { setCatalogError(''); setCatalogLoading(true); }}
-            className="mt-2 text-sm text-red-600 underline hover:text-red-800"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── DISPLAY MODE ───────────────────────────────────────
-  if (!isEditing || isReadOnly) {
-    return (
-      <div className="space-y-6">
-        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">
-          Services Offered
-        </h3>
-        {Object.keys(groupedServices).length === 0 ? (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-            <p className="text-yellow-700 text-sm">No services added yet.</p>
-          </div>
-        ) : (
-          Object.entries(groupedServices).map(([mainCat, items]) => (
-            <div key={mainCat} className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="bg-gray-100 px-4 py-2 font-semibold text-gray-700">{mainCat}</div>
-              <div className="divide-y divide-gray-100">
-                {items.map((cat, idx) => {
-                  const key = `${mainCat}-${cat.categoryName}`;
-                  return (
-                    <div key={idx}>
-                      <button
-                        onClick={() => toggleCategoryExpand(key)}
-                        className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-50 transition-colors text-left"
-                      >
-                        <span className="font-medium text-gray-800">{cat.categoryName}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                            {cat.subServices?.length || 0}
-                          </span>
-                          {expandedCategories[key] ? (
-                            <ChevronUp className="w-4 h-4 text-gray-400" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-gray-400" />
-                          )}
-                        </div>
-                      </button>
-                      {expandedCategories[key] && (
-                        <div className="px-4 py-3 bg-white flex flex-wrap gap-2">
-                          {cat.subServices?.map((sub, i) => (
-                            <span key={i} className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm">
-                              {sub}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    );
-  }
-
-  // ── EDIT MODE ──────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {validationError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <span className="text-sm flex-1">{validationError}</span>
-          <button onClick={() => setValidationError('')} className="text-red-500 hover:text-red-700">×</button>
-        </div>
+      {error && <Banner onClose={() => setError('')}>{error}</Banner>}
+      {notice && <Banner type="success">{notice}</Banner>}
+      {catalogError && canEdit && (
+        <Banner onClose={() => setCatalogError('')}>
+          {catalogError}{' '}
+          <button type="button" onClick={loadCatalog} className="underline font-medium">Try again</button>
+        </Banner>
       )}
 
-      {/* Main Category picker */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select Main Category <span className="text-red-500">*</span>
-        </label>
-        <select
-          value={selectedMainCategory}
-          onChange={(e) => setSelectedMainCategory(e.target.value)}
-          className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
-        >
-          <option value="">-- Choose a main category --</option>
-          {mainCategories.map((cat) => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-        {mainCategories.length === 0 && (
-          <p className="text-xs text-amber-600 mt-1">
-            ⚠️ Please add at least one main category in the Profile tab first.
-          </p>
-        )}
-      </div>
-
-      {/* Service Category picker */}
-      {selectedMainCategory && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Service Category <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={selectedServiceCategory}
-            onChange={(e) => setSelectedServiceCategory(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
-          >
-            <option value="">-- Select a service category --</option>
-            {availableServiceCategories.map((cat) => (
-              <option key={cat.name} value={cat.name}>
-                {cat.name} ({cat.subServiceCount} sub-services)
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Sub-services checkboxes for ADD */}
-      {selectedServiceCategory && selectedMainCategory && (
-        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Select Sub-Services You Offer <span className="text-red-500">*</span>
-          </label>
-          {subServicesLoading ? (
-            <div className="flex justify-center items-center py-8 bg-white rounded-lg border border-gray-200">
-              <Loader2 className="w-6 h-6 text-gray-600 animate-spin" />
-              <span className="ml-2 text-gray-600 text-sm">Loading sub-services...</span>
-            </div>
-          ) : availableSubServices.length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-white">
-                {availableSubServices.map((sub) => (
-                  <label
-                    key={sub.name}
-                    className={`flex items-start space-x-3 cursor-pointer p-2 rounded-lg transition-colors ${
-                      selectedSubServices.includes(sub.name)
-                        ? 'bg-green-50 border border-green-200'
-                        : 'hover:bg-gray-50 border border-transparent'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedSubServices.includes(sub.name)}
-                      onChange={() => toggleSubService(sub.name)}
-                      className="h-4 w-4 text-green-600 rounded focus:ring-green-500 mt-1"
-                    />
-                    <div className="flex-1">
-                      <span className="text-sm font-medium text-gray-700">{sub.name}</span>
-                      {sub.description && <p className="text-xs text-gray-500 mt-0.5">{sub.description}</p>}
-                      {sub.averagePrice && <p className="text-xs text-gray-400 mt-0.5">Avg. price: {sub.averagePrice}</p>}
-                    </div>
-                    {selectedSubServices.includes(sub.name) && (
-                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                    )}
-                  </label>
-                ))}
-              </div>
-              <div className="mt-4 flex justify-between items-center">
-                <p className="text-xs text-gray-500">{selectedSubServices.length} sub-service(s) selected</p>
-                <button
-                  type="button"
-                  onClick={addServiceCategory}
-                  disabled={selectedSubServices.length === 0 || isAdding || isSaving}
-                  className="bg-gray-800 text-white px-5 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isAdding || isSaving ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Adding...</>
-                  ) : (
-                    <><Plus className="w-4 h-4" /> Add {selectedServiceCategory}</>
-                  )}
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-8 bg-white rounded-lg border border-gray-200">
-              <p className="text-gray-400 text-sm">No sub-services available for this category</p>
-              <p className="text-xs text-gray-400 mt-1">Try selecting a different service category</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Saved categories — now with pencil for inline edit */}
-      {serviceCategories.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Your Added Services ({serviceCategories.length} total)
-          </label>
-          <div className="space-y-3">
-            {Object.entries(groupedServices).map(([mainCat, items]) => (
-              <div key={mainCat} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-gray-100 px-4 py-2 font-semibold text-gray-700">{mainCat}</div>
-                <div className="divide-y divide-gray-100">
-                  {items.map((cat) => {
-                    const globalIndex = serviceCategories.indexOf(cat);
-                    const editKey = `${cat.mainCategory}||${cat.categoryName}`;
-                    const isEditingThis = editingCategoryKey === editKey;
-
-                    return (
-                      <div key={editKey} className="p-4 bg-white">
-                        {isEditingThis ? (
-                          /* ─── Inline edit form ─── */
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                              <Pencil className="w-4 h-4 text-blue-500" />
-                              <span className="font-semibold text-gray-800">
-                                Editing: {cat.categoryName}
-                              </span>
-                            </div>
-
-                            {editSubsLoading ? (
-                              <div className="flex justify-center items-center py-6">
-                                <Loader2 className="w-5 h-5 text-gray-600 animate-spin" />
-                                <span className="ml-2 text-sm text-gray-500">Loading sub-services…</span>
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
-                                {editAvailableSubs.map((sub) => (
-                                  <label
-                                    key={sub.name}
-                                    className={`flex items-start space-x-3 cursor-pointer p-2 rounded-lg transition-colors ${
-                                      editSelectedSubs.includes(sub.name)
-                                        ? 'bg-green-50 border border-green-200'
-                                        : 'hover:bg-white border border-transparent'
-                                    }`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={editSelectedSubs.includes(sub.name)}
-                                      onChange={() => toggleEditSubService(sub.name)}
-                                      className="h-4 w-4 text-green-600 rounded focus:ring-green-500 mt-1"
-                                    />
-                                    <div className="flex-1">
-                                      <span className="text-sm font-medium text-gray-700">{sub.name}</span>
-                                      {sub.description && (
-                                        <p className="text-xs text-gray-500 mt-0.5">{sub.description}</p>
-                                      )}
-                                    </div>
-                                  </label>
-                                ))}
-                              </div>
-                            )}
-
-                            <p className="text-xs text-gray-500">
-                              {editSelectedSubs.length} sub-service(s) selected
-                            </p>
-
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => saveEditCategory(cat)}
-                                disabled={
-                                  savingEdit || editSubsLoading || editSelectedSubs.length === 0
-                                }
-                                className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 inline-flex items-center justify-center gap-1.5 text-sm disabled:opacity-50"
-                              >
-                                {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                {savingEdit ? 'Saving…' : 'Save Changes'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={cancelEditCategory}
-                                className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 inline-flex items-center justify-center gap-1.5 text-sm"
-                              >
-                                <X className="w-4 h-4" /> Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          /* ─── Display card ─── */
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-gray-800">{cat.categoryName}</h4>
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                {cat.subServices.map((sub, subIdx) => (
-                                  <span
-                                    key={subIdx}
-                                    className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-green-200"
-                                  >
-                                    {sub}
-                                    <button
-                                      type="button"
-                                      onClick={() => removeSubService(globalIndex, subIdx)}
-                                      className="text-red-400 hover:text-red-600 transition-colors ml-1"
-                                      title="Remove this sub-service"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 ml-2">
-                              <button
-                                type="button"
-                                onClick={() => startEditCategory(cat)}
-                                className="text-blue-500 hover:text-blue-700 p-1 hover:bg-blue-50 rounded"
-                                title="Edit sub-services"
-                                disabled={isAdding || isSaving}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeServiceCategory(globalIndex)}
-                                className="text-red-400 hover:text-red-600 transition-colors p-1 hover:bg-red-50 rounded"
-                                title="Remove entire category"
-                                disabled={isAdding || isSaving}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
+      <Section
+        icon={Wrench}
+        title="Services you offer"
+        description={serviceCategories.length
+          ? `${totalServices} service${totalServices === 1 ? '' : 's'} in ${serviceCategories.length} service categor${serviceCategories.length === 1 ? 'y' : 'ies'}. Clients find you by these.`
+          : 'Clients find you by the services you list here.'}
+        action={canEdit && <AddButton onClick={openAdd} disabled={busy || !catalog.length}>Add services</AddButton>}
+      >
+        {serviceCategories.length === 0 ? (
+          <EmptyState icon={Wrench} title="No services yet"
+            text={canEdit ? 'Click “Add services” and tick everything you can do — the more relevant services you list, the more searches you appear in.' : 'Click “Edit Profile”, then “Add services”.'} />
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(grouped).map(([main, items]) => (
+              <div key={main}>
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  <Layers className="w-4 h-4" /> {main}
+                </h4>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {items.map((item) => (
+                    <div key={`${item.mainCategory}||${item.categoryName}`} className="rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h5 className="font-semibold text-gray-900">{item.categoryName}</h5>
+                          <p className="text-xs text-gray-500">{item.subServices?.length || 0} service{item.subServices?.length === 1 ? '' : 's'}</p>
+                        </div>
+                        {canEdit && (
+                          <RowActions disabled={busy} onEdit={() => openEdit(item)} onDelete={() => removeCategory(item)}
+                            editLabel="Edit services" deleteLabel="Remove service category" />
                         )}
                       </div>
-                    );
-                  })}
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {(item.subServices || []).map((name) => (
+                          <span key={name} className="inline-flex items-center gap-1 bg-green-50 text-green-800 text-xs px-2.5 py-1 rounded-full">
+                            <CheckCircle className="w-3 h-3" /> {name}
+                            {canEdit && (
+                              <button type="button" onClick={() => removeOne(item, name)} disabled={busy} aria-label={`Remove ${name}`}
+                                className="ml-0.5 text-green-700/60 hover:text-red-600">
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </Section>
 
-      {/* Help box */}
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-        <h5 className="text-sm font-semibold text-blue-800 mb-2">💡 How to Manage Services:</h5>
-        <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-          <li>To <strong>add</strong>: select a main category, then a service category, then tick the sub-services you offer.</li>
-          <li>To <strong>edit</strong>: click the pencil on any saved category and toggle sub-services on/off.</li>
-          <li>To <strong>remove a single sub-service</strong>: click its × inside the green chip.</li>
-          <li>To <strong>remove an entire category</strong>: click the trash icon on the card.</li>
-        </ol>
-      </div>
+      {modal && (
+        <FormModal
+          title={modal.mode === 'add' ? 'Add services' : `Edit ${modal.sc}`}
+          onClose={() => setModal(null)}
+          onSave={submit}
+          saving={saving}
+          saveLabel={modal.mode === 'add' ? `Add ${modal.selected.length || ''} service${modal.selected.length === 1 ? '' : 's'}` : 'Save changes'}
+          error={formError}
+          wide
+        >
+          {modal.mode === 'add' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Category" htmlFor="sv-main" required>
+                <select id="sv-main" className={inputClass} value={modal.main} onChange={(e) => chooseMain(e.target.value)}>
+                  <option value="">Choose a category</option>
+                  {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </Field>
+              <Field label="Service category" htmlFor="sv-sc" required>
+                <select id="sv-sc" className={inputClass} value={modal.sc} onChange={(e) => chooseSc(e.target.value)} disabled={!modal.main}>
+                  <option value="">{modal.main ? 'Choose a service category' : 'Choose a category first'}</option>
+                  {availableSc.map((sc) => (
+                    <option key={sc.name} value={sc.name} disabled={alreadyAdded(modal.main, sc.name)}>
+                      {sc.name}{sc.subServiceCount ? ` (${sc.subServiceCount})` : ''}{alreadyAdded(modal.main, sc.name) ? ' — already added' : ''}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">{modal.main} › <span className="font-medium text-gray-900">{modal.sc}</span></p>
+          )}
+          {modal.sc && (
+            <Field label="Services you offer" required>
+              <ServiceChecklist options={modal.options} selected={modal.selected} loading={modal.loading}
+                onChange={(selected) => setModal((m) => ({ ...m, selected }))} />
+            </Field>
+          )}
+        </FormModal>
+      )}
     </div>
   );
 };
