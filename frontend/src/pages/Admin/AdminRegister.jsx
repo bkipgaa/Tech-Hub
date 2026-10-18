@@ -179,7 +179,7 @@ const AdminRegister = () => {
                 onChange={handleChange}
                 required
                 className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:outline-none transition-colors"
-                placeholder="admin@weba-hub.com"
+                placeholder="admin@webafix.co.ke"
               />
             </div>
 

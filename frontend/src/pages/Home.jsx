@@ -116,24 +116,17 @@ const Home = () => {
         </div>
       )}
 
-      {/* Hero Section with Background Video */}
+      {/* Hero Section with Background Illustration: a technician in Webafix green-and-red overalls fixing an electrical panel */}
       <div className="relative h-[500px] overflow-hidden">
-        {/* Background Video */}
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute top-0 left-0 w-full h-full object-cover"
-          poster="https://images.unsplash.com/photo-1581091226033-d5c48150dbaa?w=1920&h=500&fit=crop"
-        >
-          <source src="https://assets.mixkit.co/videos/preview/mixkit-man-working-on-laptop-and-phone-32868-large.mp4" type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
-        
-        {/* Dark Overlay for better text readability */}
-        <div className="absolute inset-0 bg-black/60"></div>
-        
+        <img
+          src="/hero-technician.svg"
+          alt="Technician in green and red overalls repairing an electrical panel"
+          className="absolute inset-0 w-full h-full object-cover object-[80%_center]"
+        />
+
+        {/* Dark Overlay for better text readability, darkest behind the centred text */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/65 to-black/20"></div>
+
         {/* Hero Content */}
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
           {isTechnician ? (
@@ -277,7 +270,7 @@ const Home = () => {
       <div className="bg-gradient-to-r from-green-700 to-green-900 py-10 mt-6">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-2xl font-bold text-white mb-2">Ready to grow your business?</h2>
-          <p className="text-green-100 mb-5 text-sm">Join thousands of professionals who trust Webalink</p>
+          <p className="text-green-100 mb-5 text-sm">Join thousands of professionals who trust Webafix</p>
           <button
             onClick={() => navigate('/become-technician')}
             className="bg-white text-green-700 px-6 py-2.5 rounded-md font-semibold hover:bg-gray-100 transition-colors text-sm"

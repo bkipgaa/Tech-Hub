@@ -1,11 +1,11 @@
 /**
  * Wordmark Component
  * ==================
- * The "Webalink" logotype.
+ * The "Webafix" logotype.
  *
  * Design:
  *  - "W" is a green → red gradient
- *  - "ebalink" is dark gray (or white on dark backgrounds)
+ *  - "ebafix" is dark gray (or white on dark backgrounds)
  *  - Both parts share the same font size
  *
  * Size is controlled entirely by the `className` you pass in.
@@ -20,7 +20,7 @@ import React from 'react';
 export const Wordmark = ({ className = 'text-3xl', onDark = false }) => (
   <span
     role="img"
-    aria-label="Webalink"
+    aria-label="Webafix"
     className={`inline-flex items-baseline font-extrabold tracking-tight leading-none ${className}`}
   >
     {/* The "W" — green → red gradient, same size as the rest */}
@@ -35,12 +35,12 @@ export const Wordmark = ({ className = 'text-3xl', onDark = false }) => (
       W
     </span>
 
-    {/* "ebalink" — same size, colour preserved */}
+    {/* "ebafix" — same size, colour preserved */}
     <span
       aria-hidden="true"
       className={onDark ? 'text-white' : 'text-gray-800'}
     >
-      ebalink
+      ebafix
     </span>
   </span>
 );

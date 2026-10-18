@@ -145,7 +145,7 @@ const AdminLogin = () => {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@webahub.com"
+                  placeholder="you@webafix.co.ke"
                   required
                   disabled={submitting}
                   className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none text-sm disabled:bg-gray-50 disabled:text-gray-400"
@@ -221,7 +221,7 @@ const AdminLogin = () => {
             href="/"
             className="hover:text-gray-300 transition-colors"
           >
-            ← Back to Webalink
+            ← Back to Webafix
           </a>
         </p>
       </div>

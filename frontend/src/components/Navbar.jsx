@@ -127,7 +127,7 @@ const Navbar = () => {
   to="/"
   className="flex items-center space-x-3 group"
   onClick={closeMobileMenu}
-  aria-label="Webalink Home"
+  aria-label="Webafix Home"
 >
   {/* Circular logo with hover lift + glow */}
   <div className="relative">
@@ -137,7 +137,7 @@ const Navbar = () => {
     {/* The logo image */}
     <img
       src="/logo.jpg"
-      alt="Webalink"
+      alt="Webafix"
       className="relative w-11 h-11 object-contain rounded-full ring-2 ring-white shadow-md
                  transition-all duration-300 ease-out
                  group-hover:scale-110 group-hover:shadow-xl
