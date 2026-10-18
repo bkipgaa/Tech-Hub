@@ -26,7 +26,7 @@ export const Wordmark = ({ className = 'text-3xl', onDark = false }) => (
     {/* The "W" — green → red gradient, same size as the rest */}
     <span
       aria-hidden="true"
-      className={`inline-block bg-clip-text text-transparent ${
+      className={`inline-block bg-clip-text text-transparent [text-shadow:none] ${
         onDark
           ? 'bg-[linear-gradient(115deg,#22c55e_50%,#ef4444_50%)]'
           : 'bg-[linear-gradient(115deg,#16a34a_50%,#dc2626_50%)]'

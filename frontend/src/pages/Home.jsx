@@ -122,7 +122,7 @@ const Home = () => {
         <HeroSlideshow />
 
         {/* Hero Content */}
-        <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 pt-12 pb-28">
+        <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 pt-12 pb-28 [text-shadow:0_2px_10px_rgba(0,0,0,0.7)]">
           {isTechnician ? (
             <>
               <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
