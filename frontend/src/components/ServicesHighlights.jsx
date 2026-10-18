@@ -49,7 +49,7 @@ const ExpertCard = ({ tech, rank, onClick }) => {
     <button
       type="button"
       onClick={onClick}
-      className="relative bg-white rounded-xl border border-gray-200 p-4 text-center hover:border-green-400 hover:shadow-lg transition-all flex flex-col items-center"
+      className="relative bg-white rounded-xl border border-gray-200 p-4 text-center hover:border-green-500 hover:bg-green-100 hover:shadow-lg transition-all flex flex-col items-center"
     >
       {rank && (
         <span className="absolute top-2 left-2 text-[10px] font-bold bg-green-600 text-white rounded-full w-5 h-5 flex items-center justify-center">
@@ -146,7 +146,7 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
     <div className="space-y-10 mt-10">
       {/* ─── Most popular services ─── */}
       <section>
-        <SectionHeading icon={TrendingUp} title="Most popular services" subtitle="What clients search for and book most" />
+        <SectionHeading icon={TrendingUp} title="Most popular services" subtitle="Services with the most completed bookings" />
         {popular.loading ? spinner : popular.data.length === 0 ? (
           <Placeholder>Popular services will show here soon.</Placeholder>
         ) : (
@@ -156,7 +156,7 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
                 key={`${item.mainCategory}|${item.serviceCategory}|${item.subService}`}
                 type="button"
                 onClick={() => openService(item)}
-                className="bg-white rounded-xl border border-gray-200 p-3 text-left hover:border-green-400 hover:shadow-md transition-all"
+                className="bg-white rounded-xl border border-gray-200 p-3 text-left hover:border-green-500 hover:bg-green-100 hover:shadow-md transition-all"
               >
                 <p className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2">{item.subService}</p>
                 <p className="mt-1 text-[11px] text-gray-500 line-clamp-1">{item.serviceCategory}</p>

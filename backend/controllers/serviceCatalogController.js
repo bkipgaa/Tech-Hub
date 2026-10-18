@@ -1,5 +1,6 @@
 const ServiceCatalog = require('../models/ServiceCatalog');
 const Technician = require('../models/Technician');
+const Booking = require('../models/Booking');
 const searchController = require('./searchController');
 const mongoose = require('mongoose');
 
@@ -16,6 +17,17 @@ const cache = {
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const isStale = (timestamp) => Date.now() - timestamp > CACHE_TTL;
+
+// Booking counts per serviceCategory + subService. "Popular" means most
+// completed bookings, then most bookings made (cancelled ones don't count).
+const bookingKey = (serviceCategory, subService) => `${serviceCategory}|${subService}`.toLowerCase();
+const getBookingStats = () => Booking.aggregate([
+  { $group: {
+      _id: { serviceCategory: '$serviceCategory', subService: '$subService' },
+      totalBookings: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 0, 1] } },
+      completedBookings: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } }
+  }}
+]);
 
 // Display order for the original categories; categories added later by admins
 // follow alphabetically. Also the fallback when the catalog is empty/unreachable.
@@ -53,8 +65,25 @@ exports.getMainCategories = async (req, res) => {
     if (dbConnected()) {
       // .lean() returns plain JS objects instead of heavy Mongoose docs
       activeCatalogs = await ServiceCatalog.find({ isActive: true })
-        .select('mainCategory serviceCategories.isActive')
+        .select('mainCategory serviceCategories.name serviceCategories.isActive')
         .lean();
+    }
+
+    // Roll booking counts up to main categories (via serviceCategory name)
+    const mainByService = new Map();
+    activeCatalogs.forEach(c => (c.serviceCategories || []).forEach(sc => {
+      if (sc.name) mainByService.set(sc.name.toLowerCase(), c.mainCategory);
+    }));
+    const statsByMain = new Map();
+    if (activeCatalogs.length) {
+      (await getBookingStats()).forEach(b => {
+        const main = mainByService.get(String(b._id.serviceCategory || '').toLowerCase());
+        if (!main) return;
+        const s = statsByMain.get(main) || { completedBookings: 0, totalBookings: 0 };
+        s.completedBookings += b.completedBookings;
+        s.totalBookings += b.totalBookings;
+        statsByMain.set(main, s);
+      });
     }
 
     // Categories come from the catalog itself, so admin-added ones appear too
@@ -69,6 +98,8 @@ exports.getMainCategories = async (req, res) => {
     const data = categories.map(cat => ({
       name: cat,
       hasServices: activeSet.has(cat),
+      completedBookings: statsByMain.get(cat)?.completedBookings || 0,
+      totalBookings: statsByMain.get(cat)?.totalBookings || 0,
       description: activeSet.has(cat)
         ? `${cat} services available for booking`
         : `${cat} services coming soon`
@@ -401,21 +432,37 @@ exports.getPopularServices = async (req, res) => {
           suggestedPriceRange: '$serviceCategories.subServices.suggestedPriceRange',
           typicalDuration: '$serviceCategories.subServices.typicalDuration'
       }},
-      { $addFields: {
-          popularityScore: { $add: [
-            { $multiply: ['$searchCount', 1] },
-            { $multiply: ['$bookingCount', 3] }
-          ]}
-      }},
-      { $sort: { popularityScore: -1 } },
-      { $limit: limit }
     ]).allowDiskUse(false);
+
+    // Rank by real bookings: completed first, then all bookings made,
+    // then searches as a tie-breaker. Bookings carry no mainCategory, so
+    // they are matched on serviceCategory + subService.
+    const bookingStats = await getBookingStats();
+    const statsByKey = new Map(
+      bookingStats.map((b) => [bookingKey(b._id.serviceCategory, b._id.subService), b])
+    );
+
+    const ranked = popular
+      .map((item) => {
+        const stats = statsByKey.get(bookingKey(item.serviceCategory, item.subService));
+        return {
+          ...item,
+          completedBookings: stats?.completedBookings || 0,
+          totalBookings: stats?.totalBookings || 0
+        };
+      })
+      .sort((a, b) =>
+        b.completedBookings - a.completedBookings ||
+        b.totalBookings - a.totalBookings ||
+        b.searchCount - a.searchCount
+      )
+      .slice(0, limit);
 
     const payload = {
       success: true,
-      count: popular.length,
-      data: popular,
-      metadata: { scoring: { searchWeight: 1, bookingWeight: 3 } }
+      count: ranked.length,
+      data: ranked,
+      metadata: { ranking: ['completedBookings', 'totalBookings', 'searchCount'] }
     };
 
     cache.popular = { data: payload, timestamp: Date.now() };
