@@ -3,20 +3,22 @@
  * One place to fill in the details used by the Terms and Privacy pages.
  * Anything wrapped in {{double braces}} shows up highlighted in amber on the
  * page (in development) so you can see what is still missing. Replace the
- * whole value, braces included, e.g.  privacyEmail: 'privacy@webalink.co.ke'
+ * whole value, braces included, e.g.  privacyEmail: 'privacy@webafix.co.ke'
  */
 export const LEGAL = {
-  company: 'Webalink',
-  legalEntity: 'Webalink Limited',
-  platform: 'Webalink',
+  company: 'Webafix',
+  legalEntity: 'Webafix Ltd',
+  platform: 'Webafix',
+  registrationNo: 'PVT-OD16Y7RO',
+  kraPin: 'P052596315H',
   // Set to '' once the whole app has been renamed. While the app still shows the old name, the legal pages mention it so nobody is confused.
-  formerName: 'WeBA-Hub',
+  formerName: '',
   website: '{{https://your-domain}}',
   address: '{{Registered address}}, Kenya',
-  phone: '{{+254 ...}}',
-  privacyEmail: '{{privacy@your-domain}}',
-  legalEmail: '{{legal@your-domain}}',
-  disputeEmail: '{{disputes@your-domain}}',
+  phone: '0712 200 198',
+  privacyEmail: 'webathub@gmail.com',
+  legalEmail: 'webathub@gmail.com',
+  disputeEmail: 'webathub@gmail.com',
   dpoName: '{{Name of data protection contact}}',
   odpcRegNo: '{{ODPC registration number}}',
 

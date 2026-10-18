@@ -47,7 +47,7 @@ const Footer = () => {
       <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400/40 to-red-400/40 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       <img
         src="/logo.jpg"
-        alt="Webalink"
+        alt="Webafix"
         className="relative w-12 h-12 object-contain rounded-full ring-2 ring-gray-700 shadow-lg
                    transition-all duration-300 ease-out
                    group-hover:scale-110 group-hover:ring-green-500/50"
@@ -133,11 +133,11 @@ const Footer = () => {
             <ul className="space-y-3">
               <li className="flex items-center gap-3 text-sm text-gray-400">
                 <Mail className="w-4 h-4 text-green-500" />
-                <span>hello@webahub.com</span>
+                <a href="mailto:webathub@gmail.com" className="hover:text-green-500 transition-colors">webathub@gmail.com</a>
               </li>
               <li className="flex items-center gap-3 text-sm text-gray-400">
                 <Phone className="w-4 h-4 text-green-500" />
-                <span>+254 700 123 456</span>
+                <a href="tel:+254712200198" className="hover:text-green-500 transition-colors">0712 200 198</a>
               </li>
               <li className="flex items-center gap-3 text-sm text-gray-400">
                 <MapPin className="w-4 h-4 text-green-500" />
@@ -149,7 +149,10 @@ const Footer = () => {
 
         {/* Bottom Bar */}
         <div className="mt-10 pt-6 border-t border-gray-800 flex flex-col sm:flex-row justify-between items-center text-xs text-gray-500">
-          <p>&copy; {currentYear} Webalink Limited. All rights reserved.</p>
+          <div className="text-center sm:text-left">
+            <p>&copy; {currentYear} Webafix Ltd. All rights reserved.</p>
+            <p className="mt-1">Reg. No. PVT-OD16Y7RO &middot; KRA PIN P052596315H</p>
+          </div>
           <div className="flex gap-6 mt-3 sm:mt-0">
             <Link to="/privacy" className="hover:text-green-500 transition-colors">Privacy Policy</Link>
             <Link to="/terms" className="hover:text-green-500 transition-colors">Terms of Service</Link>

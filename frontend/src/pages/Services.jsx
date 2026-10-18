@@ -8,7 +8,7 @@
  *   4. Browse sub-services & book a technician
  *
  * @version 4.1.0 – Compact chips (no icon, ~7 per row)
- * @author Webalink Team
+ * @author Webafix Team
  */
 
 import React, { useState, useEffect } from 'react';

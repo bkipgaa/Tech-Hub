@@ -6,14 +6,16 @@ const E = L.legalEntity;
 
 const sections = [
   { id: 'who', title: 'Who we are', body: [
-    `${E} ("**Webalink**", "we", "us") runs the Webalink online platform at ${L.website}, which connects clients with independent technicians and engineers.`,
+    `${E} ("**Webafix**", "we", "us") runs the Webafix online platform at ${L.website}, which connects clients with independent technicians and engineers.`,
     { ul: [
+      `Company registration number: ${L.registrationNo}`,
+      `KRA PIN: ${L.kraPin}`,
       `Registered address: ${L.address}`,
       `ODPC registration number: ${L.odpcRegNo}`,
       `Data protection contact: ${L.dpoName}, ${L.privacyEmail}, ${L.phone}`,
     ]},
     `We are the **data controller** for the personal data described here. This policy is issued under the **Data Protection Act, 2019 (Kenya)** and its regulations.`,
-    ...(L.formerName ? [`Webalink was previously known as **${L.formerName}**. This policy covers your data whichever name you see.`] : []),
+    ...(L.formerName ? [`Webafix was previously known as **${L.formerName}**. This policy covers your data whichever name you see.`] : []),
   ]},
   { id: 'scope', title: 'Who this covers', body: [
     `Clients, technicians and engineers, people who post or apply for jobs, and visitors. The platform is for people **aged 18 and over**. We do not knowingly collect data from children. If you think a child has registered, tell us and we will delete the account.`,
@@ -134,7 +136,7 @@ export default function Privacy() {
   return (
     <LegalLayout
       title="Privacy Policy"
-      intro={`This policy explains what personal data Webalink collects through its platform, why, who sees it, and the choices you have. **We do not sell your data, and we never see your card details or M-Pesa PIN.**`}
+      intro={`This policy explains what personal data Webafix collects through its platform, why, who sees it, and the choices you have. **We do not sell your data, and we never see your card details or M-Pesa PIN.**`}
       sections={sections}
       other={{ to: '/terms', label: 'Terms and Conditions' }}
     />

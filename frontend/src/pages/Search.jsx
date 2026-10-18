@@ -13,7 +13,7 @@
  *   "View Profile & Book" action — matching the Services page pattern
  *
  * @version 2.5.0 – Single "View Profile & Book" action (Services parity)
- * @author Webalink Team
+ * @author Webafix Team
  */
 
 import React, { useState, useEffect } from 'react';
