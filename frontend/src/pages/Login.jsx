@@ -260,7 +260,7 @@ const Login = () => {
                 type="button"
                 onClick={() => {
                   setFormData({
-                    email: 'admin@weba-hub.com',
+                    email: 'admin@webafix.co.ke',
                     password: 'admin123'
                   });
                 }}

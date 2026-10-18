@@ -6,10 +6,10 @@ const E = L.legalEntity;
 
 const sections = [
   { id: 'marketplace', title: 'We are a marketplace, not the contractor', body: [
-    `${E} ("**Webalink**", "we", "us") runs the Webalink online platform (the "**platform**"), which helps clients find and contact independent technicians and engineers ("**Technicians**"), and helps Technicians find work through bookings and job postings.`,
-    `**Webalink does not provide technical services, employ Technicians, or guarantee any work.** Any service contract is directly between the client and the Technician. Technicians are independent contractors, not employees, agents or partners of Webalink.`,
+    `${E} ("**Webafix**", "we", "us"), a company registered in Kenya (registration number ${L.registrationNo}, KRA PIN ${L.kraPin}), runs the Webafix online platform (the "**platform**"), which helps clients find and contact independent technicians and engineers ("**Technicians**"), and helps Technicians find work through bookings and job postings.`,
+    `**Webafix does not provide technical services, employ Technicians, or guarantee any work.** Any service contract is directly between the client and the Technician. Technicians are independent contractors, not employees, agents or partners of Webafix.`,
     `We do not control or guarantee the quality, safety, legality, timing or price of services, or the accuracy of what users post.`,
-    ...(L.formerName ? [`Webalink was previously known as **${L.formerName}**. Any reference to ${L.formerName} on the site, in the app or in past messages means Webalink, and these Terms apply to it.`] : []),
+    ...(L.formerName ? [`Webafix was previously known as **${L.formerName}**. Any reference to ${L.formerName} on the site, in the app or in past messages means Webafix, and these Terms apply to it.`] : []),
   ]},
   { id: 'accounts', title: 'Eligibility and accounts', body: [
     { ul: [
@@ -22,14 +22,14 @@ const sections = [
     { ol: [
       `A client sends a booking request describing the service, date, time and location. The Technician can accept, decline, or reply with a quotation.`,
       `A booking exists once the Technician accepts, and, where a quotation is used, once the client accepts it. A quotation can include **labour** and **materials**.`,
-      `**Materials.** If a client gives the Technician money for materials, the Technician must record it on the platform and provide receipts on request. Webalink does not hold or handle materials money and is not liable for money a client hands to a Technician.`,
+      `**Materials.** If a client gives the Technician money for materials, the Technician must record it on the platform and provide receipts on request. Webafix does not hold or handle materials money and is not liable for money a client hands to a Technician.`,
       `**Completion.** When a Technician marks the work complete, the client should check it and confirm or raise an issue promptly. Confirming and rating closes the booking.`,
       `Status changes (confirmed, in progress, completed, cancelled) are recorded and may be used as evidence in a dispute.`,
     ]},
   ]},
   { id: 'payments', title: 'Payments', body: [
     { ul: [
-      `**Service payments** are made directly between client and Technician by the methods the Technician offers (cash, M-Pesa, card, bank transfer). Unless the platform clearly says otherwise for a particular transaction, Webalink is not a party to service payments and does not hold them.`,
+      `**Service payments** are made directly between client and Technician by the methods the Technician offers (cash, M-Pesa, card, bank transfer). Unless the platform clearly says otherwise for a particular transaction, Webafix is not a party to service payments and does not hold them.`,
       `Payments made through the platform, such as Technician subscriptions and commissions, are processed by **Paystack** (card) and **Safaricom M-Pesa**. Their terms also apply. We never see or store card details or M-Pesa PINs.`,
       `Prices are in **Kenya Shillings (KES)**. Prices shown by Technicians are estimates until a quotation is accepted.`,
       `Keep your receipts. Technicians must give clients a receipt for money received.`,
@@ -39,7 +39,7 @@ const sections = [
     { ul: [
       `**Client cancellation.** A client can cancel before the Technician starts work. Cancelling more than ${L.cancelWindow} before the scheduled time is free. After that, the Technician may charge a reasonable fee of up to ${L.cancelFee}.`,
       `**Technician cancellation.** Cancel as early as you can and give a reason. Repeated late cancellations or no-shows can lead to warnings, reduced visibility or suspension.`,
-      `**Refunds for services** are agreed between client and Technician. If you cannot agree, use the dispute process in section 10. Webalink is not obliged to refund service payments it never received.`,
+      `**Refunds for services** are agreed between client and Technician. If you cannot agree, use the dispute process in section 10. Webafix is not obliged to refund service payments it never received.`,
       `Platform fees (subscriptions and commission) are covered by the Technician Terms below.`,
     ]},
   ]},
@@ -96,13 +96,13 @@ const sections = [
   ]},
   { id: 'liability', title: 'Limit of liability', body: [
     { ul: [
-      `To the fullest extent Kenyan law permits, Webalink and its directors, staff and partners are not liable for indirect or consequential loss, loss of profit, revenue, data or goodwill, or for loss arising from services performed by Technicians.`,
+      `To the fullest extent Kenyan law permits, Webafix and its directors, staff and partners are not liable for indirect or consequential loss, loss of profit, revenue, data or goodwill, or for loss arising from services performed by Technicians.`,
       `Our total liability to you for any claim about the platform is limited to the **greater of** the fees you paid us in the 12 months before the claim, **and** ${L.liabilityFloor}.`,
       `Nothing here limits liability that cannot be limited by law, for example for fraud, or for death or personal injury caused by our negligence, or your rights under the Consumer Protection Act, 2012.`,
     ]},
   ]},
   { id: 'indemnity', title: 'Indemnity', body: [
-    `You agree to cover Webalink against claims, losses and reasonable legal costs arising from your breach of these Terms, your content, or your dealings with other users, except to the extent caused by our own wrongdoing.`,
+    `You agree to cover Webafix against claims, losses and reasonable legal costs arising from your breach of these Terms, your content, or your dealings with other users, except to the extent caused by our own wrongdoing.`,
   ]},
   { id: 'termination', title: 'Suspension and closing accounts', body: [
     `You can close your account at any time. Outstanding fees and bookings must still be settled or completed.`,
@@ -110,7 +110,7 @@ const sections = [
     `Sections that by nature should continue (content licence, payment obligations, disclaimers, liability, indemnity, disputes, governing law) survive closure.`,
   ]},
   { id: 'ip', title: 'Our intellectual property', body: [
-    `The platform, the Webalink name and logo, the design and the software belong to ${E} or its licensors. Do not copy or use them except as these Terms allow. Report infringement to ${L.legalEmail}.`,
+    `The platform, the Webafix name and logo, the design and the software belong to ${E} or its licensors. Do not copy or use them except as these Terms allow. Report infringement to ${L.legalEmail}.`,
   ]},
   { id: 'changes', title: 'Changes to the platform and these Terms', body: [
     `We may change the platform and these Terms. We will give at least ${L.noticeDays} notice of material changes by email or in the app. If you keep using the platform after the effective date, you accept the changes. If you disagree, close your account before then.`,
@@ -128,7 +128,7 @@ const sections = [
     ]},
   ]},
   { id: 'law', title: 'Governing law', body: [
-    `These Terms are governed by the **laws of Kenya**. For disputes with Webalink, we will first try good-faith negotiation, then **mediation** in ${L.mediationCity}, and if that fails the **courts of Kenya**. Consumers keep any rights they have under the Consumer Protection Act, 2012.`,
+    `These Terms are governed by the **laws of Kenya**. For disputes with Webafix, we will first try good-faith negotiation, then **mediation** in ${L.mediationCity}, and if that fails the **courts of Kenya**. Consumers keep any rights they have under the Consumer Protection Act, 2012.`,
   ]},
 
   // ───────────── Technician Terms ─────────────
@@ -136,7 +136,7 @@ const sections = [
     intro: `These terms apply in addition to the Terms above to everyone who registers a Technician profile. If the two conflict on Technician matters, these Technician Terms win.` },
 
   { id: 't-status', title: 'Independent professional', body: [
-    `You are an independent contractor and are solely responsible for your work, tools, staff, insurance, taxes and legal compliance. Nothing here creates employment, agency, partnership or a joint venture with Webalink.`,
+    `You are an independent contractor and are solely responsible for your work, tools, staff, insurance, taxes and legal compliance. Nothing here creates employment, agency, partnership or a joint venture with Webafix.`,
     `You are responsible for your own income tax, VAT (if applicable), statutory contributions, and for issuing receipts or tax invoices to clients as the law requires.`,
   ]},
   { id: 't-verify', title: 'Registration and verification', body: [
@@ -155,7 +155,7 @@ const sections = [
       `**Subscription plans.** To appear in search you need an active plan. Plans differ by **visibility radius**, price (in KES, billed monthly) and features, as shown in the app when you buy. The plan details and prices shown in the app at purchase are the ones that apply.`,
       `**Expiry.** When your plan or free trial ends, **your profile stops appearing in search** until you renew. Bookings already made continue.`,
       `**Renewal and refunds.** ${L.autoRenew}. Subscription fees are non-refundable except where the law requires or where we end the service for our own reasons. We send reminders before a plan expires.`,
-      `**Commission.** For each booking completed through the platform you owe Webalink **${L.commissionRate} of ${L.commissionBase}**, **whether the client paid you in cash, M-Pesa or any other way**. It is recorded per booking and becomes payable when the booking is completed.`,
+      `**Commission.** For each booking completed through the platform you owe Webafix **${L.commissionRate} of ${L.commissionBase}**, **whether the client paid you in cash, M-Pesa or any other way**. It is recorded per booking and becomes payable when the booking is completed.`,
       `**Paying commission.** Pay in the app by **card (Paystack) or M-Pesa STK Push**. You may be asked to settle all outstanding commission together. If it stays unpaid for more than ${L.commissionOverdue} we may reduce your visibility, restrict new bookings, suspend your account and recover the amount.`,
       `**Tax.** Fees are ${L.vatNote}.`,
       `**Changes.** We may change fees with ${L.feeChangeNotice} notice. Changes do not affect bookings already accepted.`,
@@ -181,7 +181,7 @@ const sections = [
     `Do not offer incentives for reviews, review yourself, pressure clients, or retaliate against clients for honest reviews. We may adjust or hide ratings to reflect fraud or manipulation.`,
   ]},
   { id: 't-liability', title: 'Your liability', body: [
-    `You are **solely liable** to clients for your work, including defects, damage, injury, delays and breach of contract, and you indemnify Webalink against related claims as set out in section 14.`,
+    `You are **solely liable** to clients for your work, including defects, damage, injury, delays and breach of contract, and you indemnify Webafix against related claims as set out in section 14.`,
   ]},
   { id: 't-suspend', title: 'Suspension and removal', body: [
     `We may suspend or remove your profile for false information, unlicensed work, safety issues, fraud, serious or repeated complaints, unpaid fees or breach of these terms. If you delete your account, your data is handled as described in the Privacy Policy, and any commission you owe remains payable.`,
@@ -192,7 +192,7 @@ export default function Terms() {
   return (
     <LegalLayout
       title="Terms and Conditions"
-      intro={`**By creating an account or using the Webalink platform, you agree to these Terms, our Privacy Policy and, if you are a Technician, the Technician Terms at the end of this page.** If you do not agree, please do not use the platform.`}
+      intro={`**By creating an account or using the Webafix platform, you agree to these Terms, our Privacy Policy and, if you are a Technician, the Technician Terms at the end of this page.** If you do not agree, please do not use the platform.`}
       sections={sections}
       other={{ to: '/privacy', label: 'Privacy Policy' }}
     />
