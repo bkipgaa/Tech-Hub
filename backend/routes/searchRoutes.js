@@ -15,6 +15,7 @@ const {
   searchTechnicians,
   getTechniciansBySubService,
   getNearbyTechnicians,
+  getTopTechnicians,
   getCategories,
   getFullCategories,
   getSearchSuggestions,
@@ -41,6 +42,13 @@ router.get('/by-service', getTechniciansBySubService);
  * Query: lat, lng, radius, page, limit
  */
 router.get('/nearby', getNearbyTechnicians);
+
+/**
+ * GET /top-technicians
+ * Highest-rated technicians (then most completed jobs).
+ * Query: limit
+ */
+router.get('/top-technicians', getTopTechnicians);
 
 /**
  * GET /categories

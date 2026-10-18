@@ -13,7 +13,8 @@
  * - Real-time chat unread badge
  * 
  * Access Control:
- * - Public links: Home, Services, Search, Book Service
+ * - Public links: Home, Services, Available Jobs, My Bookings
+ *   (Search is reached from the Services page)
  * - Authenticated users: Profile, Messages, Logout
  * - Technicians: Dashboard, Subscription, Commissions
  * 
@@ -96,7 +97,6 @@ const Navbar = () => {
     { name: "Home", path: "/" },
     { name: "Services", path: "/services" },
     { name: "Available Jobs", path: "/available-jobs" },
-    { name: "Search", path: "/search", highlight: true },
     { name: "My Bookings", path: "/bookings" },
   ];
 
