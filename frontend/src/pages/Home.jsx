@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Wordmark } from '../components/Wordmark';
+import HeroSlideshow from '../components/HeroSlideshow';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ChevronRight, X } from 'lucide-react';
 import api from '../services/api';
@@ -116,40 +117,33 @@ const Home = () => {
         </div>
       )}
 
-      {/* Hero Section with Background Illustration: a technician in Webafix green-and-red overalls fixing an electrical panel */}
-      <div className="relative h-[500px] overflow-hidden">
-        <img
-          src="/hero-technician.svg"
-          alt="Technician in green and red overalls repairing an electrical panel"
-          className="absolute inset-0 w-full h-full object-cover object-[80%_center]"
-        />
-
-        {/* Dark Overlay for better text readability, darkest behind the centred text */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/65 to-black/20"></div>
+      {/* Hero Section: rotating photos of experts at work, one per service area */}
+      <div className="relative min-h-[540px] md:min-h-[520px] overflow-hidden flex">
+        <HeroSlideshow />
 
         {/* Hero Content */}
-        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
+        <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 pt-12 pb-28">
           {isTechnician ? (
             <>
-              <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
                 Welcome back{user?.firstName ? `, ${user.firstName}` : ''}
               </h1>
-              <p className="text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
+              <p className="text-lg sm:text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
                 Here's how your business on <Wordmark className="" onDark /> is doing
               </p>
-              <p className="text-gray-300 max-w-3xl mx-auto text-lg leading-relaxed animate-fadeInUp">
+              <p className="text-gray-300 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed animate-fadeInUp">
                 Need a job done outside your skills? You can find and book other experts too.
               </p>
             </>
           ) : (
             <>
-              <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
                 Welcome to <Wordmark className="" onDark />
               </h1>
-              <p className="text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
+              <p className="text-lg sm:text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
                 Your trusted marketplace connecting you with verified professionals
               </p>
-              <p className="text-gray-300 max-w-3xl mx-auto text-lg leading-relaxed animate-fadeInUp">
+              <p className="text-gray-300 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed animate-fadeInUp">
                 From IT solutions to home services, find qualified experts ready to help with your needs.
                 Get matched with the best experts in your area.
               </p>
@@ -157,10 +151,10 @@ const Home = () => {
           )}
           
           {/* Search CTA */}
-          <div className="mt-8 flex flex-wrap justify-center gap-4 animate-fadeInUp">
+          <div className="mt-8 flex flex-wrap justify-center gap-3 sm:gap-4 animate-fadeInUp">
             <button
               onClick={() => navigate('/search')}
-              className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
+              className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors flex items-center gap-2"
             >
               Find an Expert
               <ArrowRight className="w-5 h-5" />
@@ -169,14 +163,14 @@ const Home = () => {
             {!isTechnician && (
               <button
                 onClick={() => navigate('/become-technician')}
-                className="bg-white/20 backdrop-blur-sm text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
+                className="bg-white/20 backdrop-blur-sm text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-white/30 transition-colors border border-white/30"
               >
                 Become an Expert
               </button>
             )}
             <button
               onClick={() => setShowBenefits(true)}
-              className="bg-white/20 backdrop-blur-sm text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
+              className="bg-white/20 backdrop-blur-sm text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-white/30 transition-colors border border-white/30"
             >
               Why Complete Jobs Through Bookings?
             </button>
