@@ -24,27 +24,27 @@ const unsplash = (id) => {
 const SLIDES = [
   {
     label: 'Electrical Services',
-    alt: 'Electrician in a hard hat and safety gloves repairing an electrical meter panel',
-    photo: unsplash('1621905251918-48416bd8575a'),
-    position: 'object-[30%_30%]',
-    credit: 'Emmanuel Ikwuegbu',
-    href: 'https://unsplash.com/photos/man-in-brown-and-white-plaid-dress-shirt-and-yellow-hard-hat-holding-black-and-orange--0-kl1BjvFc',
+    alt: 'Electrician in a hard hat and workwear repairing power lines from a lift',
+    photo: unsplash('1747110594869-789610507597'),
+    position: 'object-[40%_35%]',
+    credit: 'EriGle Gon',
+    href: 'https://unsplash.com/photos/an-electrician-works-on-power-lines-from-a-lift-QBeTa2KoTyI',
   },
   {
     label: 'Telecommunication',
-    alt: 'Technician sorting a bundle of telecommunication cables',
-    photo: unsplash('1708980047954-1400f412d67c'),
-    position: 'object-[75%_60%]',
-    credit: 'Brock Wegner',
-    href: 'https://unsplash.com/photos/a-man-holding-a-bunch-of-wires-in-his-hand-6tUsv-H35E8',
+    alt: 'Cell towers with antennas against a cloudy blue sky',
+    photo: unsplash('1673798880756-889117cacb7e'),
+    position: 'object-[50%_30%]',
+    credit: 'Mudit Agarwal',
+    href: 'https://unsplash.com/photos/a-group-of-cell-towers-sitting-under-a-cloudy-blue-sky-QfAnNvh3qTw',
   },
   {
     label: 'IT & Networking',
-    alt: 'Network technician patching cables in a server cabinet',
-    photo: unsplash('1629837093109-11325d6e7afd'),
-    position: 'object-[50%_30%]',
-    credit: 'Sammyayot254',
-    href: 'https://unsplash.com/photos/man-in-blue-denim-button-up-shirt-standing-beside-white-metal-frame-knUZi7dzb58',
+    alt: 'Modern data centre with rows of white server cabinets',
+    photo: unsplash('1784652852605-6945598f2af3'),
+    position: 'object-center',
+    credit: 'Tony Marinescu',
+    href: 'https://unsplash.com/photos/modern-data-center-with-rows-of-white-server-cabinets-fImCPTZ026U',
   },
   {
     label: 'Civil Engineering & Construction',
@@ -56,19 +56,19 @@ const SLIDES = [
   },
   {
     label: 'Mechanical Engineering',
-    alt: 'Welder in a protective helmet fabricating metal in a workshop',
-    photo: unsplash('1686819649144-d5592c6f0f60'),
-    position: 'object-[50%_20%]',
-    credit: 'Divaris Shirichena',
-    href: 'https://unsplash.com/photos/a-man-wearing-a-helmet-standing-next-to-a-machine-jquy4-lYwIY',
+    alt: 'Mechanic tightening a car engine part with a wrench',
+    photo: unsplash('1775590766345-c117265f0c1b'),
+    position: 'object-center',
+    credit: 'Sasun Bughdaryan',
+    href: 'https://unsplash.com/photos/mechanic-using-a-wrench-on-a-car-engine-9gB7APNSquE',
   },
   {
     label: 'Plumbing',
-    alt: 'Worker in a safety vest carrying water pipes on site',
-    photo: unsplash('1785096046242-6e5b9260c630'),
-    position: 'object-[40%_15%]',
-    credit: 'Shane Ryan Herilalaina',
-    href: 'https://unsplash.com/photos/worker-in-orange-vest-carrying-pipes-on-a-dirt-path-ofqkpvqFJic',
+    alt: 'White water pipes fitted with red valves',
+    photo: unsplash('1786294112341-b86211513b92'),
+    position: 'object-center',
+    credit: 'Sylvain Miklaszewski',
+    href: 'https://unsplash.com/photos/industrial-pipes-with-red-valves-PBhR1Kw1wXk',
   },
   {
     label: 'Electronics & Repairs',
@@ -113,8 +113,8 @@ const HeroSlideshow = () => {
         />
       ))}
 
-      {/* Dark overlay for text readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/55 to-black/75" />
+      {/* Light overlay: keeps photos bright; the hero text carries a shadow for readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/30 to-black/55" />
 
       {/* Current service label + slide dots */}
       <div className="absolute bottom-4 inset-x-0 z-20 flex flex-col items-center gap-2 px-4">
