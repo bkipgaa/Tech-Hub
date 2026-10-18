@@ -95,7 +95,7 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Why complete jobs through bookings — benefits popup */}
+      {/* Why use bookings — benefits popup (expert or client version) */}
       {showBenefits && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -112,7 +112,7 @@ const Home = () => {
             >
               <X className="w-5 h-5" />
             </button>
-            <BookingBenefits />
+            <BookingBenefits audience={isTechnician ? 'technician' : 'client'} />
           </div>
         </div>
       )}
@@ -128,25 +128,29 @@ const Home = () => {
               <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
                 Welcome back{user?.firstName ? `, ${user.firstName}` : ''}
               </h1>
-              <p className="text-lg sm:text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
-                Here's how your business on <Wordmark className="" onDark /> is doing
-              </p>
-              <p className="text-gray-300 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed animate-fadeInUp">
-                Need a job done outside your skills? You can find and book other experts too.
-              </p>
+              <div className="max-w-3xl mx-auto bg-green-700/85 backdrop-blur-sm rounded-xl px-5 py-4 [text-shadow:none] animate-fadeInUp">
+                <p className="text-lg sm:text-xl font-bold text-white">
+                  Here's how your business on <Wordmark className="" onDark /> is doing
+                </p>
+                <p className="mt-2 text-base sm:text-lg font-semibold text-green-50 leading-relaxed">
+                  Need a job done outside your skills? You can find and book other experts too.
+                </p>
+              </div>
             </>
           ) : (
             <>
               <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
                 Welcome to <Wordmark className="" onDark />
               </h1>
-              <p className="text-lg sm:text-xl text-gray-200 max-w-2xl mx-auto mb-6 animate-fadeInUp">
-                Your trusted marketplace connecting you with verified professionals
-              </p>
-              <p className="text-gray-300 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed animate-fadeInUp">
-                From IT solutions to home services, find qualified experts ready to help with your needs.
-                Get matched with the best experts in your area.
-              </p>
+              <div className="max-w-3xl mx-auto bg-green-700/85 backdrop-blur-sm rounded-xl px-5 py-4 [text-shadow:none] animate-fadeInUp">
+                <p className="text-lg sm:text-xl font-bold text-white">
+                  Your trusted marketplace connecting you with verified professionals
+                </p>
+                <p className="mt-2 text-base sm:text-lg font-semibold text-green-50 leading-relaxed">
+                  From IT solutions to home services, find qualified experts ready to help with your needs.
+                  Get matched with the best experts in your area.
+                </p>
+              </div>
             </>
           )}
           
@@ -170,9 +174,9 @@ const Home = () => {
             )}
             <button
               onClick={() => setShowBenefits(true)}
-              className="bg-white/20 backdrop-blur-sm text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-white/30 transition-colors border border-white/30"
+              className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors"
             >
-              Why Complete Jobs Through Bookings?
+              {isTechnician ? 'Why Complete Jobs Through Bookings?' : 'Why Request Services Through Our Booking System?'}
             </button>
           </div>
         </div>

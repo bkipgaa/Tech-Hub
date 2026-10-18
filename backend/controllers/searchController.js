@@ -683,6 +683,55 @@ exports.getNearbyTechnicians = async (req, res) => {
 };
 
 // ===========================================
+// TOP TECHNICIANS
+// ===========================================
+
+/**
+ * Get the highest-ranked technicians: best average rating first, then most
+ * completed jobs, then most reviews. Technicians hidden for unpaid
+ * commission are left out.
+ * Route: GET /api/search/top-technicians
+ * Query: limit (default 10, max 20)
+ */
+exports.getTopTechnicians = async (req, res) => {
+  try {
+    const limitNum = Math.min(parseInt(req.query.limit) || 10, 20);
+    const standing = await getCommissionStanding();
+
+    const technicians = await Technician.find({
+      _id: { $nin: Array.from(standing.hidden) },
+      isActive: true,
+      verificationStatus: { $in: ['verified', 'pending'] }
+    })
+    .sort({ 'rating.average': -1, 'statistics.completedJobs': -1, 'rating.count': -1 })
+    .limit(limitNum)
+    .populate('userId', 'firstName lastName profileImage')
+    .lean();
+
+    const data = technicians.map(tech => ({
+      _id: tech._id,
+      businessName: tech.businessName,
+      mainCategory: tech.mainCategory,
+      profileHeadline: tech.profileHeadline,
+      rating: tech.rating,
+      completedJobs: tech.statistics?.completedJobs || 0,
+      verificationStatus: tech.verificationStatus,
+      acceptingBookings: !standing.blocked.has(String(tech._id)),
+      user: tech.userId ? {
+        _id: tech.userId._id,
+        firstName: tech.userId.firstName,
+        lastName: tech.userId.lastName,
+        profileImage: tech.userId.profileImage
+      } : null
+    }));
+
+    res.json({ success: true, count: data.length, data });
+  } catch (error) {
+    handleControllerError(res, error, 'An error occurred while fetching top technicians.', 500, 'getTopTechnicians');
+  }
+};
+
+// ===========================================
 // SEARCH SUGGESTIONS (AUTOCOMPLETE)
 // ===========================================
 
