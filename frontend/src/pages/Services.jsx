@@ -6,6 +6,9 @@
  *   2. Pick a service category (compact horizontal chips)
  *   3. Set your search radius  (with location)
  *   4. Browse sub-services & book a technician
+ * Below the catalog: popular services, top experts and experts nearby.
+ * The Search button in the header opens the Search page (the navbar no
+ * longer has its own Search link).
  *
  * @version 4.1.0 – Compact chips (no icon, ~7 per row)
  * @author Webafix Team
@@ -23,9 +26,11 @@ import {
   Navigation,
   Sparkles,
   ArrowRight,
+  Search,
 } from 'lucide-react';
 import api from '../services/api';
 import RadiusPicker from '../components/RadiusPicker';
+import ServicesHighlights from '../components/ServicesHighlights';
 
 const Services = () => {
   const navigate = useNavigate();
@@ -264,13 +269,23 @@ const Services = () => {
       <div className="max-w-6xl mx-auto px-4 py-8 md:py-10">
 
         {/* ─── Header ─────────────────────────────────── */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-            Browse Services
-          </h1>
-          <p className="text-sm md:text-base text-gray-600 mt-1">
-            Pick a category → choose a service → set your distance → book an expert.
-          </p>
+        <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+              Browse Services
+            </h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1">
+              Pick a category → choose a service → set your distance → book an expert.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/search')}
+            className="self-start inline-flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-sm flex-shrink-0"
+          >
+            <Search className="w-4 h-4" />
+            Search
+          </button>
         </div>
 
         {/* ═══════════════════════════════════════════════
@@ -547,14 +562,21 @@ const Services = () => {
 
         {/* ── Idle hint ─────────────────────────────── */}
         {!selectedMainCategory && (
-          <div className="mt-8 text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
-            <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <div className="mt-4 text-center py-6 bg-white rounded-xl border border-dashed border-gray-300">
+            <Wrench className="w-8 h-8 text-gray-300 mx-auto mb-2" />
             <p className="text-gray-500">Click a category above to get started</p>
             <p className="text-xs text-gray-400 mt-1">
               {catalog.length} categor{catalog.length !== 1 ? 'ies' : 'y'} available
             </p>
           </div>
         )}
+
+        {/* ── Popular services, top experts, experts nearby ── */}
+        <ServicesHighlights
+          userLocation={userLocation}
+          locationStatus={locationStatus}
+          onEnableLocation={requestUserLocation}
+        />
       </div>
 
       {/* ── Footer CTA (kept) ─────────────────────────── */}

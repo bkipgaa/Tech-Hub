@@ -7,6 +7,9 @@
  *
  * Features:
  * - Dropdown cascading from backend catalog data
+ * - Type-to-search over the catalog that tolerates typos; picking a match
+ *   fills the dropdowns
+ * - Accepts ?mainCategory=&serviceCategory=&subService= to pre-fill them
  * - Location detection and radius control
  * - Advanced filters (rating, hourly rate)
  * - Results display with plan badges, visibility radius, and a single
@@ -16,8 +19,8 @@
  * @author Webafix Team
  */
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   MapPin,
@@ -40,6 +43,7 @@ import {
 import api from '../services/api';
 import RadiusPicker from '../components/RadiusPicker';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
+import { rankMatches } from '../utils/fuzzyMatch';
 
 // ============================================================
 // PLAN CONFIGURATION (matching backend subscription plans)
@@ -61,6 +65,7 @@ const CATALOG_CACHE_MS = 10 * 60 * 1000;
 
 const SearchPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // --- Search & results state ---
   const [loading, setLoading] = useState(false);
@@ -93,9 +98,9 @@ const SearchPage = () => {
   });
   const [showFilters, setShowFilters] = useState(false);
 
-  // --- Dynamic dropdown options (derived from catalog) ---
-  const [serviceCategories, setServiceCategories] = useState([]);
-  const [subServices, setSubServices] = useState([]);
+  // --- Type-to-search box ---
+  const [query, setQuery] = useState('');
+  const [showMatches, setShowMatches] = useState(false);
 
   // ============================================================
   // CATALOG LOADING
@@ -198,35 +203,80 @@ const SearchPage = () => {
   }, []);
 
   // ============================================================
-  // DYNAMIC DROPDOWN UPDATES
+  // DROPDOWN OPTIONS (derived from catalog)
   // ============================================================
-  useEffect(() => {
-    if (filters.mainCategory) {
-      const services = catalogData.serviceCategoriesMap[filters.mainCategory] || [];
-      setServiceCategories(services);
-      setFilters((prev) => ({ ...prev, serviceCategory: '', subService: '' }));
-      setSubServices([]);
-    } else {
-      setServiceCategories([]);
-      setSubServices([]);
-    }
-  }, [filters.mainCategory, catalogData.serviceCategoriesMap]);
+  const subServicesFor = (main, service) =>
+    (
+      catalogData.subServicesMap[`${main}||${service}`] ||
+      catalogData.subServicesMap[service] || // built-in fallback catalog
+      []
+    ).map((sub) => (typeof sub === 'string' ? sub : sub.name || sub.subService || ''));
 
+  const serviceCategories = filters.mainCategory
+    ? catalogData.serviceCategoriesMap[filters.mainCategory] || []
+    : [];
+  const subServices = filters.serviceCategory
+    ? subServicesFor(filters.mainCategory, filters.serviceCategory)
+    : [];
+
+  // Changing a level clears the levels below it
+  const selectMainCategory = (mainCategory) =>
+    setFilters((f) => ({ ...f, mainCategory, serviceCategory: '', subService: '' }));
+  const selectServiceCategory = (serviceCategory) =>
+    setFilters((f) => ({ ...f, serviceCategory, subService: '' }));
+
+  // Every catalog name, flattened so the search box can match any level
+  const catalogEntries = useMemo(() => {
+    const entries = [];
+    catalogData.mainCategories.forEach((main) => {
+      entries.push({ label: main, path: [main], mainCategory: main });
+      (catalogData.serviceCategoriesMap[main] || []).forEach((service) => {
+        entries.push({ label: service, path: [main, service], mainCategory: main, serviceCategory: service });
+        subServicesFor(main, service).forEach((sub) => {
+          if (sub) {
+            entries.push({
+              label: sub,
+              path: [main, service, sub],
+              mainCategory: main,
+              serviceCategory: service,
+              subService: sub,
+            });
+          }
+        });
+      });
+    });
+    return entries;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogData]);
+
+  const matches = useMemo(
+    () => (query.trim().length >= 2 ? rankMatches(query, catalogEntries, 8) : []),
+    [query, catalogEntries]
+  );
+
+  const applyMatch = (match) => {
+    setFilters((f) => ({
+      ...f,
+      mainCategory: match.mainCategory || '',
+      serviceCategory: match.serviceCategory || '',
+      subService: match.subService || '',
+    }));
+    setQuery('');
+    setShowMatches(false);
+  };
+
+  // Pre-fill from the URL, e.g. /search?mainCategory=Plumbing (links from Home and Services)
   useEffect(() => {
-    if (filters.serviceCategory) {
-      const subs =
-        catalogData.subServicesMap[`${filters.mainCategory}||${filters.serviceCategory}`] ||
-        catalogData.subServicesMap[filters.serviceCategory] || // built-in fallback catalog
-        [];
-      const subNames = subs.map((sub) =>
-        typeof sub === 'string' ? sub : sub.name || sub.subService || ''
-      );
-      setSubServices(subNames);
-      setFilters((prev) => ({ ...prev, subService: '' }));
-    } else {
-      setSubServices([]);
-    }
-  }, [filters.serviceCategory, catalogData.subServicesMap]);
+    if (catalogLoading) return;
+    const main = searchParams.get('mainCategory');
+    if (!main || !catalogData.mainCategories.includes(main)) return;
+    const service = searchParams.get('serviceCategory');
+    const validService = service && (catalogData.serviceCategoriesMap[main] || []).includes(service) ? service : '';
+    const sub = searchParams.get('subService');
+    const validSub = validService && sub && subServicesFor(main, validService).includes(sub) ? sub : '';
+    setFilters((f) => ({ ...f, mainCategory: main, serviceCategory: validService, subService: validSub }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogLoading, catalogData, searchParams]);
 
   // ============================================================
   // LOCATION FUNCTIONS
@@ -366,8 +416,7 @@ const SearchPage = () => {
       maxHourlyRate: '',
       minHourlyRate: '',
     });
-    setServiceCategories([]);
-    setSubServices([]);
+    setQuery('');
     if (userLocation) {
       performSearch(userLocation.lat, userLocation.lng);
     }
@@ -469,10 +518,77 @@ const SearchPage = () => {
         {/* ===== SEARCH FORM ===== */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <form onSubmit={handleSearch} className="space-y-4">
+            {/* Type to find a category, service or sub-service */}
+            <div className="relative">
+              <label htmlFor="catalogSearch" className="block text-sm font-medium text-gray-700 mb-1">
+                What do you need?
+              </label>
+              <div className="relative">
+                <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  id="catalogSearch"
+                  type="text"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setShowMatches(true);
+                  }}
+                  onFocus={() => setShowMatches(true)}
+                  onBlur={() => setTimeout(() => setShowMatches(false), 150)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && matches.length > 0) {
+                      e.preventDefault();
+                      applyMatch(matches[0]);
+                    }
+                  }}
+                  placeholder="Type a service, e.g. plumbing, CCTV, house wiring"
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={showMatches && matches.length > 0}
+                  aria-controls="catalogSearchMatches"
+                  className="w-full pl-10 pr-3 p-3 border border-gray-300 rounded-lg focus:border-green-500 focus:outline-none"
+                />
+              </div>
+
+              {showMatches && query.trim().length >= 2 && (
+                <ul
+                  id="catalogSearchMatches"
+                  role="listbox"
+                  className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto"
+                >
+                  {matches.length > 0 ? (
+                    matches.map((match) => (
+                      <li key={match.path.join('>')} role="option" aria-selected="false">
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => applyMatch(match)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-green-50 focus:bg-green-50 focus:outline-none"
+                        >
+                          <span className="block text-sm font-medium text-gray-800">{match.label}</span>
+                          {match.path.length > 1 && (
+                            <span className="block text-xs text-gray-500">
+                              {match.path.slice(0, -1).join(' › ')}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="px-4 py-3 text-sm text-gray-500">
+                      No matching services. Try another word or pick from the lists below.
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+
+            <p className="text-xs text-gray-500 -mt-2">Or choose step by step:</p>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <select
                 value={filters.mainCategory}
-                onChange={(e) => setFilters({ ...filters, mainCategory: e.target.value })}
+                onChange={(e) => selectMainCategory(e.target.value)}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none bg-white"
               >
                 <option value="">Select Main Category</option>
@@ -483,7 +599,7 @@ const SearchPage = () => {
 
               <select
                 value={filters.serviceCategory}
-                onChange={(e) => setFilters({ ...filters, serviceCategory: e.target.value })}
+                onChange={(e) => selectServiceCategory(e.target.value)}
                 disabled={!filters.mainCategory || serviceCategories.length === 0}
                 className="p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none disabled:bg-gray-100 bg-white"
               >
