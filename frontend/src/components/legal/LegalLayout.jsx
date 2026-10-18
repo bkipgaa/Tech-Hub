@@ -149,7 +149,7 @@ export default function LegalLayout({ title, intro, sections, other }) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:px-8">
+      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:px-8">
         <aside>
           <details className="rounded-lg border border-gray-200 lg:hidden">
             <summary className="cursor-pointer px-4 py-3 font-sans text-sm font-semibold text-gray-800">Jump to a section</summary>
