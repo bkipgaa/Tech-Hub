@@ -67,8 +67,13 @@ const Home = () => {
     navigate(`/search?mainCategory=${encodeURIComponent(categoryName)}`);
   };
 
-  // Get top 5 categories for featured section
-  const topCategories = mainCategories.slice(0, 5);
+  // Top 5 categories: most completed bookings, then most bookings made
+  const topCategories = [...mainCategories]
+    .sort((a, b) =>
+      (b.completedBookings || 0) - (a.completedBookings || 0) ||
+      (b.totalBookings || 0) - (a.totalBookings || 0)
+    )
+    .slice(0, 5);
 
   if (loading) {
     return (
@@ -142,11 +147,11 @@ const Home = () => {
               <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
                 Welcome to <Wordmark className="" onDark />
               </h1>
-              <div className="max-w-3xl mx-auto bg-green-700/85 backdrop-blur-sm rounded-xl px-5 py-4 [text-shadow:none] animate-fadeInUp">
-                <p className="text-lg sm:text-xl font-bold text-white">
+              <div className="max-w-3xl mx-auto px-5 py-4 animate-fadeInUp">
+                <p className="text-xl sm:text-2xl font-extrabold text-white">
                   Your trusted marketplace connecting you with verified professionals
                 </p>
-                <p className="mt-2 text-base sm:text-lg font-semibold text-green-50 leading-relaxed">
+                <p className="mt-2 text-base sm:text-lg font-bold text-white leading-relaxed">
                   From IT solutions to home services, find qualified experts ready to help with your needs.
                   Get matched with the best experts in your area.
                 </p>
@@ -167,7 +172,7 @@ const Home = () => {
             {!isTechnician && (
               <button
                 onClick={() => navigate('/become-technician')}
-                className="bg-white/20 backdrop-blur-sm text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-white/30 transition-colors border border-white/30"
+                className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors"
               >
                 Become an Expert
               </button>
@@ -194,7 +199,7 @@ const Home = () => {
           <p className="text-gray-500 text-sm">
             {isTechnician
               ? 'Find an expert for jobs outside your skills — most requested categories'
-              : 'Most requested categories by our users'}
+              : 'Categories with the most completed bookings'}
           </p>
         </div>
         
@@ -203,7 +208,7 @@ const Home = () => {
             <div
               key={index}
               onClick={() => handleCategoryClick(category.name)}
-              className="group bg-white py-3 px-2 rounded-md shadow-sm border border-gray-200 hover:shadow-md hover:border-green-300 transition-all duration-200 cursor-pointer text-center"
+              className="group bg-white py-3 px-2 rounded-md shadow-sm border border-gray-200 hover:shadow-md hover:border-green-500 hover:bg-green-100 transition-all duration-200 cursor-pointer text-center"
             >
               <h3 className="font-medium text-gray-800 group-hover:text-green-600 transition-colors duration-200 text-sm">
                 {category.name}
