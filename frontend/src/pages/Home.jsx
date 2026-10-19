@@ -133,11 +133,11 @@ const Home = () => {
               <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-white mb-4 animate-fadeIn">
                 Welcome back{user?.firstName ? `, ${user.firstName}` : ''}
               </h1>
-              <div className="max-w-3xl mx-auto bg-green-700/85 backdrop-blur-sm rounded-xl px-5 py-4 [text-shadow:none] animate-fadeInUp">
-                <p className="text-lg sm:text-xl font-bold text-white">
+              <div className="max-w-3xl mx-auto px-5 py-4 animate-fadeInUp">
+                <p className="text-xl sm:text-2xl font-extrabold text-white">
                   Here's how your business on <Wordmark className="" onDark /> is doing
                 </p>
-                <p className="mt-2 text-base sm:text-lg font-semibold text-green-50 leading-relaxed">
+                <p className="mt-2 text-base sm:text-lg font-bold text-white leading-relaxed">
                   Need a job done outside your skills? You can find and book other experts too.
                 </p>
               </div>
