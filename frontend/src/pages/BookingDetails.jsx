@@ -487,6 +487,7 @@ const BookingDetails = () => {
    * Opens the action confirmation modal for a specific action.
    */
   const openActionModal = (action) => {
+    const expertName = getTechnicianName(booking);
     const configs = {
       sendQuotation: {
         title: 'Send Quotation',
@@ -535,7 +536,7 @@ const BookingDetails = () => {
       },
       confirmMaterialsReceived: {
         title: 'Confirm Materials Received',
-        message: 'Have you received the materials from the expert?',
+        message: `Have you received the materials from ${expertName}?`,
         buttonText: 'Confirm Received',
         buttonColor: 'bg-green-600 hover:bg-green-700',
         needsRating: false,
@@ -549,14 +550,14 @@ const BookingDetails = () => {
       },
       confirmWork: {
         title: 'Confirm Work Is Done',
-        message: 'Have you checked the proof and is the work finished to your satisfaction? After confirming, pay the expert for the labor.',
+        message: `Have you checked the proof and is the work finished to your satisfaction? After confirming, pay ${expertName} for the labor.`,
         buttonText: 'Yes, work is done',
         buttonColor: 'bg-green-600 hover:bg-green-700',
         needsRating: false,
       },
       disputeWork: {
         title: 'Report a Problem',
-        message: 'Tell us what is wrong. The expert can add more proof, and our team will review it.',
+        message: `Tell us what is wrong. ${expertName} can add more proof, and our team will review it.`,
         buttonText: 'Send',
         buttonColor: 'bg-red-600 hover:bg-red-700',
         needsRating: false,
@@ -578,8 +579,8 @@ const BookingDetails = () => {
         needsRating: false,
       },
       rate: {
-        title: 'Rate Your Expert',
-        message: 'Share your experience with this expert.',
+        title: `Rate ${expertName}`,
+        message: `Share your experience with ${expertName}.`,
         buttonText: 'Submit Rating',
         buttonColor: 'bg-yellow-500 hover:bg-yellow-600',
         needsRating: true,
@@ -1043,7 +1044,7 @@ const BookingDetails = () => {
         }
         return tech ? 'Your move: confirm the labor amount you were paid.' : `Pay ${technicianName} for the labor; they will confirm the amount.`;
       case 'labor_paid':
-        return tech ? `Waiting for ${clientName} to rate you.` : 'Your move: rate the expert to finish the booking.';
+        return tech ? `Waiting for ${clientName} to rate you.` : `Your move: rate ${technicianName} to finish the booking.`;
       default:
         return null;
     }
@@ -1192,7 +1193,7 @@ const BookingDetails = () => {
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
                 >
                   <Star className="w-4 h-4 fill-current" />
-                  Rate Expert
+                  Rate {technicianName}
                 </button>
               )}
 
@@ -1347,7 +1348,7 @@ const BookingDetails = () => {
                       : "I'm at the job address now — pin my location"}
                   </button>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Used to check that the expert's proof-of-work photos were taken here.
+                    Used to check that {technicianName}'s proof-of-work photos were taken here.
                   </p>
                   {pinState.error && <p className="text-xs text-red-600 mt-1">{pinState.error}</p>}
                 </div>
@@ -1391,7 +1392,7 @@ const BookingDetails = () => {
                 </p>
                 {booking.ratingCheck?.pending && (
                   <p className="text-xs text-yellow-700 mt-1">
-                    This rating will show on the expert's profile after a quick check by our team.
+                    This rating will show on {technicianName}'s profile after a quick check by our team.
                   </p>
                 )}
               </div>
@@ -1470,7 +1471,7 @@ const BookingDetails = () => {
                   <p className="text-sm">
                     <span className="text-gray-500">Provided by:</span>{' '}
                     <span className="font-medium">
-                      {booking.materials.providedByClient ? 'Client' : 'Expert (buys)'}
+                      {booking.materials.providedByClient ? clientName : `${technicianName} (buys)`}
                     </span>
                   </p>
                   {booking.materials.moneyReceivedAt && (
@@ -1508,12 +1509,12 @@ const BookingDetails = () => {
                   {booking.quotation?.sentAt ? (
                     <>
                       <p className="text-xl font-bold text-green-600">{formatCurrency(booking.quotation.totalCost)}</p>
-                      <p className="text-xs text-gray-400">From the expert's quotation</p>
+                      <p className="text-xs text-gray-400">From {technicianName}'s quotation</p>
                     </>
                   ) : booking.totalAmount > 0 ? (
                     <>
                       <p className="text-xl font-bold text-green-600">{formatCurrency(booking.totalAmount)}</p>
-                      <p className="text-xs text-gray-400">Estimate until the expert sends a quotation</p>
+                      <p className="text-xs text-gray-400">Estimate until {technicianName} sends a quotation</p>
                     </>
                   ) : (
                     <p className="text-base font-medium text-gray-500">Awaiting quotation</p>
@@ -1582,7 +1583,7 @@ const BookingDetails = () => {
                 )}
                 {booking.technicianNotes && (
                   <div>
-                    <p className="text-sm text-gray-500">Expert Notes</p>
+                    <p className="text-sm text-gray-500">{technicianName}'s notes</p>
                     <p className="text-gray-700">{booking.technicianNotes}</p>
                   </div>
                 )}
@@ -1841,10 +1842,10 @@ const BookingDetails = () => {
                         onChange={() => setActionModal((prev) => ({ ...prev, providedByClient: false }))}
                         disabled={actionModal.loading}
                       />
-                      Expert buys
+                      I buy them
                     </label>
                   </div>
-                  <p className="text-xs text-gray-400">If the expert buys, they will need to confirm money received.</p>
+                  <p className="text-xs text-gray-400">If you buy them, you'll first confirm the client has paid you for them.</p>
                 </div>
               )}
 
@@ -1994,7 +1995,7 @@ const BookingDetails = () => {
                   {booking.laborPayment?.amount > 0 && (
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <p className="text-sm font-medium text-gray-700 mb-2">
-                        The expert says you paid{' '}
+                        {technicianName} says you paid{' '}
                         <strong>{formatCurrency(booking.laborPayment.amount)}</strong> for labor. Is this correct?{' '}
                         <span className="text-red-500">*</span>
                       </p>

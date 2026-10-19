@@ -1125,9 +1125,11 @@ exports.rateTechnician = async (req, res) => {
 
     const held = ratingCheck.status === 'held';
     if (held) {
+      const techUser = await User.findById(technician.userId).select('firstName lastName').lean();
+      const expertName = `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || technician.businessName || 'the expert';
       return res.json({
         success: true,
-        message: 'Thanks! Your rating is saved and will appear on the expert\'s profile after a quick check by our team.',
+        message: `Thanks! Your rating is saved and will appear on ${expertName}'s profile after a quick check by our team.`,
         data: { bookingId: booking._id, rating, review: claimed.clientReview, held: true },
       });
     }

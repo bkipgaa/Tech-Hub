@@ -322,9 +322,12 @@ exports.confirmWork = async (req, res) => {
     }
     await booking.save();
 
+    await booking.populate(TECHNICIAN_WITH_NAME);
+    const techUser = booking.technicianId?.userId;
+    const expertName = `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || booking.technicianId?.businessName || 'the expert';
     await respondWithBooking(res, booking, confirmed
-      ? 'Thanks — work confirmed. Pay the expert for the labor; they will record the amount.'
-      : 'Your concern has been recorded. The expert can add more proof, and our team will review it.');
+      ? `Thanks — work confirmed. Pay ${expertName} for the labor; they will record the amount.`
+      : `Your concern has been recorded. ${expertName} can add more proof, and our team will review it.`);
   } catch (error) {
     logError('confirmWork', error);
     fail(res, 500, 'Failed to save your answer.');

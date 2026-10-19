@@ -58,7 +58,7 @@ import api from '../services/api';
  * @param {string} props.status - Booking status: pending, confirmed, in-progress, completed, cancelled, no-show
  * @returns {JSX.Element} - Rendered badge
  */
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, expertName }) => {
   const config = {
     pending: {
       label: 'Pending',
@@ -122,7 +122,8 @@ const StatusBadge = ({ status }) => {
       icon: <CheckCircle className="w-3 h-3 mr-1" />,
     },
     labor_paid: {
-      label: 'Rate your expert',
+      // Client sees who to rate; the expert sees that a rating is pending
+      label: expertName ? `Rate ${expertName}` : 'Waiting for rating',
       color: 'bg-orange-100 text-orange-800 border-orange-200',
       icon: <AlertCircle className="w-3 h-3 mr-1" />,
     },
@@ -530,12 +531,17 @@ const MyBookings = () => {
   const getTechnicianName = (booking) => {
     if (!booking?.technicianId) return 'Expert';
     const tech = booking.technicianId;
-    if (tech.businessName?.trim()) return tech.businessName.trim();
+    // Person's name first, like the booking page (business name as a fallback)
     if (tech.userId?.firstName) {
       return `${tech.userId.firstName} ${tech.userId.lastName || ''}`.trim();
     }
+    if (tech.businessName?.trim()) return tech.businessName.trim();
     return 'Expert';
   };
+
+  // Name of the expert on the booking a modal (cancel / rate) is open for
+  const selectedBooking = bookings.find((b) => b._id === selectedBookingId);
+  const selectedExpertName = selectedBooking ? getTechnicianName(selectedBooking) : 'the expert';
 
   /**
    * getTechnicianId()
@@ -747,7 +753,7 @@ const MyBookings = () => {
                           <h3 className="text-lg font-semibold text-gray-800 truncate">
                             {booking.serviceCategory || 'Service'}
                           </h3>
-                          <StatusBadge status={booking.status} />
+                          <StatusBadge status={booking.status} expertName={asClient ? getTechnicianName(booking) : undefined} />
                         </div>
                         <p className="text-sm text-gray-500 truncate">
                           {booking.subService || 'No sub-service'}
@@ -833,7 +839,7 @@ const MyBookings = () => {
                           <p className="text-xs text-gray-400">
                             {booking.hourlyRate > 0
                               ? `${formatCurrency(booking.hourlyRate)}/hour × ${booking.estimatedHours} hours`
-                              : 'Fixed price agreed with expert'}
+                              : asClient ? `Fixed price agreed with ${getTechnicianName(booking)}` : 'Fixed price from your quotation'}
                           </p>
                         </div>
                         <div>
@@ -907,7 +913,7 @@ const MyBookings = () => {
                 <div>
                   <p className="text-sm font-medium">Are you sure?</p>
                   <p className="text-xs text-yellow-700 mt-0.5">
-                    This action cannot be undone. The expert will be notified.
+                    This action cannot be undone. {selectedExpertName} will be notified.
                   </p>
                 </div>
               </div>
@@ -921,7 +927,7 @@ const MyBookings = () => {
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent h-20 resize-y"
-                  placeholder="Please explain why you're cancelling (e.g., changed my mind, found another expert)"
+                  placeholder="Please explain why you're cancelling (e.g., changed my mind, found someone else)"
                   required
                   disabled={cancelLoading}
                   maxLength={500}
@@ -973,7 +979,7 @@ const MyBookings = () => {
           >
             {/* Modal Header */}
             <div className="flex justify-between items-center p-5 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
-              <h2 className="text-xl font-bold text-gray-800">Rate Your Expert</h2>
+              <h2 className="text-xl font-bold text-gray-800">Rate {selectedExpertName}</h2>
               <button
                 onClick={closeRatingModal}
                 className="text-gray-400 hover:text-gray-600 transition-colors p-1"
@@ -1043,7 +1049,7 @@ const MyBookings = () => {
                   value={ratingForm.review}
                   onChange={(e) => setRatingForm((prev) => ({ ...prev, review: e.target.value }))}
                   className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent h-24 resize-y"
-                  placeholder="Share your experience with this expert (e.g., professionalism, quality of work, punctuality)..."
+                  placeholder={`Share your experience with ${selectedExpertName} (e.g., professionalism, quality of work, punctuality)...`}
                   required
                   disabled={ratingLoading || ratingSuccess}
                   maxLength={500}
