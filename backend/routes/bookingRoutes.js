@@ -3,7 +3,18 @@ const router = express.Router();
 const { auth } = require('../middleware/auth'); // your auth middleware
 const bookingController = require('../controllers/bookingratingController');
 const evidenceController = require('../controllers/bookingEvidenceController');
-const { evidenceUpload } = require('../config/cloudinary');
+const { evidenceUpload, quotationUpload } = require('../config/cloudinary');
+
+// Optional quotation photo/PDF files (multipart); plain JSON requests pass straight through
+const quotationFiles = (req, res, next) => {
+  quotationUpload.array('attachments', 3)(req, res, (err) => {
+    if (!err) return next();
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'Each file must be under 10 MB.'
+      : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE' ? 'You can attach up to 3 files.'
+      : err.message;
+    res.status(400).json({ success: false, message });
+  });
+};
 
 // Multer errors (wrong type, too big) as a 400 instead of the generic 500
 const evidencePhotoUpload = (req, res, next) => {
@@ -54,7 +65,7 @@ router.post('/:bookingId/cancel', bookingController.cancelBooking);
 router.post('/:bookingId/location-pin', evidenceController.pinLocation);
 
 // 12‑STEP ADVANCED BOOKING FLOW
-router.post('/:bookingId/quotation', bookingController.sendQuotation);
+router.post('/:bookingId/quotation', quotationFiles, bookingController.sendQuotation);
 router.post('/:bookingId/accept-quotation', bookingController.acceptQuotation);
 router.post('/:bookingId/reject-quotation', bookingController.rejectQuotation);
 router.post('/:bookingId/material-source', bookingController.setMaterialSource);

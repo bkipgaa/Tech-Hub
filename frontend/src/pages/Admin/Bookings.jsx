@@ -334,7 +334,7 @@ const Bookings = () => {
                       <p className="text-[10px] text-gray-400 truncate max-w-[160px]">{b.subService}</p>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <p className="font-medium text-gray-800">{formatCurrency(b.totalAmount)}</p>
+                      <p className="font-medium text-gray-800">{formatCurrency(b.quotation?.sentAt ? b.quotation.totalCost : b.totalAmount)}</p>
                       <p className="text-[10px] text-gray-400">{b.paymentStatus}</p>
                     </td>
                     <td className="px-4 py-3">

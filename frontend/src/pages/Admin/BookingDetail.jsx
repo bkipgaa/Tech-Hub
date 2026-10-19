@@ -438,6 +438,21 @@ const BookingDetail = () => {
                 <Detail label="Labor" value={formatCurrency(booking.quotation.laborCost)} />
                 <Detail label="Materials" value={formatCurrency(booking.quotation.materialsCost)} />
               </div>
+              {booking.quotation.attachments?.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {booking.quotation.attachments.map((file) => (
+                    <a key={file._id || file.url} href={file.url} target="_blank" rel="noopener noreferrer" title={file.name}>
+                      {file.fileType === 'pdf' ? (
+                        <span className="flex items-center gap-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-gray-50">
+                          <FileText className="w-4 h-4 text-red-500" /> {file.name || 'Quotation PDF'}
+                        </span>
+                      ) : (
+                        <img src={cldImage(file.url, 200)} alt="Quotation" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                      )}
+                    </a>
+                  ))}
+                </div>
+              )}
               <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <p className="text-gray-500">Sent</p>
@@ -471,6 +486,9 @@ const BookingDetail = () => {
                 {booking.materials.moneyReceivedAt && (
                   <Detail label="Money received" value={formatDateTime(booking.materials.moneyReceivedAt)} />
                 )}
+                {booking.materials.moneyReceivedAmount > 0 && (
+                  <Detail label="Amount received" value={formatCurrency(booking.materials.moneyReceivedAmount)} />
+                )}
                 {booking.materials.deliveredAt && (
                   <Detail label="Delivered" value={formatDateTime(booking.materials.deliveredAt)} />
                 )}
@@ -484,7 +502,10 @@ const BookingDetail = () => {
           {/* Payment */}
           <Card title="Payment & Commission" icon={DollarSign}>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <Detail label="Total Amount" value={formatCurrency(booking.totalAmount)} />
+              <Detail
+                label={booking.quotation?.sentAt ? 'Total Amount (quotation)' : 'Total Amount (estimate)'}
+                value={formatCurrency(booking.quotation?.sentAt ? booking.quotation.totalCost : booking.totalAmount)}
+              />
               <Detail label="Payment Status" value={booking.paymentStatus} />
               {booking.laborPayment?.confirmedAt && (
                 <>

@@ -51,11 +51,13 @@ import {
   Truck,
   Gift,
   Percent,
+  Paperclip,
 } from 'lucide-react';
 import api from '../services/api';
 import BookingBenefits from '../components/technician/BookingBenefits';
 import JobEvidence from '../components/booking/JobEvidence';
 import { getLivePosition, mapsLink } from '../utils/geo';
+import { cldImage } from '../utils/media';
 
 // Client can (re)pin the job location until the work is marked completed
 const PIN_STATUSES = ['pending', 'quoted', 'agreed', 'materials_delivered', 'materials_confirmed', 'in_progress'];
@@ -607,6 +609,10 @@ const BookingDetails = () => {
       review: '',
       laborConfirmed: null,
       clientLaborAmount: '',
+      quotationFiles: [],
+      // Pre-fill the materials amount with the quoted materials cost (the expert can change or clear it)
+      materialsAmount: action === 'confirmMaterialsMoneyReceived' && booking?.quotation?.materialsCost > 0
+        ? String(booking.quotation.materialsCost) : '',
       needsRating: config.needsRating || false,
       needsQuotation: config.needsQuotation || false,
       needsMaterialSource: config.needsMaterialSource || false,
@@ -641,6 +647,8 @@ const BookingDetails = () => {
       review: '',
       laborConfirmed: null,
       clientLaborAmount: '',
+      quotationFiles: [],
+      materialsAmount: '',
       needsRating: false,
       needsQuotation: false,
       needsMaterialSource: false,
@@ -670,6 +678,8 @@ const BookingDetails = () => {
       review,
       laborConfirmed,
       clientLaborAmount,
+      quotationFiles,
+      materialsAmount,
       needsRating,
       needsQuotation,
       needsMaterialSource,
@@ -717,6 +727,11 @@ const BookingDetails = () => {
       }
     }
 
+    if (materialsAmount !== '' && (isNaN(parseFloat(materialsAmount)) || parseFloat(materialsAmount) < 0)) {
+      setActionModal((prev) => ({ ...prev, error: 'Materials amount must be a positive number, or leave it empty.' }));
+      return;
+    }
+
     // Validate material source
     if (needsMaterialSource && typeof providedByClient !== 'boolean') {
       setActionModal((prev) => ({ ...prev, error: 'Please select who provides materials.' }));
@@ -754,6 +769,13 @@ const BookingDetails = () => {
             laborCost: parseFloat(laborCost),
             materialsCost: parseFloat(materialsCost),
           };
+          // With a quotation photo/PDF attached, send as multipart (axios sets the boundary)
+          if (quotationFiles.length) {
+            const form = new FormData();
+            Object.entries(payload).forEach(([key, value]) => form.append(key, String(value)));
+            quotationFiles.forEach((file) => form.append('attachments', file));
+            payload = form;
+          }
           break;
         case 'acceptQuotation':
           endpoint = `/bookings/${booking._id}/accept-quotation`;
@@ -768,6 +790,7 @@ const BookingDetails = () => {
           break;
         case 'confirmMaterialsMoneyReceived':
           endpoint = `/bookings/${booking._id}/materials-money-received`;
+          if (materialsAmount !== '') payload = { amount: parseFloat(materialsAmount) };
           break;
         case 'confirmMaterialsDelivered':
           endpoint = `/bookings/${booking._id}/materials-delivered`;
@@ -1029,6 +1052,17 @@ const BookingDetails = () => {
   // Build timeline
   const timeline = buildStatusTimeline(booking);
 
+  // Proof of work sits near the top while the expert adds it or the client checks it
+  const evidenceIsCurrentStep = isInProgress || isWorkCompleted;
+  const proofOfWork = (
+    <JobEvidence
+      booking={booking}
+      canEdit={isTechnician && techCanAddEvidence}
+      canComplete={isTechnician && techCanCompleteWork}
+      onUpdated={() => fetchBooking(true)}
+    />
+  );
+
   // ─── RENDER: MAIN ────────────────────────────────────────────
 
   return (
@@ -1086,6 +1120,155 @@ const BookingDetails = () => {
             </div>
           </div>
         )}
+
+        {/* ─── ACTIONS (right under the next step, so they are easy to find on a phone) ─── */}
+        {((isClient && (clientCanCancel || clientCanAcceptReject || clientCanConfirmMaterialsReceived || clientCanConfirmWork || clientCanRate)) ||
+          (isTechnician && (techCanSendQuotation || techCanSetMaterialSource || techCanConfirmMaterialsMoneyReceived ||
+            techCanConfirmMaterialsDelivered || techCanStartWork ||
+            techCanConfirmLaborPayment || techCanCancel))) && (
+          <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-3">⚡ What you can do now</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* Client Actions */}
+              {isClient && clientCanCancel && (
+                <button
+                  onClick={() => openActionModal('cancel')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                >
+                  <Ban className="w-4 h-4" />
+                  Cancel Booking
+                </button>
+              )}
+              {isClient && clientCanAcceptReject && (
+                <>
+                  <button
+                    onClick={() => openActionModal('acceptQuotation')}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                  >
+                    <Check className="w-4 h-4" />
+                    Accept Quotation
+                  </button>
+                  <button
+                    onClick={() => openActionModal('rejectQuotation')}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  >
+                    <X className="w-4 h-4" />
+                    Reject Quotation
+                  </button>
+                </>
+              )}
+              {isClient && clientCanConfirmMaterialsReceived && (
+                <button
+                  onClick={() => openActionModal('confirmMaterialsReceived')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Confirm Materials Received
+                </button>
+              )}
+              {isClient && clientCanConfirmWork && (
+                <>
+                  <button
+                    onClick={() => openActionModal('confirmWork')}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Confirm Work Is Done
+                  </button>
+                  {!workConfirmation.disputedAt && (
+                    <button
+                      onClick={() => openActionModal('disputeWork')}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-medium"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      Report a Problem
+                    </button>
+                  )}
+                </>
+              )}
+              {isClient && clientCanRate && (
+                <button
+                  onClick={() => openActionModal('rate')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
+                >
+                  <Star className="w-4 h-4 fill-current" />
+                  Rate Expert
+                </button>
+              )}
+
+              {/* Technician Actions */}
+              {isTechnician && techCanSendQuotation && (
+                <button
+                  onClick={() => openActionModal('sendQuotation')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  <FileText className="w-4 h-4" />
+                  Send Quotation
+                </button>
+              )}
+              {isTechnician && techCanSetMaterialSource && (
+                <button
+                  onClick={() => openActionModal('setMaterialSource')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                  <Package className="w-4 h-4" />
+                  Set Material Source
+                </button>
+              )}
+              {isTechnician && techCanConfirmMaterialsMoneyReceived && (
+                <button
+                  onClick={() => openActionModal('confirmMaterialsMoneyReceived')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Confirm Materials Money Received
+                </button>
+              )}
+              {isTechnician && techCanConfirmMaterialsDelivered && (
+                <button
+                  onClick={() => openActionModal('confirmMaterialsDelivered')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  <Truck className="w-4 h-4" />
+                  Confirm Materials Delivered
+                </button>
+              )}
+              {isTechnician && techCanStartWork && (
+                <button
+                  onClick={() => openActionModal('start')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                  <Play className="w-4 h-4" />
+                  Start Work
+                </button>
+              )}
+              {isTechnician && techCanConfirmLaborPayment && (
+                <button
+                  onClick={() => openActionModal('confirmLaborPayment')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Confirm Labor Payment
+                </button>
+              )}
+              {isTechnician && techCanCancel && (
+                <button
+                  onClick={() => openActionModal('cancel')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                >
+                  <Ban className="w-4 h-4" />
+                  Cancel Booking
+                </button>
+              )}
+
+              {!isClient && !isTechnician && (
+                <p className="text-sm text-gray-500 text-center">You are not authorized to take actions on this booking.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {evidenceIsCurrentStep && <div className="mb-6">{proofOfWork}</div>}
 
         {/* ─── MAIN CONTENT ───────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1171,13 +1354,8 @@ const BookingDetails = () => {
               )}
             </div>
 
-            {/* Proof of finished work */}
-            <JobEvidence
-              booking={booking}
-              canEdit={isTechnician && techCanAddEvidence}
-              canComplete={isTechnician && techCanCompleteWork}
-              onUpdated={() => fetchBooking(true)}
-            />
+            {/* Proof of finished work (shown at the top while it is being added or checked) */}
+            {!evidenceIsCurrentStep && proofOfWork}
 
             {/* Client's answer to the finished work */}
             {evidenceFlow && (workConfirmation.confirmedAt || workConfirmation.autoConfirmedAt || workConfirmation.disputedAt) && (
@@ -1240,6 +1418,32 @@ const BookingDetails = () => {
                     <p className="font-medium">{formatCurrency(booking.quotation.materialsCost)}</p>
                   </div>
                 </div>
+                {booking.quotation.attachments?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-500 mb-2">Written quotation</p>
+                    <div className="flex flex-wrap gap-3">
+                      {booking.quotation.attachments.map((file) => (
+                        <a
+                          key={file._id || file.url}
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                          title={file.name}
+                        >
+                          {file.fileType === 'pdf' ? (
+                            <span className="flex flex-col items-center justify-center w-24 h-24 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 text-xs gap-1 p-1">
+                              <FileText className="w-6 h-6 text-red-500" />
+                              <span className="truncate w-full text-center">{file.name || 'Quotation PDF'}</span>
+                            </span>
+                          ) : (
+                            <img src={cldImage(file.url, 300)} alt="Quotation" className="w-24 h-24 object-cover rounded-lg border border-gray-200 hover:opacity-90" />
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {booking.quotation.sentAt && (
                   <p className="text-xs text-gray-400 mt-2">Sent on {formatDateTime(booking.quotation.sentAt)}</p>
                 )}
@@ -1272,6 +1476,7 @@ const BookingDetails = () => {
                   {booking.materials.moneyReceivedAt && (
                     <p className="text-sm text-green-600">
                       Money received: {formatDateTime(booking.materials.moneyReceivedAt)}
+                      {booking.materials.moneyReceivedAmount > 0 && ` (${formatCurrency(booking.materials.moneyReceivedAmount)})`}
                     </p>
                   )}
                   {booking.materials.deliveredAt && (
@@ -1300,7 +1505,19 @@ const BookingDetails = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Total Amount</p>
-                  <p className="text-xl font-bold text-green-600">{formatCurrency(booking.totalAmount)}</p>
+                  {booking.quotation?.sentAt ? (
+                    <>
+                      <p className="text-xl font-bold text-green-600">{formatCurrency(booking.quotation.totalCost)}</p>
+                      <p className="text-xs text-gray-400">From the expert's quotation</p>
+                    </>
+                  ) : booking.totalAmount > 0 ? (
+                    <>
+                      <p className="text-xl font-bold text-green-600">{formatCurrency(booking.totalAmount)}</p>
+                      <p className="text-xs text-gray-400">Estimate until the expert sends a quotation</p>
+                    </>
+                  ) : (
+                    <p className="text-base font-medium text-gray-500">Awaiting quotation</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Payment Method</p>
@@ -1437,153 +1654,6 @@ const BookingDetails = () => {
 
             {/* Why use bookings (technician) */}
             {isTechnician && !isCompleted && !isCancelled && <BookingBenefits compact />}
-
-            {/* Actions Card */}
-            {((isClient && (clientCanCancel || clientCanAcceptReject || clientCanConfirmMaterialsReceived || clientCanConfirmWork || clientCanRate)) ||
-              (isTechnician && (techCanSendQuotation || techCanSetMaterialSource || techCanConfirmMaterialsMoneyReceived ||
-                techCanConfirmMaterialsDelivered || techCanStartWork ||
-                techCanConfirmLaborPayment || techCanCancel))) && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">⚡ Actions</h2>
-                <div className="space-y-2">
-                  {/* Client Actions */}
-                  {isClient && clientCanCancel && (
-                    <button
-                      onClick={() => openActionModal('cancel')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                    >
-                      <Ban className="w-4 h-4" />
-                      Cancel Booking
-                    </button>
-                  )}
-                  {isClient && clientCanAcceptReject && (
-                    <>
-                      <button
-                        onClick={() => openActionModal('acceptQuotation')}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                      >
-                        <Check className="w-4 h-4" />
-                        Accept Quotation
-                      </button>
-                      <button
-                        onClick={() => openActionModal('rejectQuotation')}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                      >
-                        <X className="w-4 h-4" />
-                        Reject Quotation
-                      </button>
-                    </>
-                  )}
-                  {isClient && clientCanConfirmMaterialsReceived && (
-                    <button
-                      onClick={() => openActionModal('confirmMaterialsReceived')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Confirm Materials Received
-                    </button>
-                  )}
-                  {isClient && clientCanConfirmWork && (
-                    <>
-                      <button
-                        onClick={() => openActionModal('confirmWork')}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Confirm Work Is Done
-                      </button>
-                      {!workConfirmation.disputedAt && (
-                        <button
-                          onClick={() => openActionModal('disputeWork')}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-medium"
-                        >
-                          <AlertCircle className="w-4 h-4" />
-                          Report a Problem
-                        </button>
-                      )}
-                    </>
-                  )}
-                  {isClient && clientCanRate && (
-                    <button
-                      onClick={() => openActionModal('rate')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
-                    >
-                      <Star className="w-4 h-4 fill-current" />
-                      Rate Expert
-                    </button>
-                  )}
-
-                  {/* Technician Actions */}
-                  {isTechnician && techCanSendQuotation && (
-                    <button
-                      onClick={() => openActionModal('sendQuotation')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    >
-                      <FileText className="w-4 h-4" />
-                      Send Quotation
-                    </button>
-                  )}
-                  {isTechnician && techCanSetMaterialSource && (
-                    <button
-                      onClick={() => openActionModal('setMaterialSource')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                    >
-                      <Package className="w-4 h-4" />
-                      Set Material Source
-                    </button>
-                  )}
-                  {isTechnician && techCanConfirmMaterialsMoneyReceived && (
-                    <button
-                      onClick={() => openActionModal('confirmMaterialsMoneyReceived')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      Confirm Materials Money Received
-                    </button>
-                  )}
-                  {isTechnician && techCanConfirmMaterialsDelivered && (
-                    <button
-                      onClick={() => openActionModal('confirmMaterialsDelivered')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                    >
-                      <Truck className="w-4 h-4" />
-                      Confirm Materials Delivered
-                    </button>
-                  )}
-                  {isTechnician && techCanStartWork && (
-                    <button
-                      onClick={() => openActionModal('start')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                    >
-                      <Play className="w-4 h-4" />
-                      Start Work
-                    </button>
-                  )}
-                  {isTechnician && techCanConfirmLaborPayment && (
-                    <button
-                      onClick={() => openActionModal('confirmLaborPayment')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      Confirm Labor Payment
-                    </button>
-                  )}
-                  {isTechnician && techCanCancel && (
-                    <button
-                      onClick={() => openActionModal('cancel')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                    >
-                      <Ban className="w-4 h-4" />
-                      Cancel Booking
-                    </button>
-                  )}
-
-                  {!isClient && !isTechnician && (
-                    <p className="text-sm text-gray-500 text-center">You are not authorized to take actions on this booking.</p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -1675,7 +1745,73 @@ const BookingDetails = () => {
                       required
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Quotation photo or PDF (optional)
+                    </label>
+                    <label className={`flex items-center justify-center gap-2 w-full p-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 cursor-pointer hover:bg-gray-50 ${
+                      actionModal.loading || actionModal.quotationFiles.length >= 3 ? 'opacity-50 pointer-events-none' : ''
+                    }`}>
+                      <Paperclip className="w-4 h-4" />
+                      Attach your written quotation
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const picked = [...(e.target.files || [])];
+                          e.target.value = '';
+                          const tooBig = picked.find((f) => f.size > 10 * 1024 * 1024);
+                          setActionModal((prev) => ({
+                            ...prev,
+                            error: tooBig ? `${tooBig.name} is larger than 10 MB.` : '',
+                            quotationFiles: tooBig ? prev.quotationFiles : [...prev.quotationFiles, ...picked].slice(0, 3),
+                          }));
+                        }}
+                      />
+                    </label>
+                    {actionModal.quotationFiles.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {actionModal.quotationFiles.map((file, i) => (
+                          <li key={`${file.name}-${i}`} className="flex items-center justify-between gap-2 text-xs text-gray-600 bg-gray-50 rounded px-2 py-1">
+                            <span className="truncate">{file.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setActionModal((prev) => ({ ...prev, quotationFiles: prev.quotationFiles.filter((_, j) => j !== i) }))}
+                              className="text-gray-400 hover:text-red-600"
+                              aria-label={`Remove ${file.name}`}
+                              disabled={actionModal.loading}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">Up to 3 files (JPG, PNG, WebP or PDF), 10 MB each. The client sees them with the quotation.</p>
+                  </div>
                 </>
+              )}
+
+              {/* How much the client gave for materials (optional) */}
+              {actionModal.action === 'confirmMaterialsMoneyReceived' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount received for materials (KES, optional)
+                  </label>
+                  <input
+                    type="number"
+                    value={actionModal.materialsAmount}
+                    onChange={(e) => setActionModal((prev) => ({ ...prev, materialsAmount: e.target.value }))}
+                    placeholder="e.g. 2000"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    disabled={actionModal.loading}
+                    min="0"
+                    step="1"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Leave empty if you'd rather not say.</p>
+                </div>
               )}
 
               {/* Material source */}

@@ -829,7 +829,7 @@ const MyBookings = () => {
                         </div>
                         <div>
                           <p className="text-gray-500 font-medium">Total Amount:</p>
-                          <p className="text-gray-700 font-semibold">{formatCurrency(booking.totalAmount)}</p>
+                          <p className="text-gray-700 font-semibold">{formatCurrency(booking.quotation?.sentAt ? booking.quotation.totalCost : booking.totalAmount)}</p>
                           <p className="text-xs text-gray-400">
                             {booking.hourlyRate > 0
                               ? `${formatCurrency(booking.hourlyRate)}/hour × ${booking.estimatedHours} hours`

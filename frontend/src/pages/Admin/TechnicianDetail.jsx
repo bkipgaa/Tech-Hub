@@ -211,7 +211,7 @@ const TechnicianDetail = () => {
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-xs text-gray-700">{formatCurrency(b.totalAmount)}</p>
+                      <p className="text-xs text-gray-700">{formatCurrency(b.quotation?.sentAt ? b.quotation.totalCost : b.totalAmount)}</p>
                       <p className="text-[10px] text-gray-400 capitalize">{b.status}</p>
                     </div>
                   </li>

@@ -27,6 +27,7 @@ const {
 } = require('../utils/commissionDue');
 const jobEvidence = require('../utils/jobEvidence');
 const { checkNewRating, applyRatingToTechnician } = require('../utils/ratingChecks');
+const { uploadQuotationToCloudinary } = require('../config/cloudinary');
 
 // Technician business name plus the person's name (no contact details)
 const TECHNICIAN_WITH_NAME = {
@@ -523,16 +524,20 @@ exports.cancelBooking = async (req, res) => {
 exports.sendQuotation = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const { totalCost, laborCost, materialsCost } = req.body;
+    // JSON or multipart (when a quotation photo/PDF is attached), so read numbers explicitly
+    const toAmount = (v) => (v === undefined || v === null || v === '' ? NaN : Number(v));
+    const totalCost = toAmount(req.body.totalCost);
+    const laborCost = toAmount(req.body.laborCost);
+    const materialsCost = toAmount(req.body.materialsCost);
     const userId = req.user.userId || req.user.id || req.user._id;
 
-    if (!totalCost || totalCost <= 0) {
+    if (!Number.isFinite(totalCost) || totalCost <= 0) {
       return handleControllerError(res, new Error('Total cost required'), 'Total cost must be > 0', 400, 'sendQuotation');
     }
-    if (laborCost === undefined || laborCost < 0) {
+    if (!Number.isFinite(laborCost) || laborCost < 0) {
       return handleControllerError(res, new Error('Labor cost required'), 'Labor cost is required (can be 0)', 400, 'sendQuotation');
     }
-    if (materialsCost === undefined || materialsCost < 0) {
+    if (!Number.isFinite(materialsCost) || materialsCost < 0) {
       return handleControllerError(res, new Error('Materials cost required'), 'Materials cost is required (can be 0)', 400, 'sendQuotation');
     }
 
@@ -548,12 +553,28 @@ exports.sendQuotation = async (req, res) => {
       return handleControllerError(res, new Error('Invalid status'), 'Booking already progressed', 400, 'sendQuotation');
     }
 
+    // Optional photo/PDF of the written quotation
+    const attachments = [];
+    for (const file of req.files || []) {
+      const result = await uploadQuotationToCloudinary(file.buffer, file.mimetype);
+      attachments.push({
+        url: result.secure_url,
+        publicId: result.public_id,
+        fileType: file.mimetype === 'application/pdf' ? 'pdf' : 'image',
+        name: String(file.originalname || '').slice(0, 120),
+        uploadedAt: new Date(),
+      });
+    }
+
     booking.quotation = {
       totalCost,
       laborCost,
       materialsCost,
       sentAt: new Date(),
+      attachments,
     };
+    // The quoted total is the booking's amount from now on (lists, exports, admin)
+    booking.totalAmount = totalCost;
     booking.status = 'quoted';
     await booking.save();
 
@@ -701,6 +722,16 @@ exports.confirmMaterialsMoneyReceived = async (req, res) => {
     }
     if (booking.materials.moneyReceivedAt) {
       return handleControllerError(res, new Error('Already confirmed'), 'Money already received', 400, 'confirmMaterialsMoneyReceived');
+    }
+
+    // Optional: how much the client gave for materials
+    const { amount } = req.body || {};
+    if (amount !== undefined && amount !== null && amount !== '') {
+      const received = Number(amount);
+      if (!Number.isFinite(received) || received < 0) {
+        return handleControllerError(res, new Error('Invalid amount'), 'Materials amount must be a positive number.', 400, 'confirmMaterialsMoneyReceived');
+      }
+      booking.materials.moneyReceivedAmount = received;
     }
 
     booking.materials.moneyReceivedAt = new Date();

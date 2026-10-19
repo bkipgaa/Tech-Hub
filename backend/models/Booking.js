@@ -157,6 +157,14 @@ const bookingSchema = new mongoose.Schema({
     acceptedAt: Date,
     rejectedAt: Date,
     rejectionReason: String,
+    // Optional photo or PDF of the expert's written quotation
+    attachments: [{
+      url: { type: String, required: true },
+      publicId: String,
+      fileType: { type: String, enum: ['image', 'pdf'] },
+      name: String,
+      uploadedAt: Date,
+    }],
   },
 
   // ── Materials ──────────────────────────────────────────────────
@@ -164,6 +172,7 @@ const bookingSchema = new mongoose.Schema({
     providedByClient: { type: Boolean, default: false },
     sourceSetAt: Date,            // technician chose who provides materials
     moneyReceivedAt: Date,        // technician acknowledges client paid for materials
+    moneyReceivedAmount: { type: Number, min: 0 },   // optional: how much the client gave
     deliveredAt: Date,            // technician confirms materials delivered
     confirmedByClientAt: Date,    // client confirms materials received
     notes: String,
