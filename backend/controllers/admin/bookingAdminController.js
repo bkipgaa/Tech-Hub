@@ -10,6 +10,8 @@
  *   PATCH /api/admin/bookings/:id/cancel     → admin force-cancel
  *   PATCH /api/admin/bookings/:id/notes      → update admin notes
  *   PATCH /api/admin/bookings/:id/status     → force status change (override)
+ *   PATCH /api/admin/bookings/:id/evidence-review → approve / reject proof of work
+ *   PATCH /api/admin/bookings/:id/rating-review   → approve / reject a held rating
  *   GET   /api/admin/bookings/export         → CSV export
  * 
  * @version 1.0.0
@@ -18,6 +20,9 @@
 const Booking = require('../../models/Booking');
 const Technician = require('../../models/Technician');
 const User = require('../../models/User');
+const EvidenceHash = require('../../models/EvidenceHash');
+const jobEvidence = require('../../utils/jobEvidence');
+const { applyRatingToTechnician } = require('../../utils/ratingChecks');
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -216,6 +221,18 @@ exports.getBooking = async (req, res) => {
       return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Booking not found.' });
     }
 
+    // For each evidence photo, the other bookings with the same or a near-identical photo
+    for (const photo of booking.completionEvidence?.photos || []) {
+      if (!jobEvidence.isPhash(photo.phash)) continue;
+      const candidates = await EvidenceHash.find({
+        phashBands: { $in: jobEvidence.phashBands(photo.phash) },
+        bookingId: { $ne: booking._id },
+      }).select('phash bookingId technicianId url createdAt').limit(500).lean();
+      photo.similarElsewhere = candidates
+        .filter((c) => jobEvidence.isPhash(c.phash) && jobEvidence.hammingDistance(c.phash, photo.phash) <= jobEvidence.NEAR_DUPLICATE_BITS)
+        .map(({ bookingId, technicianId, url, createdAt }) => ({ bookingId, technicianId, url, createdAt }));
+    }
+
     res.json({ success: true, data: booking });
   } catch (error) {
     handleError(res, error, 'Failed to fetch booking.');
@@ -296,6 +313,77 @@ exports.updateAdminNotes = async (req, res) => {
     });
   } catch (error) {
     handleError(res, error, 'Failed to update notes.');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// REVIEW JOB EVIDENCE (approve / reject the proof of work)
+// ─────────────────────────────────────────────────────────────
+exports.reviewEvidence = async (req, res) => {
+  try {
+    const { decision, note } = req.body;
+    if (!['admin_ok', 'admin_rejected'].includes(decision)) {
+      return res.status(400).json({ success: false, code: 'INVALID_DECISION', message: 'decision must be admin_ok or admin_rejected.' });
+    }
+    if (decision === 'admin_rejected' && !String(note || '').trim()) {
+      return res.status(400).json({ success: false, code: 'NOTE_REQUIRED', message: 'Please give a reason for rejecting.' });
+    }
+
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Booking not found.' });
+    }
+    if (!booking.completionEvidence?.submittedAt) {
+      return res.status(400).json({ success: false, code: 'NO_EVIDENCE', message: 'This booking has no submitted evidence.' });
+    }
+    // Once rated, the rating already counts; rejecting then would need the rating removed too
+    if (decision === 'admin_rejected' && booking.status === 'completed') {
+      return res.status(400).json({ success: false, code: 'ALREADY_RATED', message: 'This booking is already rated; it can no longer be rejected here.' });
+    }
+
+    booking.completionEvidence.reviewStatus = decision;
+    booking.completionEvidence.reviewedAt = new Date();
+    booking.completionEvidence.reviewNote = String(note || '').trim().slice(0, 500);
+    await booking.save();
+
+    res.json({ success: true, message: decision === 'admin_ok' ? 'Evidence approved.' : 'Evidence rejected.', data: booking.completionEvidence });
+  } catch (error) {
+    handleError(res, error, 'Failed to save the evidence review.');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// REVIEW A HELD RATING (over the daily limit)
+// ─────────────────────────────────────────────────────────────
+exports.reviewRating = async (req, res) => {
+  try {
+    const { decision, note } = req.body;
+    if (!['approved', 'rejected'].includes(decision)) {
+      return res.status(400).json({ success: false, code: 'INVALID_DECISION', message: 'decision must be approved or rejected.' });
+    }
+
+    // Claim it in one step so a double click can't count it twice
+    const booking = await Booking.findOneAndUpdate(
+      { _id: req.params.id, 'ratingCheck.status': 'held' },
+      { $set: {
+        'ratingCheck.status': decision,
+        'ratingCheck.reviewedAt': new Date(),
+        'ratingCheck.reviewNote': String(note || '').trim().slice(0, 500),
+      } },
+      { returnDocument: 'after' }
+    );
+    if (!booking) {
+      return res.status(400).json({ success: false, code: 'NOT_HELD', message: 'This booking has no rating waiting for review.' });
+    }
+
+    if (decision === 'approved') {
+      const technician = await Technician.findById(booking.technicianId);
+      if (technician) await applyRatingToTechnician(technician, booking);
+    }
+
+    res.json({ success: true, message: decision === 'approved' ? 'Rating approved and counted.' : 'Rating rejected; it will not count.', data: booking.ratingCheck });
+  } catch (error) {
+    handleError(res, error, 'Failed to save the rating review.');
   }
 };
 

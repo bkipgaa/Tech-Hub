@@ -100,7 +100,35 @@ const uploadProfileToCloudinary = (buffer) =>
     transformation: [{ width: 500, height: 500, crop: 'limit' }],
   });
 
+// Job-evidence photos: also ask Cloudinary for a perceptual hash (result.phash)
+// so a photo reused on another booking can be spotted even after re-encoding.
+const uploadEvidenceToCloudinary = (buffer) =>
+  new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'bookings/evidence',
+        resource_type: 'image',
+        phash: true,
+        transformation: [{ width: 1920, height: 1920, crop: 'limit', quality: 'auto' }],
+      },
+      (error, result) => (error ? reject(error) : resolve(result))
+    );
+    stream.end(buffer);
+  });
+
+// Evidence photos only (JPEG/PNG/WebP), 10 MB
+const evidenceUpload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) cb(null, true);
+    else cb(new Error(`File type not allowed: ${file.mimetype}`));
+  },
+});
+
 module.exports = {
+  evidenceUpload,
+  uploadEvidenceToCloudinary,
   cloudinary,
   upload,
   uploadBufferToCloudinary,

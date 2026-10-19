@@ -326,17 +326,17 @@ exports.clientQuotationReceived = (data) => ({
 });
 
 exports.clientWorkCompleted = (data) => ({
-  subject: `🎉 Your job is complete — payment needed`,
+  subject: `🎉 Your job is complete — please check and confirm`,
   html: layout(
     'Job completed!',
     `
       <p>Hi <strong>${data.clientName}</strong>,</p>
-      <p>Great news — <strong>${data.technicianName}</strong> has marked your job as complete.</p>
-      <p>Please pay the labor amount (KES ${data.laborAmount}) directly to the technician and confirm payment in the app.</p>
-      <p>After confirming, you'll be able to rate the technician and complete the booking.</p>
+      <p><strong>${data.technicianName}</strong> has marked your job as complete and added proof of the finished work.</p>
+      <p>Please open the booking, check the photos (or link), and confirm the work is done — or tell us if something is wrong.</p>
+      <p>Once you confirm, pay the expert for the labor. You'll then be able to rate them and complete the booking.</p>
     `,
     `${BRAND.url}/bookings/${data.bookingId}`,
-    'View Booking'
+    'Check & Confirm'
   ),
 });
 

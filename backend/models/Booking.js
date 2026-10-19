@@ -1,5 +1,49 @@
 const mongoose = require('mongoose');
 
+const EVIDENCE_FLAGS = [
+  'no_job_pin',            // client never pinned the job location
+  'no_gps',
+  'low_accuracy',
+  'far_from_job',
+  'stale_capture',         // photo sent long after it was taken, or clocks disagree
+  'near_duplicate_photo',  // looks like a photo used on another booking
+  'exif_old',              // camera says the photo was taken earlier (fallback capture only)
+  'exif_far',              // camera GPS far from the job (fallback capture only)
+  'link_unreachable',
+  'too_fast',              // work marked done very soon after starting
+  'before_booking_date',
+  'client_disputed',
+];
+
+const evidencePhotoSchema = new mongoose.Schema({
+  url: { type: String, required: true },
+  publicId: String,
+  width: Number,
+  height: Number,
+  sha256: String,
+  phash: String,                // Cloudinary perceptual hash (hex)
+  captureMethod: { type: String, enum: ['camera', 'capture_input'], default: 'camera' },
+  capturedAt: Date,             // device clock
+  receivedAt: Date,             // server clock
+  gps: {
+    lat: Number,
+    lng: Number,
+    accuracy: Number,
+    at: Date,
+  },
+  distanceFromJobM: Number,
+  exif: {
+    make: String,
+    model: String,
+    takenAt: Date,
+    lat: Number,
+    lng: Number,
+  },
+  flags: [{ type: String, enum: EVIDENCE_FLAGS }],
+  ip: String,
+  userAgent: String,
+});
+
 const bookingSchema = new mongoose.Schema({
   // ── References ──
   clientId: {
@@ -29,7 +73,17 @@ const bookingSchema = new mongoose.Schema({
   duration: { type: Number, default: 1 },
 
   // ── Location ──
-  location: { address: { type: String, required: true } },
+  location: {
+    address: { type: String, required: true },
+    // Pinned by the client from their device ("use my location"); the expert's
+    // evidence photo GPS is checked against it
+    coordinates: {
+      lat: { type: Number, min: -90, max: 90 },
+      lng: { type: Number, min: -180, max: 180 },
+    },
+    accuracy: Number,             // metres, as reported by the client's device
+    pinnedAt: Date,
+  },
 
   // ── Status & Payment ──
   status: {
@@ -80,6 +134,19 @@ const bookingSchema = new mongoose.Schema({
   clientReview: { type: String, maxlength: 500 },
   technicianRating: { type: Number, min: 1, max: 5 },
   technicianReview: { type: String, maxlength: 500 },
+
+  // ── Rating checks (set when the client rates) ──
+  // An expert gets at most a few counted ratings a day; extra ones are held for
+  // the admin. Ratings close together are flagged.
+  ratingCheck: {
+    ratedAt: Date,
+    status: { type: String, enum: ['counted', 'held', 'approved', 'rejected'] },
+    flags: [{ type: String, enum: ['daily_limit', 'short_gap'] }],
+    minutesSincePreviousRating: Number,   // this expert's previous rating, any client
+    ratingsInPrevious24h: Number,         // counted ratings in the 24 hours before this one
+    reviewedAt: Date,
+    reviewNote: { type: String, maxlength: 500 },
+  },
 
   // ── Quotation ──────────────────────────────────────────────────
   quotation: {
@@ -147,6 +214,39 @@ const bookingSchema = new mongoose.Schema({
     mpesaFailedAt: Date,
   },
 
+  // ── Proof of finished work (technician, before work_completed) ──
+  // Photos come from the device camera with live GPS; a live link is accepted for
+  // digital jobs. Checks only raise flags for the admin, apart from exact photo reuse.
+  completionEvidence: {
+    photos: [evidencePhotoSchema],
+    link: {
+      url: String,
+      submittedAt: Date,
+      checkedAt: Date,
+      reachable: Boolean,
+      httpStatus: Number,
+      finalUrl: String,
+      error: String,
+    },
+    submittedAt: Date,            // set when the technician marks the work completed
+    flags: [{ type: String, enum: EVIDENCE_FLAGS }],
+    reviewStatus: {
+      type: String,
+      enum: ['none', 'auto_ok', 'flagged', 'admin_ok', 'admin_rejected'],
+      default: 'none',
+    },
+    reviewedAt: Date,
+    reviewNote: { type: String, maxlength: 500 },
+  },
+
+  // ── Client confirms the work is done (or disputes it) ──
+  clientWorkConfirmation: {
+    confirmedAt: Date,
+    autoConfirmedAt: Date,        // client didn't answer within the waiting period
+    disputedAt: Date,
+    disputeReason: { type: String, maxlength: 500 },
+  },
+
   // ── Payment confirmation (for simplified flow, kept for compatibility) ──
   paymentConfirmed: { type: Boolean, default: false },
   paymentConfirmedAt: Date,
@@ -169,6 +269,7 @@ bookingSchema.index({ clientId: 1, createdAt: -1 });
 bookingSchema.index({ technicianId: 1, createdAt: -1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ preferredDate: 1 });
+bookingSchema.index({ technicianId: 1, completedAt: -1 });   // recent ratings per expert
 
 // ─── Virtuals ──────────────────────────────────────────────────
 bookingSchema.virtual('isCancellable').get(function() {
@@ -250,3 +351,4 @@ bookingSchema.pre('save', async function() {
 });
 
 module.exports = mongoose.model('Booking', bookingSchema);
+module.exports.EVIDENCE_FLAGS = EVIDENCE_FLAGS;

@@ -25,6 +25,8 @@ const {
   dueDateFor,
   hasOverdueCommission,
 } = require('../utils/commissionDue');
+const jobEvidence = require('../utils/jobEvidence');
+const { checkNewRating, applyRatingToTechnician } = require('../utils/ratingChecks');
 
 // Technician business name plus the person's name (no contact details)
 const TECHNICIAN_WITH_NAME = {
@@ -238,6 +240,17 @@ exports.createBooking = async (req, res) => {
     const rate = (hourlyRate && hourlyRate > 0) ? hourlyRate : 0;
     const totalAmount = rate * estimatedHours;
 
+    // Optional pin from the client's device; evidence photo GPS is checked against it
+    const lat = Number(location.coordinates?.lat);
+    const lng = Number(location.coordinates?.lng);
+    const accuracy = Number(location.accuracy);
+    const bookingLocation = { address: String(location.address).trim() };
+    if (jobEvidence.isValidLatLng(lat, lng)) {
+      bookingLocation.coordinates = { lat, lng };
+      if (Number.isFinite(accuracy)) bookingLocation.accuracy = Math.round(accuracy);
+      bookingLocation.pinnedAt = new Date();
+    }
+
     // Create booking
     const booking = new Booking({
       clientId,
@@ -251,7 +264,7 @@ exports.createBooking = async (req, res) => {
       preferredDate: selectedDate,
       preferredTime: preferredTime.trim(),
       duration: duration || estimatedHours,
-      location,
+      location: bookingLocation,
       clientNotes,
       paymentMethod: paymentMethod || 'cash',
       status: 'pending',
@@ -383,7 +396,7 @@ exports.getMyBookings = async (req, res) => {
 
     res.json({
       success: true,
-      data: bookings,
+      data: bookings.map(jobEvidence.participantView),
       pagination: {
         page: parseInt(page),
         limit: limitNum,
@@ -439,7 +452,19 @@ exports.getBooking = async (req, res) => {
     }
 
     // viewerRole tells the page which actions to show (a technician can be the client here)
-    res.json({ success: true, data: { ...booking, viewerRole } });
+    res.json({
+      success: true,
+      data: {
+        ...jobEvidence.participantView(booking),
+        viewerRole,
+        // What proof this job accepts (the page shows the link option only for digital jobs)
+        evidenceRules: {
+          linkAllowed: jobEvidence.isDigitalCategory(booking.serviceCategory),
+          maxPhotos: jobEvidence.MAX_PHOTOS,
+          autoConfirmDays: jobEvidence.AUTO_CONFIRM_DAYS,
+        },
+      },
+    });
   } catch (error) {
     handleControllerError(res, error, 'Failed to fetch booking.', 500, 'getBooking');
   }
@@ -830,14 +855,56 @@ exports.completeWork = async (req, res) => {
       return handleControllerError(res, new Error('Already completed'), 'Work already marked completed', 400, 'completeWork');
     }
 
-    booking.workCompletedAt = new Date();
+    // Proof first: a camera photo, or a live link for digital jobs
+    const evidence = booking.completionEvidence;
+    const hasPhoto = evidence?.photos?.length > 0;
+    const hasLink = !!evidence?.link?.url && jobEvidence.isDigitalCategory(booking.serviceCategory);
+    if (!hasPhoto && !hasLink) {
+      return handleControllerError(
+        res,
+        new Error('Evidence required'),
+        jobEvidence.isDigitalCategory(booking.serviceCategory)
+          ? 'Add a photo of the finished work or a live link before marking it completed.'
+          : 'Take at least one photo of the finished work before marking it completed.',
+        400,
+        'completeWork'
+      );
+    }
+
+    const now = new Date();
+    const startOfBookingDay = new Date(booking.preferredDate);
+    startOfBookingDay.setHours(0, 0, 0, 0);
+    jobEvidence.addBookingFlag(booking, 'too_fast',
+      !!booking.startedAt && now - booking.startedAt < jobEvidence.MIN_WORK_MINUTES * 60 * 1000);
+    jobEvidence.addBookingFlag(booking, 'before_booking_date', now < startOfBookingDay);
+    jobEvidence.addBookingFlag(booking, 'no_job_pin', hasPhoto && !jobEvidence.jobPin(booking));
+    evidence.submittedAt = now;
+    jobEvidence.recomputeEvidenceFlags(booking);
+    jobEvidence.refreshReviewStatus(booking);
+
+    booking.workCompletedAt = now;
     booking.status = 'work_completed';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName');
+    await booking.populate('clientId', 'firstName lastName email');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
-    res.json({ success: true, message: 'Work marked as completed', data: booking });
+    // Ask the client to check the proof and confirm (non-blocking)
+    try {
+      if (booking.clientId?.email) {
+        const techUser = booking.technicianId?.userId;
+        await notify.clientWorkCompleted({
+          clientEmail: booking.clientId.email,
+          clientName: `${booking.clientId.firstName || ''} ${booking.clientId.lastName || ''}`.trim() || 'there',
+          technicianName: `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || 'Your expert',
+          bookingId: booking._id,
+        });
+      }
+    } catch (notifyErr) {
+      console.error('Work completed notification failed:', notifyErr.message);
+    }
+
+    res.json({ success: true, message: 'Work marked as completed', data: jobEvidence.participantView(booking) });
   } catch (error) {
     handleControllerError(res, error, 'Failed to complete work', 500, 'completeWork');
   }
@@ -872,6 +939,33 @@ exports.confirmLaborPayment = async (req, res) => {
       return handleControllerError(res, new Error('Already confirmed'), 'Labor payment already confirmed', 400, 'confirmLaborPayment');
     }
 
+    // Bookings finished with evidence need the client's OK first (or an admin's
+    // after a dispute). If the client simply never answers, the work counts as
+    // confirmed after a few days. Older bookings finished before evidence existed skip this.
+    const evidence = booking.completionEvidence;
+    const confirmation = booking.clientWorkConfirmation;
+    if (evidence?.submittedAt) {
+      if (evidence.reviewStatus === 'admin_rejected') {
+        return handleControllerError(res, new Error('Evidence rejected'), 'Our team rejected the proof for this job. Please contact support.', 400, 'confirmLaborPayment');
+      }
+      if (!confirmation?.confirmedAt && evidence.reviewStatus !== 'admin_ok') {
+        const waitedMs = Date.now() - new Date(booking.workCompletedAt || evidence.submittedAt).getTime();
+        const clientSilent = !confirmation?.disputedAt && waitedMs >= jobEvidence.AUTO_CONFIRM_DAYS * DAY_MS;
+        if (!clientSilent) {
+          return handleControllerError(
+            res,
+            new Error('Client confirmation required'),
+            confirmation?.disputedAt
+              ? 'The client disputed the work. Add more proof or contact support before recording payment.'
+              : `Waiting for the client to confirm the work. If they don't answer within ${jobEvidence.AUTO_CONFIRM_DAYS} days you can continue.`,
+            400,
+            'confirmLaborPayment'
+          );
+        }
+        booking.clientWorkConfirmation.autoConfirmedAt = new Date();
+      }
+    }
+
     // Commission is based on what the technician actually received
     const reportedLabor = Number(amount);
     const quotedLabor = booking.quotation?.laborCost || 0;
@@ -904,7 +998,7 @@ exports.confirmLaborPayment = async (req, res) => {
     res.json({
       success: true,
       message: `Labor payment confirmed. Commission of 5% (KES ${commissionAmount.toFixed(2)}) recorded.`,
-      data: booking,
+      data: jobEvidence.participantView(booking),
     });
   } catch (error) {
     handleControllerError(res, error, 'Failed to confirm labor payment', 500, 'confirmLaborPayment');
@@ -957,42 +1051,57 @@ exports.rateTechnician = async (req, res) => {
       return handleControllerError(res, new Error('Invalid confirmation'), 'laborAmountConfirmed must be true or false.', 400, 'rateTechnician');
     }
 
+    if (booking.completionEvidence?.reviewStatus === 'admin_rejected') {
+      return handleControllerError(res, new Error('Evidence rejected'), 'This job cannot be rated because its proof of work was rejected.', 400, 'rateTechnician');
+    }
+
     const technician = await Technician.findById(booking.technicianId);
     if (!technician) {
       return handleControllerError(res, new Error('Technician not found'), 'Technician not found.', 404, 'rateTechnician');
     }
 
-    await technician.updateRating(rating);
+    // Timing checks: too many ratings in a day are held for the admin; close
+    // together is flagged. Both are stored with the rating's timestamp.
+    const ratedAt = new Date();
+    const ratingCheck = await checkNewRating(booking.technicianId, booking._id, ratedAt);
 
-    booking.clientRating = rating;
-    if (review) booking.clientReview = review.trim();
-    booking.status = 'completed';
-    booking.completedAt = new Date();
+    // Claim the booking in one conditional update so two requests at once can't both count
+    const update = {
+      clientRating: rating,
+      status: 'completed',
+      completedAt: ratedAt,
+      ratingCheck,
+    };
+    if (review) update.clientReview = review.trim();
     if (laborAmountConfirmed === true) {
-      booking.commission.clientConfirmedLabor = true;
+      update['commission.clientConfirmedLabor'] = true;
     } else if (clientCorrection !== null) {
-      booking.commission.clientConfirmedLabor = false;
-      booking.commission.clientReportedLabor = clientCorrection;
+      update['commission.clientConfirmedLabor'] = false;
+      update['commission.clientReportedLabor'] = clientCorrection;
       if (clientCorrection !== booking.laborPayment?.amount) {
-        booking.commission.flagged = true;
-        if (!booking.commission.flagReasons.includes('client_disputes_amount')) {
-          booking.commission.flagReasons.push('client_disputes_amount');
-        }
+        update['commission.flagged'] = true;
+        update['commission.flagReasons'] = [...new Set([...(booking.commission.flagReasons || []), 'client_disputes_amount'])];
       }
     }
-    await booking.save();
+    const claimed = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: 'labor_paid', clientRating: null },
+      { $set: update },
+      { returnDocument: 'after', runValidators: true }
+    );
+    if (!claimed) {
+      return handleControllerError(res, new Error('Already rated'), 'You have already rated this booking.', 400, 'rateTechnician');
+    }
 
-    technician.reviews.push({
-      clientId: clientId,
-      bookingId: booking._id,
-      rating: rating,
-      comment: review || '',
-      createdAt: new Date(),
-    });
-    technician.statistics = technician.statistics || {};
-    technician.statistics.completedJobs = (technician.statistics.completedJobs || 0) + 1;
-    technician.statistics.totalJobs = (technician.statistics.totalJobs || 0) + 1;
-    await technician.save();
+    const held = ratingCheck.status === 'held';
+    if (held) {
+      return res.json({
+        success: true,
+        message: 'Thanks! Your rating is saved and will appear on the expert\'s profile after a quick check by our team.',
+        data: { bookingId: booking._id, rating, review: claimed.clientReview, held: true },
+      });
+    }
+
+    await applyRatingToTechnician(technician, claimed);
 
     // ─── Send notification email to technician (non-blocking) ───
     try {
@@ -1019,7 +1128,7 @@ exports.rateTechnician = async (req, res) => {
       data: {
         bookingId: booking._id,
         rating,
-        review: booking.clientReview,
+        review: claimed.clientReview,
         technicianRating: {
           average: technician.rating.average,
           count: technician.rating.count,

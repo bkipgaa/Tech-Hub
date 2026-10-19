@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { cldImage, cldVideoPoster, AVATAR_WIDTH, CARD_WIDTH, VIEWER_WIDTH } from '../utils/media';
+import { getLivePosition } from '../utils/geo';
 
 /**
  * TechnicianProfile Component
@@ -75,6 +76,8 @@ const TechnicianProfile = () => {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState('');
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [pinning, setPinning] = useState(false);
+  const [pinError, setPinError] = useState('');
 
   // ─── RATING STATE ───────────────────────────────────────────
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -244,6 +247,22 @@ const TechnicianProfile = () => {
     setBookingLoading(false);
   };
 
+  const handlePinLocation = async () => {
+    setPinning(true);
+    setPinError('');
+    try {
+      const pos = await getLivePosition();
+      setBookingForm((prev) => ({
+        ...prev,
+        location: { ...prev.location, coordinates: { lat: pos.lat, lng: pos.lng }, accuracy: pos.accuracy },
+      }));
+    } catch (err) {
+      setPinError(err.message);
+    } finally {
+      setPinning(false);
+    }
+  };
+
   const handleBookingInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'address') {
@@ -317,7 +336,10 @@ const TechnicianProfile = () => {
         preferredDate,
         preferredTime,
         duration: parseFloat(estimatedHours) || 1,
-        location: { address: location.address },
+        location: {
+          address: location.address,
+          ...(location.coordinates && { coordinates: location.coordinates, accuracy: location.accuracy }),
+        },
         clientNotes: clientNotes || '',
         paymentMethod: paymentMethod || 'cash',
       };
@@ -979,6 +1001,32 @@ const TechnicianProfile = () => {
                   className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   required
                 />
+                {/* Pin the job location from this device (used to check the expert's proof-of-work photos) */}
+                <div className="mt-2">
+                  {bookingForm.location.coordinates ? (
+                    <p className="text-xs text-green-700 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />
+                      Job location pinned (within about {bookingForm.location.accuracy} m).
+                      <button type="button" onClick={handlePinLocation} className="underline ml-1" disabled={pinning}>
+                        Update
+                      </button>
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handlePinLocation}
+                      disabled={pinning}
+                      className="text-sm text-green-700 hover:text-green-800 font-medium flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {pinning ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+                      I'm at the job address now — pin my location
+                    </button>
+                  )}
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Optional. Helps confirm the expert really did the job there. You can also pin it later from the booking page.
+                  </p>
+                  {pinError && <p className="text-xs text-red-600 mt-0.5">{pinError}</p>}
+                </div>
               </div>
 
               {/* Additional Notes */}

@@ -240,11 +240,25 @@ exports.getTechnician = async (req, res) => {
       .select('serviceCategory subService status totalAmount createdAt')
       .lean();
 
+    // Every rating with its time, newest first (a rated booking's completedAt is
+    // when it was rated), so bursts of ratings stand out
+    const ratingHistory = await Booking.find({
+      technicianId: tech._id,
+      clientRating: { $ne: null },
+      completedAt: { $ne: null },
+    })
+      .sort({ completedAt: -1 })
+      .limit(100)
+      .select('clientId clientRating clientReview completedAt startedAt workCompletedAt ratingCheck serviceCategory subService')
+      .populate('clientId', 'firstName lastName createdAt')
+      .lean();
+
     res.json({
       success: true,
       data: {
         ...decorateTechnician(tech),
         recentBookings,
+        ratingHistory,
       },
     });
   } catch (error) {

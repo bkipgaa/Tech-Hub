@@ -247,23 +247,11 @@ const TechnicianBookings = () => {
    */
   const openActionModal = (bookingId, action) => {
     const configs = {
-      confirm: {
-        title: 'Confirm Booking',
-        message: 'Are you sure you want to confirm this booking? The client will be notified.',
-        buttonText: 'Confirm',
-        buttonColor: 'bg-blue-600 hover:bg-blue-700',
-      },
       start: {
         title: 'Start Booking',
         message: 'Are you ready to start this job? The client will be notified.',
         buttonText: 'Start',
         buttonColor: 'bg-purple-600 hover:bg-purple-700',
-      },
-      complete: {
-        title: 'Complete Booking',
-        message: 'Mark this booking as completed? The client will be able to rate you.',
-        buttonText: 'Complete',
-        buttonColor: 'bg-green-600 hover:bg-green-700',
       },
       cancel: {
         title: 'Cancel Booking',
@@ -324,14 +312,8 @@ const TechnicianBookings = () => {
     try {
       let endpoint = '';
       switch (action) {
-        case 'confirm':
-          endpoint = `/bookings/${bookingId}/confirm`;
-          break;
         case 'start':
           endpoint = `/bookings/${bookingId}/start`;
-          break;
-        case 'complete':
-          endpoint = `/bookings/${bookingId}/complete`;
           break;
         case 'cancel':
           endpoint = `/bookings/${bookingId}/cancel`;
@@ -551,16 +533,17 @@ const TechnicianBookings = () => {
             {bookings.map((booking) => {
               const isExpanded = expandedBookingId === booking._id;
               const isPending = booking.status === 'pending';
-              const isConfirmed = booking.status === 'confirmed';
-              const isInProgress = booking.status === 'in-progress';
+              const isQuoted = booking.status === 'quoted';
+              const isMaterialsConfirmed = booking.status === 'materials_confirmed';
+              const isInProgress = booking.status === 'in_progress';
               const isCompleted = booking.status === 'completed';
               const isCancelled = booking.status === 'cancelled';
 
-              // Determine which action buttons to show
-              const showConfirm = isPending;
-              const showStart = isConfirmed;
+              // Quoting and completing (which needs photo proof) happen on the details page
+              const showQuote = isPending;
+              const showStart = isMaterialsConfirmed;
               const showComplete = isInProgress;
-              const showCancel = isPending || isConfirmed || isInProgress;
+              const showCancel = isPending || isQuoted; // the server only allows cancelling before acceptance
 
               return (
                 <div
@@ -604,13 +587,13 @@ const TechnicianBookings = () => {
 
                       {/* Right: Actions */}
                       <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                        {showConfirm && (
+                        {showQuote && (
                           <button
-                            onClick={() => openActionModal(booking._id, 'confirm')}
+                            onClick={() => viewBookingDetails(booking._id)}
                             className="text-blue-600 hover:text-blue-800 text-sm px-3 py-1.5 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
                           >
                             <CheckCircle className="w-4 h-4" />
-                            Confirm
+                            Send Quote
                           </button>
                         )}
                         {showStart && (
@@ -624,11 +607,11 @@ const TechnicianBookings = () => {
                         )}
                         {showComplete && (
                           <button
-                            onClick={() => openActionModal(booking._id, 'complete')}
+                            onClick={() => viewBookingDetails(booking._id)}
                             className="text-green-600 hover:text-green-800 text-sm px-3 py-1.5 border border-green-300 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
                           >
                             <CheckSquare className="w-4 h-4" />
-                            Complete
+                            Add Proof &amp; Complete
                           </button>
                         )}
                         {showCancel && (
