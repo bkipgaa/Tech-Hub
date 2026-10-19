@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const { auth } = require('../middleware/auth'); // your auth middleware
 const bookingController = require('../controllers/bookingratingController');
+const evidenceController = require('../controllers/bookingEvidenceController');
+const { evidenceUpload } = require('../config/cloudinary');
+
+// Multer errors (wrong type, too big) as a 400 instead of the generic 500
+const evidencePhotoUpload = (req, res, next) => {
+  evidenceUpload.single('photo')(req, res, (err) => {
+    if (!err) return next();
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'Photo is too large (max 10 MB).' : err.message;
+    res.status(400).json({ success: false, message });
+  });
+};
 
 // ──────────────────────────────────────────────────────────────
 // All booking routes require authentication
@@ -39,6 +50,9 @@ router.get('/:bookingId', bookingController.getBooking);
 // Cancel a booking (client or technician – only if pending or quoted)
 router.post('/:bookingId/cancel', bookingController.cancelBooking);
 
+// Client pins the job location from their device (checked against evidence photo GPS)
+router.post('/:bookingId/location-pin', evidenceController.pinLocation);
+
 // 12‑STEP ADVANCED BOOKING FLOW
 router.post('/:bookingId/quotation', bookingController.sendQuotation);
 router.post('/:bookingId/accept-quotation', bookingController.acceptQuotation);
@@ -48,7 +62,10 @@ router.post('/:bookingId/materials-money-received', bookingController.confirmMat
 router.post('/:bookingId/materials-delivered', bookingController.confirmMaterialsDelivered);
 router.post('/:bookingId/materials-received', bookingController.confirmMaterialsReceived);
 router.post('/:bookingId/start', bookingController.startBooking);
-router.post('/:bookingId/complete-work', bookingController.completeWork);
+router.post('/:bookingId/evidence/photo', evidencePhotoUpload, evidenceController.addEvidencePhoto);
+router.post('/:bookingId/evidence/link', evidenceController.setEvidenceLink);
+router.post('/:bookingId/complete-work', bookingController.completeWork);   // needs evidence
+router.post('/:bookingId/confirm-work', evidenceController.confirmWork);    // client confirms or disputes
 router.post('/:bookingId/confirm-labor-payment', bookingController.confirmLaborPayment);
 router.post('/:bookingId/rate', bookingController.rateTechnician);
 

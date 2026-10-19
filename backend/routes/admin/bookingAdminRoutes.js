@@ -24,5 +24,7 @@ router.get('/:id',    requirePermission('bookings.view_details'), ctrl.getBookin
 router.patch('/:id/cancel', requirePermission('bookings.cancel'), ctrl.cancelBooking);
 router.patch('/:id/notes',  requirePermission('bookings.manage'), ctrl.updateAdminNotes);
 router.patch('/:id/status', requirePermission('bookings.manage'), ctrl.forceStatus);
+router.patch('/:id/evidence-review', requirePermission('bookings.manage'), ctrl.reviewEvidence);
+router.patch('/:id/rating-review', requirePermission('bookings.manage'), ctrl.reviewRating);
 
 module.exports = router;

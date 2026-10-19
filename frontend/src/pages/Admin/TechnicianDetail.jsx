@@ -221,6 +221,8 @@ const TechnicianDetail = () => {
               <p className="text-sm text-gray-400 text-center py-4">No bookings yet.</p>
             )}
           </div>
+
+          <RatingHistory ratings={tech.ratingHistory || []} onOpen={(bookingId) => navigate(`/admin/bookings/${bookingId}`)} />
         </div>
 
         {/* Right: sidebar */}
@@ -280,6 +282,103 @@ const TechnicianDetail = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ─── Rating history ─────────────────────────────────────────
+// Ratings closer together than this are highlighted (matches the server's short_gap flag)
+const SHORT_GAP_MINUTES = 4 * 60;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const formatGap = (minutes) => {
+  if (minutes === undefined || minutes === null) return '—';
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 48 * 60) return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+  return `${Math.round(minutes / (24 * 60))} days`;
+};
+
+const RATING_STATUS_LABEL = {
+  held: { label: 'Held', color: 'bg-yellow-100 text-yellow-800' },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
+  approved: { label: 'Approved', color: 'bg-green-100 text-green-700' },
+};
+
+const RatingHistory = ({ ratings, onOpen }) => {
+  const [now] = useState(() => Date.now()); // page load time, for the 24 h / 7 day counts
+  const ratedTime = (r) => new Date(r.ratingCheck?.ratedAt || r.completedAt).getTime();
+  // Newest first; the gap is to the next older rating
+  const rows = ratings.map((r, i) => {
+    const older = ratings[i + 1];
+    const gap = older ? Math.round((ratedTime(r) - ratedTime(older)) / 60000) : null;
+    const clientAgeDays = r.clientId?.createdAt
+      ? Math.floor((ratedTime(r) - new Date(r.clientId.createdAt).getTime()) / DAY_MS)
+      : null;
+    return { ...r, gap, clientAgeDays, short: gap !== null && gap < SHORT_GAP_MINUTES };
+  });
+  const last24h = rows.filter((r) => now - ratedTime(r) < DAY_MS).length;
+  const last7d = rows.filter((r) => now - ratedTime(r) < 7 * DAY_MS).length;
+  const shortGaps = rows.filter((r) => r.short).length;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 className="text-base font-semibold text-gray-800 mb-1">Rating History</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        {last24h} in the last 24 h · {last7d} in the last 7 days ·{' '}
+        <span className={shortGaps ? 'text-yellow-700 font-medium' : ''}>
+          {shortGaps} less than {SHORT_GAP_MINUTES / 60} h after the previous one
+        </span>
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-4">No ratings yet.</p>
+      ) : (
+        <div className="overflow-x-auto -mx-6 px-6">
+          <table className="w-full text-sm min-w-[520px]">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                <th className="py-2 pr-3 font-medium">Rated at</th>
+                <th className="py-2 pr-3 font-medium">Stars</th>
+                <th className="py-2 pr-3 font-medium">Client</th>
+                <th className="py-2 pr-3 font-medium">Gap to previous</th>
+                <th className="py-2 font-medium" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((r) => {
+                const status = RATING_STATUS_LABEL[r.ratingCheck?.status];
+                return (
+                  <tr
+                    key={r._id}
+                    onClick={() => onOpen(r._id)}
+                    className={`cursor-pointer hover:bg-gray-50 ${r.short || r.ratingCheck?.status === 'held' ? 'bg-yellow-50' : ''}`}
+                  >
+                    <td className="py-2 pr-3 whitespace-nowrap text-gray-800">{formatDateTime(r.ratingCheck?.ratedAt || r.completedAt)}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-0.5 text-gray-800">
+                        {r.clientRating} <Star className="w-3.5 h-3.5 text-yellow-500 fill-current" />
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <p className="text-gray-800 truncate max-w-[10rem]">{r.clientId?.firstName} {r.clientId?.lastName}</p>
+                      {r.clientAgeDays !== null && (
+                        <p className={`text-[11px] ${r.clientAgeDays < 7 ? 'text-yellow-700' : 'text-gray-400'}`}>
+                          account {r.clientAgeDays < 1 ? 'under a day' : `${r.clientAgeDays} days`} old when rating
+                        </p>
+                      )}
+                    </td>
+                    <td className={`py-2 pr-3 whitespace-nowrap ${r.short ? 'text-yellow-800 font-medium' : 'text-gray-600'}`}>
+                      {formatGap(r.gap)}
+                    </td>
+                    <td className="py-2 text-right">
+                      {status && <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${status.color}`}>{status.label}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

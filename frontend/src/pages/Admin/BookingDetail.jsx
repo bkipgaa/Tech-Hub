@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Loader2, AlertCircle, Ban, Save, User, Wrench,
-  MapPin, Calendar, Clock, DollarSign, FileText, Star, Briefcase,
+  MapPin, Calendar, Clock, DollarSign, FileText, Star, Briefcase, Camera, AlertTriangle,
 } from 'lucide-react';
 import adminApi from '../../services/adminApi';
 import PermissionGate from '../../components/admin/PermissionGate';
@@ -51,6 +51,32 @@ const formatDate = (d) =>
 
 const formatCurrency = (n) => `KES ${Number(n || 0).toLocaleString()}`;
 
+const mapsLink = ({ lat, lng }) => `https://www.google.com/maps?q=${lat},${lng}`;
+
+// Proof-of-work checks (set by the server; none of them block the job on their own)
+const EVIDENCE_FLAG_LABELS = {
+  no_job_pin: 'Client never pinned the job location',
+  no_gps: 'No GPS with photo',
+  low_accuracy: 'GPS not precise (>200 m)',
+  far_from_job: 'Photo taken far from the job location',
+  stale_capture: 'Photo sent long after it was taken (or device clock off)',
+  near_duplicate_photo: 'Looks like a photo used on another booking',
+  exif_old: 'Camera data says the photo is older',
+  exif_far: 'Camera GPS far from the job',
+  link_unreachable: 'Live link could not be opened',
+  too_fast: 'Marked done very soon after starting',
+  before_booking_date: 'Completed before the booking date',
+  client_disputed: 'Client reported a problem',
+};
+
+const REVIEW_STATUS = {
+  none: { label: 'No evidence yet', color: 'bg-gray-100 text-gray-700' },
+  auto_ok: { label: 'No issues found', color: 'bg-green-100 text-green-800' },
+  flagged: { label: 'Needs review', color: 'bg-yellow-100 text-yellow-800' },
+  admin_ok: { label: 'Approved by admin', color: 'bg-green-100 text-green-800' },
+  admin_rejected: { label: 'Rejected by admin', color: 'bg-red-100 text-red-800' },
+};
+
 // ═════════════════════════════════════════════════════════════
 const BookingDetail = () => {
   const { id } = useParams();
@@ -64,6 +90,7 @@ const BookingDetail = () => {
   // Modal state
   const [cancelModal, setCancelModal] = useState({ open: false, reason: '', loading: false });
   const [statusModal, setStatusModal] = useState({ open: false, status: '', reason: '', loading: false });
+  const [reviewModal, setReviewModal] = useState({ open: false, decision: '', note: '', loading: false });
 
   // Admin notes
   const [notes, setNotes] = useState('');
@@ -115,6 +142,35 @@ const BookingDetail = () => {
     }
   };
 
+  const handleEvidenceReview = async () => {
+    setReviewModal((p) => ({ ...p, loading: true }));
+    try {
+      await adminApi.patch(`/bookings/${id}/evidence-review`, {
+        decision: reviewModal.decision,
+        note: reviewModal.note.trim(),
+      });
+      setReviewModal({ open: false, decision: '', note: '', loading: false });
+      await fetchBooking();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to save the review.');
+      setReviewModal((p) => ({ ...p, loading: false }));
+    }
+  };
+
+  const handleRatingReview = async (decision) => {
+    const note = decision === 'rejected' ? window.prompt('Reason for rejecting this rating (optional):') : '';
+    if (note === null) return;
+    setActing(true);
+    try {
+      await adminApi.patch(`/bookings/${id}/rating-review`, { decision, note: note || '' });
+      await fetchBooking();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to save the rating review.');
+    } finally {
+      setActing(false);
+    }
+  };
+
   const handleSaveNotes = async () => {
     setNotesSaving(true);
     try {
@@ -156,6 +212,8 @@ const BookingDetail = () => {
   const tech = booking.technicianId || {};
   const techUser = tech.userId || {};
   const canCancel = !['completed', 'cancelled'].includes(booking.status);
+  const evidence = booking.completionEvidence || {};
+  const workConfirmation = booking.clientWorkConfirmation || {};
 
   return (
     <div className="space-y-6">
@@ -226,9 +284,151 @@ const BookingDetail = () => {
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100 flex items-start gap-2 text-sm text-gray-700">
               <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <span>{booking.location?.address || '—'}</span>
+              <div>
+                <span>{booking.location?.address || '—'}</span>
+                {booking.location?.coordinates?.lat !== undefined ? (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Pinned by client {formatDateTime(booking.location.pinnedAt)}
+                    {booking.location.accuracy ? ` (±${booking.location.accuracy} m)` : ''} ·{' '}
+                    <a href={mapsLink(booking.location.coordinates)} target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline">
+                      map
+                    </a>
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-1">Job location not pinned by the client</p>
+                )}
+              </div>
             </div>
           </Card>
+
+          {/* Proof of work */}
+          {(evidence.submittedAt || evidence.photos?.length > 0 || evidence.link?.url) && (
+            <Card title="Proof of Work" icon={Camera}>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${(REVIEW_STATUS[evidence.reviewStatus] || REVIEW_STATUS.none).color}`}>
+                  {(REVIEW_STATUS[evidence.reviewStatus] || REVIEW_STATUS.none).label}
+                </span>
+                {evidence.submittedAt && (
+                  <PermissionGate permission="bookings.manage">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setReviewModal({ open: true, decision: 'admin_ok', note: '', loading: false })}
+                        className="px-3 py-1.5 border border-green-300 text-green-700 rounded-lg text-xs font-medium hover:bg-green-50"
+                      >
+                        Approve
+                      </button>
+                      {booking.status !== 'completed' && (
+                        <button
+                          onClick={() => setReviewModal({ open: true, decision: 'admin_rejected', note: '', loading: false })}
+                          className="px-3 py-1.5 border border-red-300 text-red-700 rounded-lg text-xs font-medium hover:bg-red-50"
+                        >
+                          Reject
+                        </button>
+                      )}
+                    </div>
+                  </PermissionGate>
+                )}
+              </div>
+
+              {evidence.flags?.length > 0 && (
+                <ul className="mb-4 space-y-1">
+                  {evidence.flags.map((f) => (
+                    <li key={f} className="text-sm text-yellow-800 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      {EVIDENCE_FLAG_LABELS[f] || f}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {evidence.reviewedAt && (
+                <p className="text-xs text-gray-500 mb-4">
+                  Reviewed {formatDateTime(evidence.reviewedAt)}{evidence.reviewNote ? ` — ${evidence.reviewNote}` : ''}
+                </p>
+              )}
+
+              {(workConfirmation.confirmedAt || workConfirmation.autoConfirmedAt || workConfirmation.disputedAt) && (
+                <div className="mb-4 text-sm space-y-0.5">
+                  {workConfirmation.confirmedAt && <p className="text-green-700">Client confirmed the work {formatDateTime(workConfirmation.confirmedAt)}</p>}
+                  {workConfirmation.autoConfirmedAt && <p className="text-gray-600">Auto-confirmed (client silent) {formatDateTime(workConfirmation.autoConfirmedAt)}</p>}
+                  {workConfirmation.disputedAt && (
+                    <p className="text-red-700">Client disputed {formatDateTime(workConfirmation.disputedAt)}: "{workConfirmation.disputeReason}"</p>
+                  )}
+                </div>
+              )}
+
+              {evidence.link?.url && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg text-sm">
+                  <a href={evidence.link.url} target="_blank" rel="noopener noreferrer nofollow" className="text-green-700 hover:underline break-all">
+                    {evidence.link.url}
+                  </a>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {evidence.link.reachable ? `Reachable (HTTP ${evidence.link.httpStatus})` : `Not reachable${evidence.link.error ? `: ${evidence.link.error}` : ''}${evidence.link.httpStatus ? ` (HTTP ${evidence.link.httpStatus})` : ''}`}
+                    {evidence.link.finalUrl && evidence.link.finalUrl !== evidence.link.url ? ` → ${evidence.link.finalUrl}` : ''}
+                    {' · checked '}{formatDateTime(evidence.link.checkedAt)}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {(evidence.photos || []).map((photo) => (
+                  <div key={photo._id} className="flex flex-col sm:flex-row gap-3 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                    <a href={photo.url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                      <img src={cldImage(photo.url, 400)} alt="Evidence" className="w-full sm:w-40 aspect-square object-cover rounded-lg border border-gray-200" />
+                    </a>
+                    <div className="text-xs text-gray-600 space-y-0.5 min-w-0">
+                      <p>
+                        <span className="text-gray-400">Captured:</span> {formatDateTime(photo.capturedAt)}
+                        {' · '}<span className="text-gray-400">received:</span> {formatDateTime(photo.receivedAt)}
+                      </p>
+                      <p>
+                        <span className="text-gray-400">Method:</span>{' '}
+                        {photo.captureMethod === 'capture_input' ? 'Phone camera via file input (lower trust)' : 'In-browser camera'}
+                      </p>
+                      {photo.gps?.lat !== undefined && (
+                        <p>
+                          <span className="text-gray-400">GPS:</span>{' '}
+                          <a href={mapsLink(photo.gps)} target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline">
+                            {photo.gps.lat.toFixed(5)}, {photo.gps.lng.toFixed(5)}
+                          </a>
+                          {photo.gps.accuracy ? ` (±${photo.gps.accuracy} m)` : ''}
+                          {Number.isFinite(photo.distanceFromJobM) ? ` · ${photo.distanceFromJobM} m from job pin` : ''}
+                        </p>
+                      )}
+                      {photo.exif && (
+                        <p>
+                          <span className="text-gray-400">EXIF:</span>{' '}
+                          {[photo.exif.make, photo.exif.model].filter(Boolean).join(' ') || 'camera unknown'}
+                          {photo.exif.takenAt ? ` · taken ${formatDateTime(photo.exif.takenAt)}` : ''}
+                          {photo.exif.lat !== undefined ? ` · ${photo.exif.lat.toFixed(5)}, ${photo.exif.lng.toFixed(5)}` : ''}
+                        </p>
+                      )}
+                      <p className="truncate" title={photo.userAgent}>
+                        <span className="text-gray-400">IP:</span> {photo.ip || '—'} · {photo.userAgent || ''}
+                      </p>
+                      {photo.flags?.length > 0 && (
+                        <p className="text-yellow-800">{photo.flags.map((f) => EVIDENCE_FLAG_LABELS[f] || f).join(' · ')}</p>
+                      )}
+                      {photo.similarElsewhere?.length > 0 && (
+                        <div className="text-red-700">
+                          Similar photo on other booking(s):{' '}
+                          {photo.similarElsewhere.map((m) => (
+                            <button
+                              key={`${m.bookingId}-${m.url}`}
+                              onClick={() => navigate(`/admin/bookings/${m.bookingId}`)}
+                              className="underline mr-2"
+                            >
+                              #{String(m.bookingId).slice(-8).toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Quotation */}
           {booking.quotation?.sentAt && (
@@ -319,6 +519,27 @@ const BookingDetail = () => {
               </div>
               {booking.clientReview && (
                 <p className="mt-3 text-sm text-gray-700 italic">"{booking.clientReview}"</p>
+              )}
+              <RatingTiming booking={booking} />
+              {booking.ratingCheck?.status === 'held' && (
+                <PermissionGate permission="bookings.manage">
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => handleRatingReview('approved')}
+                      disabled={acting}
+                      className="px-3 py-1.5 border border-green-300 text-green-700 rounded-lg text-xs font-medium hover:bg-green-50 disabled:opacity-50"
+                    >
+                      Approve & count rating
+                    </button>
+                    <button
+                      onClick={() => handleRatingReview('rejected')}
+                      disabled={acting}
+                      className="px-3 py-1.5 border border-red-300 text-red-700 rounded-lg text-xs font-medium hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Reject rating
+                    </button>
+                  </div>
+                </PermissionGate>
               )}
             </Card>
           )}
@@ -446,6 +667,46 @@ const BookingDetail = () => {
         </Modal>
       )}
 
+      {/* ─── Evidence review modal ─── */}
+      {reviewModal.open && (
+        <Modal
+          title={reviewModal.decision === 'admin_ok' ? 'Approve Proof of Work' : 'Reject Proof of Work'}
+          onClose={() => !reviewModal.loading && setReviewModal({ open: false, decision: '', note: '', loading: false })}
+        >
+          <p className="text-sm text-gray-600 mb-3">
+            {reviewModal.decision === 'admin_ok'
+              ? 'Approving lets the expert record the labor payment even if the client disputed or has not answered.'
+              : 'Rejecting stops the expert from recording payment and stops the client from rating this job.'}
+          </p>
+          <textarea
+            value={reviewModal.note}
+            onChange={(e) => setReviewModal((p) => ({ ...p, note: e.target.value }))}
+            rows="3"
+            maxLength={500}
+            placeholder={reviewModal.decision === 'admin_ok' ? 'Note (optional)' : 'Reason (shown to both people)'}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+          />
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={() => setReviewModal({ open: false, decision: '', note: '', loading: false })}
+              disabled={reviewModal.loading}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Close
+            </button>
+            <button
+              onClick={handleEvidenceReview}
+              disabled={reviewModal.loading || (reviewModal.decision === 'admin_rejected' && !reviewModal.note.trim())}
+              className={`flex-1 px-4 py-2 text-white rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2 ${
+                reviewModal.decision === 'admin_ok' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+              }`}
+            >
+              {reviewModal.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : reviewModal.decision === 'admin_ok' ? 'Approve' : 'Reject'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {/* ─── Status modal ─── */}
       {statusModal.open && (
         <Modal title="Change Status (Admin Override)" onClose={() => !statusModal.loading && setStatusModal({ open: false, status: '', reason: '', loading: false })}>
@@ -487,6 +748,51 @@ const BookingDetail = () => {
             </button>
           </div>
         </Modal>
+      )}
+    </div>
+  );
+};
+
+// ─── Rating timing ──────────────────────────────────────────
+const RATING_STATUS = {
+  counted: { label: 'Counted', color: 'bg-green-100 text-green-800' },
+  held: { label: 'Held — over daily limit', color: 'bg-yellow-100 text-yellow-800' },
+  approved: { label: 'Approved by admin', color: 'bg-green-100 text-green-800' },
+  rejected: { label: 'Rejected by admin', color: 'bg-red-100 text-red-800' },
+};
+
+const formatGap = (minutes) => {
+  if (minutes === undefined || minutes === null) return 'first rating';
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 48 * 60) return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+  return `${Math.round(minutes / (24 * 60))} days`;
+};
+
+const RatingTiming = ({ booking }) => {
+  const check = booking.ratingCheck;
+  const ratedAt = check?.ratedAt || booking.completedAt;
+  if (!ratedAt) return null;
+  const status = RATING_STATUS[check?.status];
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-600 space-y-1">
+      <p>
+        <span className="text-gray-400">Rated:</span> {formatDateTime(ratedAt)}
+        {booking.workCompletedAt && <> · <span className="text-gray-400">work done:</span> {formatDateTime(booking.workCompletedAt)}</>}
+      </p>
+      {check && (
+        <p>
+          <span className="text-gray-400">Since this expert's previous rating:</span> {formatGap(check.minutesSincePreviousRating)}
+          {' · '}<span className="text-gray-400">counted ratings in the 24 h before:</span> {check.ratingsInPrevious24h ?? 0}
+        </p>
+      )}
+      {status && <span className={`inline-flex px-2 py-0.5 rounded-full font-medium ${status.color}`}>{status.label}</span>}
+      {check?.flags?.includes('short_gap') && (
+        <p className="text-yellow-800 flex items-center gap-1">
+          <AlertTriangle className="w-3.5 h-3.5" /> Rated soon after the expert's previous rating
+        </p>
+      )}
+      {check?.reviewedAt && (
+        <p className="text-gray-500">Reviewed {formatDateTime(check.reviewedAt)}{check.reviewNote ? ` — ${check.reviewNote}` : ''}</p>
       )}
     </div>
   );

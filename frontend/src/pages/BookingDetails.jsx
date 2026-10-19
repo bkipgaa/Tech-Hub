@@ -10,8 +10,10 @@
  * - Status timeline showing history of status changes
  * - Role-based action buttons for each step:
  *   - Technician: Send quotation, set material source, confirm materials money received,
- *                 confirm materials delivered, start work, complete work, confirm labor payment
- *   - Client: Accept/reject quotation, confirm materials received, rate technician
+ *                 confirm materials delivered, start work, add proof (camera photo + GPS, or
+ *                 live link) and complete work, confirm labor payment
+ *   - Client: Accept/reject quotation, confirm materials received, pin job location,
+ *             confirm or dispute the finished work, rate technician
  * - Responsive design with comprehensive error handling
  * 
  * @version 3.0.0 – Full 12‑step flow
@@ -52,6 +54,11 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import BookingBenefits from '../components/technician/BookingBenefits';
+import JobEvidence from '../components/booking/JobEvidence';
+import { getLivePosition, mapsLink } from '../utils/geo';
+
+// Client can (re)pin the job location until the work is marked completed
+const PIN_STATUSES = ['pending', 'quoted', 'agreed', 'materials_delivered', 'materials_confirmed', 'in_progress'];
 
 // ============================================================
 // HELPER COMPONENTS
@@ -236,13 +243,15 @@ const BookingDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pinState, setPinState] = useState({ loading: false, error: '' });
 
   // ── Action modal state ──
   const [actionModal, setActionModal] = useState({
     open: false,
     action: '', // 'sendQuotation', 'acceptQuotation', 'rejectQuotation', 'setMaterialSource',
                  // 'confirmMaterialsMoneyReceived', 'confirmMaterialsDelivered', 'confirmMaterialsReceived',
-                 // 'start', 'completeWork', 'confirmLaborPayment', 'cancel', 'rate'
+                 // 'start', 'confirmWork', 'disputeWork', 'confirmLaborPayment', 'cancel', 'rate'
+                 // (completing the work happens in JobEvidence, which needs proof first)
     title: '',
     message: '',
     buttonText: '',
@@ -536,12 +545,20 @@ const BookingDetails = () => {
         buttonColor: 'bg-purple-600 hover:bg-purple-700',
         needsRating: false,
       },
-      completeWork: {
-        title: 'Complete Work',
-        message: 'Are you finished with the job? This will allow the client to pay labor.',
-        buttonText: 'Complete Work',
-        buttonColor: 'bg-blue-600 hover:bg-blue-700',
+      confirmWork: {
+        title: 'Confirm Work Is Done',
+        message: 'Have you checked the proof and is the work finished to your satisfaction? After confirming, pay the expert for the labor.',
+        buttonText: 'Yes, work is done',
+        buttonColor: 'bg-green-600 hover:bg-green-700',
         needsRating: false,
+      },
+      disputeWork: {
+        title: 'Report a Problem',
+        message: 'Tell us what is wrong. The expert can add more proof, and our team will review it.',
+        buttonText: 'Send',
+        buttonColor: 'bg-red-600 hover:bg-red-700',
+        needsRating: false,
+        needsReason: true,
       },
       confirmLaborPayment: {
         title: 'Confirm Labor Payment',
@@ -716,7 +733,10 @@ const BookingDetails = () => {
 
     // Validate reason
     if (needsReason && (!reason || reason.trim() === '')) {
-      setActionModal((prev) => ({ ...prev, error: 'Please provide a reason for rejection.' }));
+      setActionModal((prev) => ({
+        ...prev,
+        error: action === 'disputeWork' ? 'Please describe the problem.' : 'Please provide a reason for rejection.',
+      }));
       return;
     }
 
@@ -758,8 +778,13 @@ const BookingDetails = () => {
         case 'start':
           endpoint = `/bookings/${booking._id}/start`;
           break;
-        case 'completeWork':
-          endpoint = `/bookings/${booking._id}/complete-work`;
+        case 'confirmWork':
+          endpoint = `/bookings/${booking._id}/confirm-work`;
+          payload = { confirmed: true };
+          break;
+        case 'disputeWork':
+          endpoint = `/bookings/${booking._id}/confirm-work`;
+          payload = { confirmed: false, reason: reason.trim() };
           break;
         case 'confirmLaborPayment':
           endpoint = `/bookings/${booking._id}/confirm-labor-payment`;
@@ -820,6 +845,18 @@ const BookingDetails = () => {
       setActionModal((prev) => ({ ...prev, error: errorMessage }));
     } finally {
       setActionModal((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handlePinLocation = async () => {
+    setPinState({ loading: true, error: '' });
+    try {
+      const pos = await getLivePosition();
+      await api.post(`/bookings/${booking._id}/location-pin`, pos);
+      await fetchBooking(true);
+      setPinState({ loading: false, error: '' });
+    } catch (err) {
+      setPinState({ loading: false, error: err.response?.data?.message || err.message || 'Could not save the location.' });
     }
   };
 
@@ -905,7 +942,20 @@ const BookingDetails = () => {
   const clientCanCancel = isPending || isQuoted; // only before accepted
   const clientCanAcceptReject = isQuoted;
   const clientCanConfirmMaterialsReceived = isMaterialsDelivered;
-  const clientCanRate = isLaborPaid && !booking.clientRating;
+  // Proof of work: bookings finished before the evidence step existed have no submittedAt
+  const evidence = booking.completionEvidence || {};
+  const workConfirmation = booking.clientWorkConfirmation || {};
+  const evidenceFlow = !!evidence.submittedAt;
+  const evidenceRejected = evidence.reviewStatus === 'admin_rejected';
+  const workConfirmed = !!(workConfirmation.confirmedAt || workConfirmation.autoConfirmedAt || evidence.reviewStatus === 'admin_ok');
+  const workDisputed = !!workConfirmation.disputedAt && !workConfirmed;
+  const autoConfirmDays = booking.evidenceRules?.autoConfirmDays || 3;
+  const clientSilentLongEnough = !workConfirmation.disputedAt && booking.workCompletedAt &&
+    Date.now() - new Date(booking.workCompletedAt).getTime() >= autoConfirmDays * 24 * 60 * 60 * 1000;
+
+  const clientCanConfirmWork = isWorkCompleted && evidenceFlow && !workConfirmation.confirmedAt && !evidenceRejected;
+  const clientCanRate = isLaborPaid && !booking.clientRating && !evidenceRejected;
+  const clientCanPinLocation = PIN_STATUSES.includes(booking.status);
 
   // Technician actions
   const techCanSendQuotation = isPending;
@@ -918,7 +968,10 @@ const BookingDetails = () => {
   const techCanConfirmMaterialsDelivered = isAgreed && materialSourceChosen && (booking.materials?.providedByClient || booking.materials?.moneyReceivedAt) && !booking.materials?.deliveredAt;
   const techCanStartWork = isMaterialsConfirmed;
   const techCanCompleteWork = isInProgress && !booking.workCompletedAt;
-  const techCanConfirmLaborPayment = isWorkCompleted && !booking.laborPayment?.confirmedAt;
+  // More proof can be added after the client reports a problem
+  const techCanAddEvidence = isInProgress || (isWorkCompleted && evidenceFlow && workDisputed);
+  const techCanConfirmLaborPayment = isWorkCompleted && !booking.laborPayment?.confirmedAt && !evidenceRejected &&
+    (!evidenceFlow || workConfirmed || clientSilentLongEnough);
   // Server only allows cancelling before the quotation is accepted
   const techCanCancel = isPending || isQuoted;
 
@@ -945,8 +998,26 @@ const BookingDetails = () => {
       case 'materials_confirmed':
         return tech ? 'Your move: start the work.' : `Waiting for ${technicianName} to start the work.`;
       case 'in_progress':
-        return tech ? 'Your move: mark the work as completed when done.' : `${technicianName} is working on it.`;
+        return tech
+          ? 'Your move: when done, take photos of the finished work below, then mark it completed.'
+          : `${technicianName} is working on it.`;
       case 'work_completed':
+        if (evidenceRejected) {
+          return 'Our team rejected the proof for this job. Please contact support.';
+        }
+        if (evidenceFlow && workDisputed) {
+          return tech
+            ? `${clientName} reported a problem: "${workConfirmation.disputeReason}". Add more proof below, or contact support.`
+            : `You reported a problem. ${technicianName} can add more proof; confirm the work once it is sorted.`;
+        }
+        if (evidenceFlow && !workConfirmed) {
+          if (tech) {
+            return clientSilentLongEnough
+              ? `${clientName} has not answered for ${autoConfirmDays} days, so you can now confirm the labor amount you were paid.`
+              : `Waiting for ${clientName} to check your proof and confirm the work. If they don't answer within ${autoConfirmDays} days, you can continue.`;
+          }
+          return 'Your move: check the proof of work below and confirm the job is done.';
+        }
         return tech ? 'Your move: confirm the labor amount you were paid.' : `Pay ${technicianName} for the labor; they will confirm the amount.`;
       case 'labor_paid':
         return tech ? `Waiting for ${clientName} to rate you.` : 'Your move: rate the expert to finish the booking.';
@@ -1071,7 +1142,82 @@ const BookingDetails = () => {
                 Location
               </h2>
               <p className="text-gray-700">{booking.location?.address || 'No address provided'}</p>
+              {booking.location?.coordinates?.lat !== undefined && (
+                <p className="text-sm text-gray-500 mt-2 flex flex-wrap items-center gap-1">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  Job location pinned
+                  <a href={mapsLink(booking.location.coordinates)} target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline ml-1">
+                    View on map
+                  </a>
+                </p>
+              )}
+              {isClient && clientCanPinLocation && (
+                <div className="mt-3">
+                  <button
+                    onClick={handlePinLocation}
+                    disabled={pinState.loading}
+                    className="text-sm text-green-700 hover:text-green-800 font-medium flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {pinState.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+                    {booking.location?.coordinates?.lat !== undefined
+                      ? "Update pin — I'm at the job address now"
+                      : "I'm at the job address now — pin my location"}
+                  </button>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Used to check that the expert's proof-of-work photos were taken here.
+                  </p>
+                  {pinState.error && <p className="text-xs text-red-600 mt-1">{pinState.error}</p>}
+                </div>
+              )}
             </div>
+
+            {/* Proof of finished work */}
+            <JobEvidence
+              booking={booking}
+              canEdit={isTechnician && techCanAddEvidence}
+              canComplete={isTechnician && techCanCompleteWork}
+              onUpdated={() => fetchBooking(true)}
+            />
+
+            {/* Client's answer to the finished work */}
+            {evidenceFlow && (workConfirmation.confirmedAt || workConfirmation.autoConfirmedAt || workConfirmation.disputedAt) && (
+              <div className={`p-4 rounded-xl border text-sm ${workConfirmed ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                {workConfirmation.confirmedAt && <p>Client confirmed the work on {formatDateTime(workConfirmation.confirmedAt)}.</p>}
+                {!workConfirmation.confirmedAt && workConfirmation.autoConfirmedAt && (
+                  <p>The client did not respond, so the work counted as confirmed on {formatDateTime(workConfirmation.autoConfirmedAt)}.</p>
+                )}
+                {workConfirmation.disputedAt && (
+                  <p className={workConfirmation.confirmedAt ? 'text-xs mt-1 text-green-700' : ''}>
+                    Problem reported {formatDateTime(workConfirmation.disputedAt)}: "{workConfirmation.disputeReason}"
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Rating, with when it was given */}
+            {booking.clientRating && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <Star className="w-5 h-5 text-yellow-500" />
+                  Rating
+                </h2>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className={`w-5 h-5 ${s <= booking.clientRating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
+                  ))}
+                  <span className="ml-2 text-sm font-medium text-gray-700">{booking.clientRating}/5</span>
+                </div>
+                {booking.clientReview && <p className="mt-2 text-gray-700 italic">"{booking.clientReview}"</p>}
+                <p className="text-xs text-gray-400 mt-2">
+                  Rated on {formatDateTime(booking.ratingCheck?.ratedAt || booking.completedAt)}
+                </p>
+                {booking.ratingCheck?.pending && (
+                  <p className="text-xs text-yellow-700 mt-1">
+                    This rating will show on the expert's profile after a quick check by our team.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Quotation Card */}
             {booking.quotation?.sentAt && (
@@ -1293,9 +1439,9 @@ const BookingDetails = () => {
             {isTechnician && !isCompleted && !isCancelled && <BookingBenefits compact />}
 
             {/* Actions Card */}
-            {((isClient && (clientCanCancel || clientCanAcceptReject || clientCanConfirmMaterialsReceived || clientCanRate)) ||
+            {((isClient && (clientCanCancel || clientCanAcceptReject || clientCanConfirmMaterialsReceived || clientCanConfirmWork || clientCanRate)) ||
               (isTechnician && (techCanSendQuotation || techCanSetMaterialSource || techCanConfirmMaterialsMoneyReceived ||
-                techCanConfirmMaterialsDelivered || techCanStartWork || techCanCompleteWork ||
+                techCanConfirmMaterialsDelivered || techCanStartWork ||
                 techCanConfirmLaborPayment || techCanCancel))) && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-800 mb-4">⚡ Actions</h2>
@@ -1336,6 +1482,26 @@ const BookingDetails = () => {
                       <CheckCircle className="w-4 h-4" />
                       Confirm Materials Received
                     </button>
+                  )}
+                  {isClient && clientCanConfirmWork && (
+                    <>
+                      <button
+                        onClick={() => openActionModal('confirmWork')}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Confirm Work Is Done
+                      </button>
+                      {!workConfirmation.disputedAt && (
+                        <button
+                          onClick={() => openActionModal('disputeWork')}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-medium"
+                        >
+                          <AlertCircle className="w-4 h-4" />
+                          Report a Problem
+                        </button>
+                      )}
+                    </>
                   )}
                   {isClient && clientCanRate && (
                     <button
@@ -1391,15 +1557,6 @@ const BookingDetails = () => {
                     >
                       <Play className="w-4 h-4" />
                       Start Work
-                    </button>
-                  )}
-                  {isTechnician && techCanCompleteWork && (
-                    <button
-                      onClick={() => openActionModal('completeWork')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    >
-                      <CheckSquare className="w-4 h-4" />
-                      Complete Work
                     </button>
                   )}
                   {isTechnician && techCanConfirmLaborPayment && (
@@ -1605,6 +1762,24 @@ const BookingDetails = () => {
                     className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent h-20 resize-y"
                     disabled={actionModal.loading}
                     maxLength={200}
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Problem with the finished work */}
+              {actionModal.action === 'disputeWork' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    What is wrong? <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={actionModal.reason}
+                    onChange={(e) => setActionModal((prev) => ({ ...prev, reason: e.target.value }))}
+                    placeholder="e.g. The work is not finished, the photos are not of my place..."
+                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent h-24 resize-y"
+                    disabled={actionModal.loading}
+                    maxLength={500}
                     required
                   />
                 </div>
