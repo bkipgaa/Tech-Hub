@@ -126,7 +126,28 @@ const evidenceUpload = multer({
   },
 });
 
+// Quotation attachments: photo or PDF of the written quote, up to 3 files of 10 MB
+const quotationUpload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024, files: 3 },
+  fileFilter: (req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Quotation files must be a photo (JPG, PNG, WebP) or a PDF.'));
+  },
+});
+
+const uploadQuotationToCloudinary = (buffer, mimetype = '') =>
+  uploadBufferToCloudinary(buffer, {
+    folder: 'bookings/quotations',
+    resource_type: 'auto',
+    ...(mimetype.startsWith('image/') && {
+      transformation: [{ width: 1920, height: 1920, crop: 'limit', quality: 'auto' }],
+    }),
+  });
+
 module.exports = {
+  quotationUpload,
+  uploadQuotationToCloudinary,
   evidenceUpload,
   uploadEvidenceToCloudinary,
   cloudinary,

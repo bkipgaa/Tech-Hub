@@ -237,7 +237,7 @@ exports.getTechnician = async (req, res) => {
     const recentBookings = await Booking.find({ technicianId: tech._id })
       .sort({ createdAt: -1 })
       .limit(5)
-      .select('serviceCategory subService status totalAmount createdAt')
+      .select('serviceCategory subService status totalAmount quotation.totalCost quotation.sentAt createdAt')
       .lean();
 
     // Every rating with its time, newest first (a rated booking's completedAt is

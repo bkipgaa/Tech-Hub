@@ -10,6 +10,11 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+
+// Load .env before requiring anything that reads env at load time
+// (config/cloudinary.js configures Cloudinary when the routes are required)
+dotenv.config();
+
 const cors = require('cors');
 const helmet = require('helmet');
 const http = require('http');
@@ -33,8 +38,6 @@ const adminRoutes = require('./routes/admin/index');
 const chatSocket = require('./socket/chatSocket');
 const jobRoutes = require('./routes/jobRoutes');
 const jobApplicationRoutes = require('./routes/jobApplicationRoutes');
-
-dotenv.config();
 
 // ===========================================
 // ENVIRONMENT VARIABLES VALIDATION

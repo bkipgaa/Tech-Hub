@@ -543,6 +543,16 @@ const TechnicianBookings = () => {
               const showQuote = isPending;
               const showStart = isMaterialsConfirmed;
               const showComplete = isInProgress;
+              // Labor payment can be recorded once the client confirmed the work (or never answered
+              // for 3 days, or an admin approved it); bookings finished before proof existed skip that
+              const evidence = booking.completionEvidence || {};
+              const workConfirmation = booking.clientWorkConfirmation || {};
+              const clientSilent = !workConfirmation.disputedAt && booking.workCompletedAt &&
+                Date.now() - new Date(booking.workCompletedAt).getTime() >= 3 * 24 * 60 * 60 * 1000;
+              const showRecordPayment = booking.status === 'work_completed' && !booking.laborPayment?.confirmedAt &&
+                evidence.reviewStatus !== 'admin_rejected' &&
+                (!evidence.submittedAt || workConfirmation.confirmedAt || workConfirmation.autoConfirmedAt ||
+                  evidence.reviewStatus === 'admin_ok' || clientSilent);
               const showCancel = isPending || isQuoted; // the server only allows cancelling before acceptance
 
               return (
@@ -614,6 +624,15 @@ const TechnicianBookings = () => {
                             Add Proof &amp; Complete
                           </button>
                         )}
+                        {showRecordPayment && (
+                          <button
+                            onClick={() => viewBookingDetails(booking._id)}
+                            className="text-green-600 hover:text-green-800 text-sm px-3 py-1.5 border border-green-300 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Record Payment
+                          </button>
+                        )}
                         {showCancel && (
                           <button
                             onClick={() => openActionModal(booking._id, 'cancel')}
@@ -652,7 +671,7 @@ const TechnicianBookings = () => {
                         </div>
                         <div>
                           <p className="text-gray-500 font-medium">Total Amount:</p>
-                          <p className="text-gray-700 font-semibold">{formatCurrency(booking.totalAmount)}</p>
+                          <p className="text-gray-700 font-semibold">{formatCurrency(booking.quotation?.sentAt ? booking.quotation.totalCost : booking.totalAmount)}</p>
                           <p className="text-xs text-gray-400">
                             {booking.hourlyRate > 0
                               ? `${formatCurrency(booking.hourlyRate)}/hour × ${booking.estimatedHours} hours`
