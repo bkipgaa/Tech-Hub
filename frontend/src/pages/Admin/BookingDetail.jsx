@@ -435,8 +435,9 @@ const BookingDetail = () => {
             <Card title="Quotation" icon={FileText}>
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <Detail label="Total" value={formatCurrency(booking.quotation.totalCost)} />
-                <Detail label="Labor" value={formatCurrency(booking.quotation.laborCost)} />
-                <Detail label="Materials" value={formatCurrency(booking.quotation.materialsCost)} />
+                {/* Older quotations were split into labor and materials */}
+                {booking.quotation.laborCost > 0 && <Detail label="Labor" value={formatCurrency(booking.quotation.laborCost)} />}
+                {booking.quotation.materialsCost > 0 && <Detail label="Materials" value={formatCurrency(booking.quotation.materialsCost)} />}
               </div>
               {booking.quotation.attachments?.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -475,8 +476,8 @@ const BookingDetail = () => {
             </Card>
           )}
 
-          {/* Materials */}
-          {booking.materials && (
+          {/* Materials (older bookings only) */}
+          {booking.materials?.sourceSetAt && (
             <Card title="Materials" icon={Briefcase}>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <Detail

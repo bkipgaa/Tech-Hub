@@ -24,7 +24,7 @@ const TECHNICIAN_WITH_NAME = {
 };
 
 // Client can (re)pin the job location until the work is marked completed
-const PIN_STATUSES = ['pending', 'quoted', 'agreed', 'materials_delivered', 'materials_confirmed', 'in_progress'];
+const PIN_STATUSES = ['pending', 'quoted', 'in_progress'];
 
 const fail = (res, status, message) => res.status(status).json({ success: false, message });
 
@@ -326,7 +326,7 @@ exports.confirmWork = async (req, res) => {
     const techUser = booking.technicianId?.userId;
     const expertName = `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || booking.technicianId?.businessName || 'the expert';
     await respondWithBooking(res, booking, confirmed
-      ? `Thanks — work confirmed. Pay ${expertName} for the labor; they will record the amount.`
+      ? `Thanks — work confirmed. Rate ${expertName} to finish the booking.`
       : `Your concern has been recorded. ${expertName} can add more proof, and our team will review it.`);
   } catch (error) {
     logError('confirmWork', error);

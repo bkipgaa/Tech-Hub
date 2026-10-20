@@ -222,8 +222,8 @@ const Bookings = () => {
                 { value: 'active', label: 'Active (any)' },
                 { value: 'pending', label: 'Pending' },
                 { value: 'quoted', label: 'Quoted' },
-                { value: 'agreed', label: 'Agreed' },
                 { value: 'in_progress', label: 'In Progress' },
+                { value: 'work_completed', label: 'Work Completed' },
                 { value: 'completed', label: 'Completed' },
                 { value: 'cancelled', label: 'Cancelled' },
               ]}

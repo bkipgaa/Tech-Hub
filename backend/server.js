@@ -207,6 +207,11 @@ const connectDB = async () => {
       console.error('Listing upgrade failed:', err.message)
     );
 
+    // Bookings part-way through the older, longer flow move onto the short one
+    require('./utils/bookingFlow').migrateBookingFlow().catch((err) =>
+      console.error('Booking flow upgrade failed:', err.message)
+    );
+
     mongoose.connection.on('error', (err) => {
       console.error('MongoDB connection error:', err);
     });

@@ -2,21 +2,21 @@
  * BookingDetails.jsx
  * ===================
  * Displays a single booking with full details, status timeline,
- * and role-based actions (client/technician) for the complete 12‑step flow.
- * 
+ * and role-based actions (client/technician) for the booking flow:
+ *   booked → quoted → accepted (work starts) → expert marks done → client confirms & rates
+ *
  * Features:
  * - View all booking details (service, location, pricing, dates)
- * - Quotation, materials and labor payment details
+ * - Quotation and payment details
  * - Status timeline showing history of status changes
  * - Role-based action buttons for each step:
- *   - Technician: Send quotation, set material source, confirm materials money received,
- *                 confirm materials delivered, start work, add proof (camera photo + GPS, or
- *                 live link) and complete work, confirm labor payment
- *   - Client: Accept/reject quotation, confirm materials received, pin job location,
- *             confirm or dispute the finished work, rate technician
+ *   - Technician: Send quotation, add proof (camera photo + GPS, or live link) and
+ *                 mark the work completed, confirming they were paid in full
+ *   - Client: Accept/reject quotation, pin job location, report a problem with the
+ *             finished work, confirm the work and rate the technician
  * - Responsive design with comprehensive error handling
- * 
- * @version 3.0.0 – Full 12‑step flow
+ *
+ * @version 4.0.0 – Short booking flow
  * @author Webafix Team
  */
 
@@ -37,7 +37,6 @@ import {
   Loader2,
   Check,
   X,
-  Play,
   CheckSquare,
   Ban,
   MessageCircle,
@@ -47,8 +46,6 @@ import {
   Clock as ClockIcon,
   Calendar as CalendarIcon,
   FileText,
-  Package,
-  Truck,
   Gift,
   Paperclip,
 } from 'lucide-react';
@@ -59,7 +56,7 @@ import { getLivePosition, mapsLink } from '../utils/geo';
 import { cldImage } from '../utils/media';
 
 // Client can (re)pin the job location until the work is marked completed
-const PIN_STATUSES = ['pending', 'quoted', 'agreed', 'materials_delivered', 'materials_confirmed', 'in_progress'];
+const PIN_STATUSES = ['pending', 'quoted', 'in_progress'];
 
 // ============================================================
 // HELPER COMPONENTS
@@ -81,21 +78,6 @@ const StatusBadge = ({ status }) => {
       color: 'bg-blue-100 text-blue-800 border-blue-200',
       icon: <FileText className="w-3 h-3 mr-1" />,
     },
-    agreed: {
-      label: 'Agreed',
-      color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-      icon: <CheckCircle className="w-3 h-3 mr-1" />,
-    },
-    materials_delivered: {
-      label: 'Materials Delivered',
-      color: 'bg-cyan-100 text-cyan-800 border-cyan-200',
-      icon: <Package className="w-3 h-3 mr-1" />,
-    },
-    materials_confirmed: {
-      label: 'Materials Confirmed',
-      color: 'bg-teal-100 text-teal-800 border-teal-200',
-      icon: <CheckCircle className="w-3 h-3 mr-1" />,
-    },
     in_progress: {
       label: 'In Progress',
       color: 'bg-purple-100 text-purple-800 border-purple-200',
@@ -105,11 +87,6 @@ const StatusBadge = ({ status }) => {
       label: 'Work Completed',
       color: 'bg-blue-100 text-blue-800 border-blue-200',
       icon: <CheckSquare className="w-3 h-3 mr-1" />,
-    },
-    labor_paid: {
-      label: 'Labor Paid',
-      color: 'bg-green-100 text-green-800 border-green-200',
-      icon: <DollarSign className="w-3 h-3 mr-1" />,
     },
     completed: {
       label: 'Completed',
@@ -145,12 +122,8 @@ const TimelineItem = ({ status, label, timestamp, isActive, isLast }) => {
   const statusColors = {
     pending: 'bg-yellow-500',
     quoted: 'bg-blue-500',
-    agreed: 'bg-indigo-500',
-    materials_delivered: 'bg-cyan-500',
-    materials_confirmed: 'bg-teal-500',
     in_progress: 'bg-purple-500',
     work_completed: 'bg-blue-500',
-    labor_paid: 'bg-green-500',
     completed: 'bg-green-500',
     cancelled: 'bg-red-500',
     'no-show': 'bg-gray-500',
@@ -249,9 +222,8 @@ const BookingDetails = () => {
   // ── Action modal state ──
   const [actionModal, setActionModal] = useState({
     open: false,
-    action: '', // 'sendQuotation', 'acceptQuotation', 'rejectQuotation', 'setMaterialSource',
-                 // 'confirmMaterialsMoneyReceived', 'confirmMaterialsDelivered', 'confirmMaterialsReceived',
-                 // 'start', 'confirmWork', 'disputeWork', 'confirmLaborPayment', 'cancel', 'rate'
+    action: '', // 'sendQuotation', 'acceptQuotation', 'rejectQuotation', 'disputeWork',
+                 // 'confirmLaborPayment' (older bookings only), 'cancel', 'rate' (also confirms the work)
                  // (completing the work happens in JobEvidence, which needs proof first)
     title: '',
     message: '',
@@ -261,11 +233,7 @@ const BookingDetails = () => {
     error: '',
     // Quotation fields
     totalCost: '',
-    laborCost: '',
-    materialsCost: '',
-    // Material source
-    providedByClient: false,
-    // Labor payment
+    // Payment (older bookings)
     amount: '',
     note: '',
     // Rejection reason
@@ -410,13 +378,9 @@ const BookingDetails = () => {
     const statusLabels = {
       pending: 'Booking Created',
       quoted: 'Quotation Sent',
-      agreed: 'Quotation Accepted',
-      materials_delivered: 'Materials Delivered',
-      materials_confirmed: 'Materials Confirmed',
-      in_progress: 'Work Started',
-      work_completed: 'Work Completed',
-      labor_paid: 'Labor Payment Confirmed',
-      completed: 'Job Completed & Rated',
+      in_progress: 'Quotation Accepted — Work Started',
+      work_completed: 'Work Completed & Paid',
+      completed: 'Confirmed & Rated by Client',
       cancelled: 'Booking Cancelled',
       'no-show': 'No Show',
     };
@@ -432,12 +396,8 @@ const BookingDetails = () => {
     if (booking.status !== 'pending') {
       const statusMap = {
         quoted: { status: 'quoted', timestamp: booking.quotation?.sentAt || booking.updatedAt },
-        agreed: { status: 'agreed', timestamp: booking.quotation?.acceptedAt || booking.updatedAt },
-        materials_delivered: { status: 'materials_delivered', timestamp: booking.materials?.deliveredAt || booking.updatedAt },
-        materials_confirmed: { status: 'materials_confirmed', timestamp: booking.materials?.confirmedByClientAt || booking.updatedAt },
         in_progress: { status: 'in_progress', timestamp: booking.startedAt || booking.updatedAt },
         work_completed: { status: 'work_completed', timestamp: booking.workCompletedAt || booking.updatedAt },
-        labor_paid: { status: 'labor_paid', timestamp: booking.laborPayment?.confirmedAt || booking.updatedAt },
         completed: { status: 'completed', timestamp: booking.completedAt || booking.updatedAt },
         cancelled: { status: 'cancelled', timestamp: booking.cancelledAt || booking.updatedAt },
         'no-show': { status: 'no-show', timestamp: booking.updatedAt },
@@ -445,9 +405,8 @@ const BookingDetails = () => {
 
       // Build the list of statuses up to the current one
       const statusOrder = [
-        'pending', 'quoted', 'agreed', 'materials_delivered',
-        'materials_confirmed', 'in_progress', 'work_completed',
-        'labor_paid', 'completed', 'cancelled', 'no-show'
+        'pending', 'quoted', 'in_progress', 'work_completed',
+        'completed', 'cancelled', 'no-show'
       ];
       const currentIndex = statusOrder.indexOf(booking.status);
       // Add all statuses from index 1 to currentIndex (skip pending which is already added)
@@ -487,7 +446,7 @@ const BookingDetails = () => {
     const configs = {
       sendQuotation: {
         title: 'Send Quotation',
-        message: 'Specify the total cost, labor cost, and materials cost for this job.',
+        message: 'Give one total price for the whole job.',
         buttonText: 'Send Quotation',
         buttonColor: 'bg-blue-600 hover:bg-blue-700',
         needsRating: false,
@@ -495,7 +454,7 @@ const BookingDetails = () => {
       },
       acceptQuotation: {
         title: 'Accept Quotation',
-        message: 'Do you agree with the quotation? Accepting will move to the next step.',
+        message: `Do you agree with the quotation? Accepting tells ${expertName} to start the work.`,
         buttonText: 'Accept',
         buttonColor: 'bg-green-600 hover:bg-green-700',
         needsRating: false,
@@ -508,49 +467,6 @@ const BookingDetails = () => {
         needsRating: false,
         needsReason: true,
       },
-      setMaterialSource: {
-        title: 'Material Source',
-        message: 'Who will provide the materials for this job?',
-        buttonText: 'Set Source',
-        buttonColor: 'bg-purple-600 hover:bg-purple-700',
-        needsRating: false,
-        needsMaterialSource: true,
-      },
-      confirmMaterialsMoneyReceived: {
-        title: 'Confirm Materials Money Received',
-        message: 'Has the client paid you for the materials?',
-        buttonText: 'Confirm',
-        buttonColor: 'bg-green-600 hover:bg-green-700',
-        needsRating: false,
-      },
-      confirmMaterialsDelivered: {
-        title: 'Confirm Materials Delivered',
-        message: 'Have you delivered the materials to the client?',
-        buttonText: 'Delivered',
-        buttonColor: 'bg-green-600 hover:bg-green-700',
-        needsRating: false,
-      },
-      confirmMaterialsReceived: {
-        title: 'Confirm Materials Received',
-        message: `Have you received the materials from ${expertName}?`,
-        buttonText: 'Confirm Received',
-        buttonColor: 'bg-green-600 hover:bg-green-700',
-        needsRating: false,
-      },
-      start: {
-        title: 'Start Work',
-        message: 'Are you ready to start this job? The client will be notified.',
-        buttonText: 'Start',
-        buttonColor: 'bg-purple-600 hover:bg-purple-700',
-        needsRating: false,
-      },
-      confirmWork: {
-        title: 'Confirm Work Is Done',
-        message: `Have you checked the proof and is the work finished to your satisfaction? After confirming, pay ${expertName} for the labor.`,
-        buttonText: 'Yes, work is done',
-        buttonColor: 'bg-green-600 hover:bg-green-700',
-        needsRating: false,
-      },
       disputeWork: {
         title: 'Report a Problem',
         message: `Tell us what is wrong. ${expertName} can add more proof, and our team will review it.`,
@@ -560,8 +476,8 @@ const BookingDetails = () => {
         needsReason: true,
       },
       confirmLaborPayment: {
-        title: 'Confirm Labor Payment',
-        message: 'Enter the amount you received for labor.',
+        title: 'Record Payment',
+        message: 'Enter the amount the client paid you.',
         buttonText: 'Confirm Payment',
         buttonColor: 'bg-green-600 hover:bg-green-700',
         needsRating: false,
@@ -575,9 +491,9 @@ const BookingDetails = () => {
         needsRating: false,
       },
       rate: {
-        title: `Rate ${expertName}`,
-        message: `Share your experience with ${expertName}.`,
-        buttonText: 'Submit Rating',
+        title: 'Confirm Work & Rate',
+        message: `Check the proof of work. By rating, you confirm ${expertName} finished the job, and the booking is closed.`,
+        buttonText: 'Confirm & Rate',
         buttonColor: 'bg-yellow-500 hover:bg-yellow-600',
         needsRating: true,
       },
@@ -596,21 +512,16 @@ const BookingDetails = () => {
       loading: false,
       error: '',
       totalCost: '',
-      laborCost: '',
-      materialsCost: '',
-      providedByClient: false,
-      amount: '',
+      // Pre-fill the payment with the quoted total (the expert can change it)
+      amount: action === 'confirmLaborPayment' && booking?.quotation?.totalCost > 0
+        ? String(booking.quotation.totalCost) : '',
       note: '',
       reason: '',
       rating: 0,
       review: '',
       quotationFiles: [],
-      // Pre-fill the materials amount with the quoted materials cost (the expert can change or clear it)
-      materialsAmount: action === 'confirmMaterialsMoneyReceived' && booking?.quotation?.materialsCost > 0
-        ? String(booking.quotation.materialsCost) : '',
       needsRating: config.needsRating || false,
       needsQuotation: config.needsQuotation || false,
-      needsMaterialSource: config.needsMaterialSource || false,
       needsLaborAmount: config.needsLaborAmount || false,
       needsReason: config.needsReason || false,
     });
@@ -632,19 +543,14 @@ const BookingDetails = () => {
       loading: false,
       error: '',
       totalCost: '',
-      laborCost: '',
-      materialsCost: '',
-      providedByClient: false,
       amount: '',
       note: '',
       reason: '',
       rating: 0,
       review: '',
       quotationFiles: [],
-      materialsAmount: '',
       needsRating: false,
       needsQuotation: false,
-      needsMaterialSource: false,
       needsLaborAmount: false,
       needsReason: false,
     });
@@ -661,19 +567,14 @@ const BookingDetails = () => {
     const {
       action,
       totalCost,
-      laborCost,
-      materialsCost,
-      providedByClient,
       amount,
       note,
       reason,
       rating,
       review,
       quotationFiles,
-      materialsAmount,
       needsRating,
       needsQuotation,
-      needsMaterialSource,
       needsLaborAmount,
       needsReason,
     } = actionModal;
@@ -698,25 +599,6 @@ const BookingDetails = () => {
         setActionModal((prev) => ({ ...prev, error: 'Total cost must be > 0.' }));
         return;
       }
-      if (laborCost === '' || isNaN(parseFloat(laborCost)) || parseFloat(laborCost) < 0) {
-        setActionModal((prev) => ({ ...prev, error: 'Labor cost is required (can be 0).' }));
-        return;
-      }
-      if (materialsCost === '' || isNaN(parseFloat(materialsCost)) || parseFloat(materialsCost) < 0) {
-        setActionModal((prev) => ({ ...prev, error: 'Materials cost is required (can be 0).' }));
-        return;
-      }
-    }
-
-    if (materialsAmount !== '' && (isNaN(parseFloat(materialsAmount)) || parseFloat(materialsAmount) < 0)) {
-      setActionModal((prev) => ({ ...prev, error: 'Materials amount must be a positive number, or leave it empty.' }));
-      return;
-    }
-
-    // Validate material source
-    if (needsMaterialSource && typeof providedByClient !== 'boolean') {
-      setActionModal((prev) => ({ ...prev, error: 'Please select who provides materials.' }));
-      return;
     }
 
     // Validate labor amount
@@ -745,11 +627,7 @@ const BookingDetails = () => {
       switch (action) {
         case 'sendQuotation':
           endpoint = `/bookings/${booking._id}/quotation`;
-          payload = {
-            totalCost: parseFloat(totalCost),
-            laborCost: parseFloat(laborCost),
-            materialsCost: parseFloat(materialsCost),
-          };
+          payload = { totalCost: parseFloat(totalCost) };
           // With a quotation photo/PDF attached, send as multipart (axios sets the boundary)
           if (quotationFiles.length) {
             const form = new FormData();
@@ -764,27 +642,6 @@ const BookingDetails = () => {
         case 'rejectQuotation':
           endpoint = `/bookings/${booking._id}/reject-quotation`;
           payload = { reason: reason.trim() };
-          break;
-        case 'setMaterialSource':
-          endpoint = `/bookings/${booking._id}/material-source`;
-          payload = { providedByClient };
-          break;
-        case 'confirmMaterialsMoneyReceived':
-          endpoint = `/bookings/${booking._id}/materials-money-received`;
-          if (materialsAmount !== '') payload = { amount: parseFloat(materialsAmount) };
-          break;
-        case 'confirmMaterialsDelivered':
-          endpoint = `/bookings/${booking._id}/materials-delivered`;
-          break;
-        case 'confirmMaterialsReceived':
-          endpoint = `/bookings/${booking._id}/materials-received`;
-          break;
-        case 'start':
-          endpoint = `/bookings/${booking._id}/start`;
-          break;
-        case 'confirmWork':
-          endpoint = `/bookings/${booking._id}/confirm-work`;
-          payload = { confirmed: true };
           break;
         case 'disputeWork':
           endpoint = `/bookings/${booking._id}/confirm-work`;
@@ -929,19 +786,14 @@ const BookingDetails = () => {
   // Status booleans
   const isPending = booking.status === 'pending';
   const isQuoted = booking.status === 'quoted';
-  const isAgreed = booking.status === 'agreed';
-  const isMaterialsDelivered = booking.status === 'materials_delivered';
-  const isMaterialsConfirmed = booking.status === 'materials_confirmed';
   const isInProgress = booking.status === 'in_progress';
   const isWorkCompleted = booking.status === 'work_completed';
-  const isLaborPaid = booking.status === 'labor_paid';
   const isCompleted = booking.status === 'completed';
   const isCancelled = booking.status === 'cancelled';
 
   // Client actions
   const clientCanCancel = isPending || isQuoted; // only before accepted
   const clientCanAcceptReject = isQuoted;
-  const clientCanConfirmMaterialsReceived = isMaterialsDelivered;
   // Proof of work: bookings finished before the evidence step existed have no submittedAt
   const evidence = booking.completionEvidence || {};
   const workConfirmation = booking.clientWorkConfirmation || {};
@@ -949,29 +801,19 @@ const BookingDetails = () => {
   const evidenceRejected = evidence.reviewStatus === 'admin_rejected';
   const workConfirmed = !!(workConfirmation.confirmedAt || workConfirmation.autoConfirmedAt || evidence.reviewStatus === 'admin_ok');
   const workDisputed = !!workConfirmation.disputedAt && !workConfirmed;
-  const autoConfirmDays = booking.evidenceRules?.autoConfirmDays || 3;
-  const clientSilentLongEnough = !workConfirmation.disputedAt && booking.workCompletedAt &&
-    Date.now() - new Date(booking.workCompletedAt).getTime() >= autoConfirmDays * 24 * 60 * 60 * 1000;
 
-  const clientCanConfirmWork = isWorkCompleted && evidenceFlow && !workConfirmation.confirmedAt && !evidenceRejected;
-  const clientCanRate = isLaborPaid && !booking.clientRating && !evidenceRejected;
+  // Rating is the client's confirmation that the work is done — one step to finish
+  const clientCanRate = isWorkCompleted && !booking.clientRating && !evidenceRejected;
+  const clientCanDispute = clientCanRate && evidenceFlow && !workConfirmation.disputedAt;
   const clientCanPinLocation = PIN_STATUSES.includes(booking.status);
 
   // Technician actions
   const techCanSendQuotation = isPending;
-  // Materials steps one at a time: choose source → (money received) → delivered.
-  // Older bookings have no sourceSetAt, so treat money/delivery progress as "source chosen".
-  const materialSourceChosen = !!(booking.materials?.sourceSetAt || booking.materials?.moneyReceivedAt || booking.materials?.deliveredAt);
-  const techCanSetMaterialSource = isAgreed && !materialSourceChosen;
-  // If tech buys, they must confirm money received before delivering
-  const techCanConfirmMaterialsMoneyReceived = isAgreed && materialSourceChosen && booking.materials?.providedByClient === false && !booking.materials?.moneyReceivedAt;
-  const techCanConfirmMaterialsDelivered = isAgreed && materialSourceChosen && (booking.materials?.providedByClient || booking.materials?.moneyReceivedAt) && !booking.materials?.deliveredAt;
-  const techCanStartWork = isMaterialsConfirmed;
   const techCanCompleteWork = isInProgress && !booking.workCompletedAt;
   // More proof can be added after the client reports a problem
   const techCanAddEvidence = isInProgress || (isWorkCompleted && evidenceFlow && workDisputed);
-  const techCanConfirmLaborPayment = isWorkCompleted && !booking.laborPayment?.confirmedAt && !evidenceRejected &&
-    (!evidenceFlow || workConfirmed || clientSilentLongEnough);
+  // Older bookings finished before payment was part of completing the work
+  const techCanConfirmLaborPayment = isWorkCompleted && !booking.laborPayment?.confirmedAt && !evidenceRejected;
   // Server only allows cancelling before the quotation is accepted
   const techCanCancel = isPending || isQuoted;
 
@@ -985,22 +827,10 @@ const BookingDetails = () => {
         return tech ? 'Your move: send a quotation.' : `Waiting for ${technicianName} to send a quotation.`;
       case 'quoted':
         return tech ? `Waiting for ${clientName} to accept or reject your quotation.` : 'Your move: accept or reject the quotation.';
-      case 'agreed':
-        if (!materialSourceChosen) {
-          return tech ? 'Your move: choose who provides the materials.' : `Waiting for ${technicianName} to arrange the materials.`;
-        }
-        if (booking.materials?.providedByClient === false && !booking.materials?.moneyReceivedAt) {
-          return tech ? 'Your move: confirm the client has paid you for materials.' : `Pay ${technicianName} for the materials; they will confirm receipt.`;
-        }
-        return tech ? 'Your move: confirm the materials are delivered.' : `Waiting for ${technicianName} to deliver the materials.`;
-      case 'materials_delivered':
-        return tech ? `Waiting for ${clientName} to confirm the materials.` : 'Your move: confirm you received the materials.';
-      case 'materials_confirmed':
-        return tech ? 'Your move: start the work.' : `Waiting for ${technicianName} to start the work.`;
       case 'in_progress':
         return tech
-          ? 'Your move: when done, take photos of the finished work below, then mark it completed.'
-          : `${technicianName} is working on it.`;
+          ? 'Your move: do the work. When it is done and you have been paid in full, take photos of the finished work below and mark it completed.'
+          : `${technicianName} is working on it. Pay them when the work is done.`;
       case 'work_completed':
         if (evidenceRejected) {
           return 'Our team rejected the proof for this job. Please contact support.';
@@ -1008,19 +838,11 @@ const BookingDetails = () => {
         if (evidenceFlow && workDisputed) {
           return tech
             ? `${clientName} reported a problem: "${workConfirmation.disputeReason}". Add more proof below, or contact support.`
-            : `You reported a problem. ${technicianName} can add more proof; confirm the work once it is sorted.`;
+            : `You reported a problem. ${technicianName} can add more proof; confirm and rate once it is sorted.`;
         }
-        if (evidenceFlow && !workConfirmed) {
-          if (tech) {
-            return clientSilentLongEnough
-              ? `${clientName} has not answered for ${autoConfirmDays} days, so you can now confirm the labor amount you were paid.`
-              : `Waiting for ${clientName} to check your proof and confirm the work. If they don't answer within ${autoConfirmDays} days, you can continue.`;
-          }
-          return 'Your move: check the proof of work below and confirm the job is done.';
-        }
-        return tech ? 'Your move: confirm the labor amount you were paid.' : `Pay ${technicianName} for the labor; they will confirm the amount.`;
-      case 'labor_paid':
-        return tech ? `Waiting for ${clientName} to rate you.` : `Your move: rate ${technicianName} to finish the booking.`;
+        return tech
+          ? `Waiting for ${clientName} to confirm the work and rate you.`
+          : `Your move: check the proof of work below, then confirm and rate ${technicianName}.`;
       default:
         return null;
     }
@@ -1099,10 +921,8 @@ const BookingDetails = () => {
         )}
 
         {/* ─── ACTIONS (right under the next step, so they are easy to find on a phone) ─── */}
-        {((isClient && (clientCanCancel || clientCanAcceptReject || clientCanConfirmMaterialsReceived || clientCanConfirmWork || clientCanRate)) ||
-          (isTechnician && (techCanSendQuotation || techCanSetMaterialSource || techCanConfirmMaterialsMoneyReceived ||
-            techCanConfirmMaterialsDelivered || techCanStartWork ||
-            techCanConfirmLaborPayment || techCanCancel))) && (
+        {((isClient && (clientCanCancel || clientCanAcceptReject || clientCanRate)) ||
+          (isTechnician && (techCanSendQuotation || techCanConfirmLaborPayment || techCanCancel))) && (
           <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-3">⚡ What you can do now</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1134,42 +954,22 @@ const BookingDetails = () => {
                   </button>
                 </>
               )}
-              {isClient && clientCanConfirmMaterialsReceived && (
-                <button
-                  onClick={() => openActionModal('confirmMaterialsReceived')}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Confirm Materials Received
-                </button>
-              )}
-              {isClient && clientCanConfirmWork && (
-                <>
-                  <button
-                    onClick={() => openActionModal('confirmWork')}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Confirm Work Is Done
-                  </button>
-                  {!workConfirmation.disputedAt && (
-                    <button
-                      onClick={() => openActionModal('disputeWork')}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-medium"
-                    >
-                      <AlertCircle className="w-4 h-4" />
-                      Report a Problem
-                    </button>
-                  )}
-                </>
-              )}
               {isClient && clientCanRate && (
                 <button
                   onClick={() => openActionModal('rate')}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
                 >
                   <Star className="w-4 h-4 fill-current" />
-                  Rate {technicianName}
+                  Confirm Work &amp; Rate
+                </button>
+              )}
+              {isClient && clientCanDispute && (
+                <button
+                  onClick={() => openActionModal('disputeWork')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-medium"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  Report a Problem
                 </button>
               )}
 
@@ -1183,49 +983,13 @@ const BookingDetails = () => {
                   Send Quotation
                 </button>
               )}
-              {isTechnician && techCanSetMaterialSource && (
-                <button
-                  onClick={() => openActionModal('setMaterialSource')}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                >
-                  <Package className="w-4 h-4" />
-                  Set Material Source
-                </button>
-              )}
-              {isTechnician && techCanConfirmMaterialsMoneyReceived && (
-                <button
-                  onClick={() => openActionModal('confirmMaterialsMoneyReceived')}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                >
-                  <DollarSign className="w-4 h-4" />
-                  Confirm Materials Money Received
-                </button>
-              )}
-              {isTechnician && techCanConfirmMaterialsDelivered && (
-                <button
-                  onClick={() => openActionModal('confirmMaterialsDelivered')}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                >
-                  <Truck className="w-4 h-4" />
-                  Confirm Materials Delivered
-                </button>
-              )}
-              {isTechnician && techCanStartWork && (
-                <button
-                  onClick={() => openActionModal('start')}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                >
-                  <Play className="w-4 h-4" />
-                  Start Work
-                </button>
-              )}
               {isTechnician && techCanConfirmLaborPayment && (
                 <button
                   onClick={() => openActionModal('confirmLaborPayment')}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
                 >
                   <DollarSign className="w-4 h-4" />
-                  Confirm Labor Payment
+                  Record Payment
                 </button>
               )}
               {isTechnician && techCanCancel && (
@@ -1386,14 +1150,19 @@ const BookingDetails = () => {
                     <p className="text-sm text-gray-500">Total Cost</p>
                     <p className="font-bold text-gray-800">{formatCurrency(booking.quotation.totalCost)}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Labor Cost</p>
-                    <p className="font-medium">{formatCurrency(booking.quotation.laborCost)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Materials Cost</p>
-                    <p className="font-medium">{formatCurrency(booking.quotation.materialsCost)}</p>
-                  </div>
+                  {/* Older quotations were split into labor and materials */}
+                  {booking.quotation.laborCost > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-500">Labor Cost</p>
+                      <p className="font-medium">{formatCurrency(booking.quotation.laborCost)}</p>
+                    </div>
+                  )}
+                  {booking.quotation.materialsCost > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-500">Materials Cost</p>
+                      <p className="font-medium">{formatCurrency(booking.quotation.materialsCost)}</p>
+                    </div>
+                  )}
                 </div>
                 {booking.quotation.attachments?.length > 0 && (
                   <div className="mt-4">
@@ -1433,43 +1202,6 @@ const BookingDetails = () => {
                 {booking.quotation.rejectionReason && (
                   <p className="text-sm text-red-500 mt-1">Reason: {booking.quotation.rejectionReason}</p>
                 )}
-              </div>
-            )}
-
-            {/* Materials Card */}
-            {booking.materials && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-cyan-600" />
-                  Materials
-                </h2>
-                <div className="space-y-2">
-                  <p className="text-sm">
-                    <span className="text-gray-500">Provided by:</span>{' '}
-                    <span className="font-medium">
-                      {booking.materials.providedByClient ? clientName : `${technicianName} (buys)`}
-                    </span>
-                  </p>
-                  {booking.materials.moneyReceivedAt && (
-                    <p className="text-sm text-green-600">
-                      Money received: {formatDateTime(booking.materials.moneyReceivedAt)}
-                      {booking.materials.moneyReceivedAmount > 0 && ` (${formatCurrency(booking.materials.moneyReceivedAmount)})`}
-                    </p>
-                  )}
-                  {booking.materials.deliveredAt && (
-                    <p className="text-sm text-green-600">
-                      Delivered: {formatDateTime(booking.materials.deliveredAt)}
-                    </p>
-                  )}
-                  {booking.materials.confirmedByClientAt && (
-                    <p className="text-sm text-green-600">
-                      Confirmed by client: {formatDateTime(booking.materials.confirmedByClientAt)}
-                    </p>
-                  )}
-                  {booking.materials.notes && (
-                    <p className="text-sm text-gray-600">Note: {booking.materials.notes}</p>
-                  )}
-                </div>
               </div>
             )}
 
@@ -1515,12 +1247,12 @@ const BookingDetails = () => {
                 )}
               </div>
 
-              {/* Labor Payment Confirmation */}
+              {/* Payment the expert confirmed when completing the work */}
               {booking.laborPayment?.confirmedAt && (
                 <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
                   <p className="text-sm text-green-700 flex items-center gap-1">
                     <CheckCircle className="w-4 h-4" />
-                    <span>Labor payment confirmed</span>
+                    <span>{technicianName} confirmed full payment</span>
                     <span className="font-medium"> ({formatCurrency(booking.laborPayment.amount)})</span>
                     <span className="text-xs text-gray-500 ml-2">
                       {formatDateTime(booking.laborPayment.confirmedAt)}
@@ -1678,38 +1410,6 @@ const BookingDetails = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Labor Cost (KES) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={actionModal.laborCost}
-                      onChange={(e) => setActionModal((prev) => ({ ...prev, laborCost: e.target.value }))}
-                      placeholder="e.g. 3000"
-                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      disabled={actionModal.loading}
-                      min="0"
-                      step="1"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Materials Cost (KES) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={actionModal.materialsCost}
-                      onChange={(e) => setActionModal((prev) => ({ ...prev, materialsCost: e.target.value }))}
-                      placeholder="e.g. 2000"
-                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      disabled={actionModal.loading}
-                      min="0"
-                      step="1"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Quotation photo or PDF (optional)
                     </label>
                     <label className={`flex items-center justify-center gap-2 w-full p-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 cursor-pointer hover:bg-gray-50 ${
@@ -1757,61 +1457,7 @@ const BookingDetails = () => {
                 </>
               )}
 
-              {/* How much the client gave for materials (optional) */}
-              {actionModal.action === 'confirmMaterialsMoneyReceived' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount received for materials (KES, optional)
-                  </label>
-                  <input
-                    type="number"
-                    value={actionModal.materialsAmount}
-                    onChange={(e) => setActionModal((prev) => ({ ...prev, materialsAmount: e.target.value }))}
-                    placeholder="e.g. 2000"
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    disabled={actionModal.loading}
-                    min="0"
-                    step="1"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">Leave empty if you'd rather not say.</p>
-                </div>
-              )}
-
-              {/* Material source */}
-              {actionModal.action === 'setMaterialSource' && (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Who provides the materials? <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="radio"
-                        name="providedByClient"
-                        value="true"
-                        checked={actionModal.providedByClient === true}
-                        onChange={() => setActionModal((prev) => ({ ...prev, providedByClient: true }))}
-                        disabled={actionModal.loading}
-                      />
-                      Client provides
-                    </label>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="radio"
-                        name="providedByClient"
-                        value="false"
-                        checked={actionModal.providedByClient === false}
-                        onChange={() => setActionModal((prev) => ({ ...prev, providedByClient: false }))}
-                        disabled={actionModal.loading}
-                      />
-                      I buy them
-                    </label>
-                  </div>
-                  <p className="text-xs text-gray-400">If you buy them, you'll first confirm the client has paid you for them.</p>
-                </div>
-              )}
-
-              {/* Labor payment amount */}
+              {/* Payment amount (older bookings) */}
               {actionModal.action === 'confirmLaborPayment' && (
                 <>
                   <div>

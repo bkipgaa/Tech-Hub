@@ -5,10 +5,9 @@
  * 
  * Features:
  * - View all bookings for the logged-in technician
- * - Filter by status (pending, confirmed, in-progress, completed, cancelled)
- * - Confirm pending bookings
- * - Start confirmed bookings
- * - Complete in-progress bookings
+ * - Filter by status (pending, quoted, in progress, work completed, completed, cancelled)
+ * - Send a quote for pending bookings (on the details page)
+ * - Add proof and complete in-progress bookings (on the details page)
  * - Cancel bookings (if needed)
  * - View booking details
  * - Responsive design with comprehensive error handling
@@ -39,7 +38,6 @@ import {
   AlertTriangle,
   RefreshCw,
   Wrench,
-  Play,
   CheckSquare,
   Ban,
 } from 'lucide-react';
@@ -63,15 +61,20 @@ const StatusBadge = ({ status }) => {
       color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       icon: <Clock className="w-3 h-3 mr-1" />,
     },
-    confirmed: {
-      label: 'Confirmed',
+    quoted: {
+      label: 'Quote sent',
       color: 'bg-blue-100 text-blue-800 border-blue-200',
       icon: <CheckCircle className="w-3 h-3 mr-1" />,
     },
-    'in-progress': {
+    in_progress: {
       label: 'In Progress',
       color: 'bg-purple-100 text-purple-800 border-purple-200',
       icon: <Loader2 className="w-3 h-3 mr-1 animate-spin" />,
+    },
+    work_completed: {
+      label: 'Waiting for client rating',
+      color: 'bg-blue-100 text-blue-800 border-blue-200',
+      icon: <CheckCircle className="w-3 h-3 mr-1" />,
     },
     completed: {
       label: 'Completed',
@@ -154,7 +157,7 @@ const TechnicianBookings = () => {
   const [actionModal, setActionModal] = useState({
     open: false,
     bookingId: null,
-    action: '', // 'confirm', 'start', 'complete', 'cancel'
+    action: '', // 'cancel'
     title: '',
     message: '',
     buttonText: '',
@@ -247,12 +250,6 @@ const TechnicianBookings = () => {
    */
   const openActionModal = (bookingId, action) => {
     const configs = {
-      start: {
-        title: 'Start Booking',
-        message: 'Are you ready to start this job? The client will be notified.',
-        buttonText: 'Start',
-        buttonColor: 'bg-purple-600 hover:bg-purple-700',
-      },
       cancel: {
         title: 'Cancel Booking',
         message: 'Are you sure you want to cancel this booking? This action cannot be undone.',
@@ -299,7 +296,7 @@ const TechnicianBookings = () => {
   /**
    * handleActionSubmit()
    * --------------------
-   * Submits the selected action (confirm, start, complete, cancel) to the backend.
+   * Submits the selected action (cancel) to the backend.
    */
   const handleActionSubmit = async (e) => {
     e.preventDefault();
@@ -312,9 +309,6 @@ const TechnicianBookings = () => {
     try {
       let endpoint = '';
       switch (action) {
-        case 'start':
-          endpoint = `/bookings/${bookingId}/start`;
-          break;
         case 'cancel':
           endpoint = `/bookings/${bookingId}/cancel`;
           break;
@@ -460,8 +454,9 @@ const TechnicianBookings = () => {
               >
                 <option value="">All</option>
                 <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="in-progress">In Progress</option>
+                <option value="quoted">Quoted</option>
+                <option value="in_progress">In Progress</option>
+                <option value="work_completed">Work Completed</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
@@ -534,25 +529,17 @@ const TechnicianBookings = () => {
               const isExpanded = expandedBookingId === booking._id;
               const isPending = booking.status === 'pending';
               const isQuoted = booking.status === 'quoted';
-              const isMaterialsConfirmed = booking.status === 'materials_confirmed';
               const isInProgress = booking.status === 'in_progress';
               const isCompleted = booking.status === 'completed';
               const isCancelled = booking.status === 'cancelled';
 
               // Quoting and completing (which needs photo proof) happen on the details page
               const showQuote = isPending;
-              const showStart = isMaterialsConfirmed;
               const showComplete = isInProgress;
-              // Labor payment can be recorded once the client confirmed the work (or never answered
-              // for 3 days, or an admin approved it); bookings finished before proof existed skip that
-              const evidence = booking.completionEvidence || {};
-              const workConfirmation = booking.clientWorkConfirmation || {};
-              const clientSilent = !workConfirmation.disputedAt && booking.workCompletedAt &&
-                Date.now() - new Date(booking.workCompletedAt).getTime() >= 3 * 24 * 60 * 60 * 1000;
+              // Payment is confirmed when completing the work; only older bookings finished
+              // before that still need it recorded
               const showRecordPayment = booking.status === 'work_completed' && !booking.laborPayment?.confirmedAt &&
-                evidence.reviewStatus !== 'admin_rejected' &&
-                (!evidence.submittedAt || workConfirmation.confirmedAt || workConfirmation.autoConfirmedAt ||
-                  evidence.reviewStatus === 'admin_ok' || clientSilent);
+                booking.completionEvidence?.reviewStatus !== 'admin_rejected';
               const showCancel = isPending || isQuoted; // the server only allows cancelling before acceptance
 
               return (
@@ -604,15 +591,6 @@ const TechnicianBookings = () => {
                           >
                             <CheckCircle className="w-4 h-4" />
                             Send Quote
-                          </button>
-                        )}
-                        {showStart && (
-                          <button
-                            onClick={() => openActionModal(booking._id, 'start')}
-                            className="text-purple-600 hover:text-purple-800 text-sm px-3 py-1.5 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors flex items-center gap-1"
-                          >
-                            <Play className="w-4 h-4" />
-                            Start
                           </button>
                         )}
                         {showComplete && (
