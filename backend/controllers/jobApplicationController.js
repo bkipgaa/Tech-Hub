@@ -68,6 +68,14 @@ exports.applyForJob = async (req, res) => {
       });
     }
 
+    // Experts can post jobs too, but can't apply to their own
+    if (job.clientId.toString() === req.user.userId) {
+      return res.status(400).json({
+        success: false,
+        message: "You can't apply to a job you posted."
+      });
+    }
+
     // Check if technician has already applied for this job
     const existingApplication = await JobApplication.findOne({
       jobId,

@@ -19,7 +19,7 @@ router.use('/verifications', require('./verificationAdminRoutes'));
 router.use('/listings',      require('./listingAdminRoutes'));
 router.use('/bookings',      require('./bookingAdminRoutes'));
 router.use('/catalog',       require('./catalogAdminRoutes'));
-// router.use('/jobs',          require('./jobAdminRoutes'));
+router.use('/jobs',          require('./jobAdminRoutes'));
 router.use('/revenue',       require('./revenueAdminRoutes'));
 router.use('/users',         require('./userAdminRoutes'));
 router.use('/admin-users',   require('./adminUserRoutes'));

@@ -70,6 +70,12 @@ exports.listingApproved = (data) =>
 exports.listingRejected = (data) =>
   dispatch(data.email, templates.listingRejected, data, 'listing_rejected');
 
+exports.jobApproved = (data) =>
+  dispatch(data.email, templates.jobApproved, data, 'job_approved');
+
+exports.jobRejected = (data) =>
+  dispatch(data.email, templates.jobRejected, data, 'job_rejected');
+
 // ─────────────────────────────────────────────────────────────
 // CLIENT NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────

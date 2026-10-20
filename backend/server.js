@@ -197,9 +197,9 @@ const connectDB = async () => {
     console.log(`📦 Database: ${mongoose.connection.name}`);
     console.log(`📍 Host: ${mongoose.connection.host}`);
 
-    // Admin roles that review listings get the listing permissions
-    require('./utils/ensureListingPermissions')().catch((err) =>
-      console.error('Listing permissions setup failed:', err.message)
+    // Admin roles that review listings and job posts get those permissions
+    require('./utils/ensureAdminPermissions')().catch((err) =>
+      console.error('Admin permissions setup failed:', err.message)
     );
 
     // Bring older Stays & Spaces listings up to date (towns, per-listing pricing)

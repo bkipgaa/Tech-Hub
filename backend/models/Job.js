@@ -26,6 +26,12 @@ const jobSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // true when the poster typed their own main category ("Other"); see utils/jobCategories.js
+  customCategory: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
   serviceCategory: {
     type: String,
     required: true,
@@ -208,6 +214,16 @@ jobSchema.methods.incrementViews = async function() {
 jobSchema.methods.incrementApplications = async function() {
   this.applicationCount += 1;
   await this.save();
+  return this;
+};
+
+// The poster hired someone (called when an application is accepted)
+jobSchema.methods.markAsFilled = async function(technicianUserId, bookingId = null) {
+  this.status = 'filled';
+  this.filledAt = new Date();
+  this.hiredTechnicianId = technicianUserId;
+  if (bookingId) this.resultingBookingId = bookingId;
+  await this.save({ validateModifiedOnly: true });
   return this;
 };
 
