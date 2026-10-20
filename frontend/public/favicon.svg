@@ -1,9 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="w" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0.5" stop-color="#15803d" />
-      <stop offset="0.5" stop-color="#dc2626" />
-    </linearGradient>
+    <!-- open jaw and hanging hole of the spanner -->
+    <mask id="jaw" maskUnits="userSpaceOnUse" x="-40" y="-40" width="80" height="80">
+      <rect x="-40" y="-40" width="80" height="80" fill="#fff" />
+      <rect x="19" y="-3.8" width="16" height="7.6" fill="#000" />
+      <circle cx="-25.5" cy="0" r="1.7" fill="#000" />
+    </mask>
+    <g id="spanner">
+      <rect x="-30" y="-3.8" width="46" height="7.6" rx="3.8" />
+      <circle cx="21" cy="0" r="9.5" />
+    </g>
   </defs>
-  <path fill="url(#w)" d="M4 10h12l6 28 6-24h8l6 24 6-28h12L48 56H37l-5-22-5 22H16z" />
+  <g transform="translate(32 32) scale(0.98)">
+    <!-- hammer: handle, head, striking face, claw -->
+    <g transform="rotate(-135)" fill="#15803d">
+      <rect x="-30" y="-3.2" width="52" height="6.4" rx="3.2" />
+      <rect x="20" y="-9" width="10" height="13" rx="1" />
+      <rect x="18.5" y="-14.5" width="13" height="6.5" rx="1" />
+      <path d="M20 3.5H30C30 10 26.5 14 19 15.5C21.5 11.5 22 7.5 20 3.5Z" />
+    </g>
+    <!-- spanner on top, with a white outline to separate it from the hammer -->
+    <g transform="rotate(-45)" mask="url(#jaw)">
+      <use href="#spanner" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round" />
+      <use href="#spanner" fill="#dc2626" />
+    </g>
+  </g>
 </svg>
