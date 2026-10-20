@@ -10,7 +10,7 @@ const plan = require('../controllers/listingPlanController');
 router.get('/meta', ctrl.getMeta);
 router.get('/places', ctrl.getPlaces);
 
-// Listing plan (free 6 months, then KES 1,500 a month)
+// Listing payments (3 free months for up to 5 listings, then KES 200 per listing a month)
 router.post('/plan/mpesa-callback', plan.mpesaCallback); // Safaricom, public
 router.get('/plan', auth, plan.getPlan);
 router.post('/plan/pay', auth, plan.pay);

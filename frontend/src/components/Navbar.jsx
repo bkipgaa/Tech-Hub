@@ -126,28 +126,20 @@ const Navbar = () => {
            
 <Link
   to="/"
-  className="flex items-center space-x-3 group"
+  className="flex items-baseline group"
   onClick={closeMobileMenu}
   aria-label="Webafix Home"
 >
-  {/* Circular logo with hover lift + glow */}
-  <div className="relative">
-    {/* Soft glow behind logo */}
-    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400/30 to-red-400/30 blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+  {/* The hammer-and-spanner mark doubles as the "W" of the wordmark.
+      translate-y-[10%] drops it by the empty space under the W, so its feet sit on the text baseline. */}
+  <img
+    src="/logo.svg"
+    alt=""
+    className="w-9 h-9 md:w-11 md:h-11 translate-y-[10%] -mr-1 md:-mr-1.5 origin-bottom transition-transform duration-300 ease-out group-hover:scale-110"
+  />
 
-    {/* The logo image */}
-    <img
-      src="/logo.svg"
-      alt="Webafix"
-      className="relative w-11 h-11 object-contain rounded-full bg-white p-1 ring-2 ring-white shadow-md
-                 transition-all duration-300 ease-out
-                 group-hover:scale-110 group-hover:shadow-xl
-                 group-hover:ring-green-100"
-    />
-  </div>
-
-  {/* Wordmark — colour preserved exactly as before */}
-  <Wordmark className="text-2xl md:text-3xl" />
+  {/* "ebafix" — the logo above supplies the W */}
+  <Wordmark className="text-2xl md:text-3xl" hideW />
 </Link>
 
             {/* ─── DESKTOP NAVIGATION ─────────────── */}

@@ -13,18 +13,19 @@
  * Usage:
  *   <Wordmark className="text-2xl" />
  *   <Wordmark className="text-4xl" onDark />
+ *   <Wordmark className="text-2xl" hideW />  // when the logo mark stands in for the "W"
  */
 
 import React from 'react';
 
-export const Wordmark = ({ className = 'text-3xl', onDark = false }) => (
+export const Wordmark = ({ className = 'text-3xl', onDark = false, hideW = false }) => (
   <span
     role="img"
     aria-label="Webafix"
     className={`inline-flex items-baseline font-extrabold tracking-tight leading-none ${className}`}
   >
     {/* The "W" — green → red gradient, same size as the rest */}
-    <span
+    {!hideW && <span
       aria-hidden="true"
       className={`inline-block bg-clip-text text-transparent [text-shadow:none] ${
         onDark
@@ -33,7 +34,7 @@ export const Wordmark = ({ className = 'text-3xl', onDark = false }) => (
       }`}
     >
       W
-    </span>
+    </span>}
 
     {/* "ebafix" — same size, colour preserved */}
     <span
