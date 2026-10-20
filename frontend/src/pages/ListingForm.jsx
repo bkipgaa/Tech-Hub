@@ -16,7 +16,7 @@ import usePlaces from '../hooks/usePlaces';
 import {
   LISTING_GROUPS, PROPERTY_TYPES, AMENITIES, LISTER_TYPES, COUNTIES,
   categoryById, isShortStay, isBusiness, isEntertainment, amenitiesFor, priceUnitLabel,
-  LISTING_FREE_MONTHS, LISTING_MONTHLY_PRICE,
+  LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE,
 } from '../utils/listingCategories';
 
 const MAX_PHOTOS = 12;
@@ -150,7 +150,7 @@ const ListingForm = () => {
       const allowed = new Set(amenitiesFor(form.category).map((a) => a.id));
       const payload = { ...form, amenities: form.amenities.filter((a) => allowed.has(a)), availableFrom: form.availableFrom || null };
       const r = isEdit ? await api.put(`/listings/${id}`, payload) : await api.post('/listings', payload);
-      navigate(`/stays/${r.data?.data?._id || id}`);
+      navigate("/my-listings", { state: { notice: r.data?.message } });
     } catch (err) {
       setError(err.response?.data?.message || 'Could not save your listing. Please try again.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -184,8 +184,8 @@ const ListingForm = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">{isEdit ? 'Edit listing' : 'List your property'}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Free for your first {LISTING_FREE_MONTHS} months, then KES {LISTING_MONTHLY_PRICE.toLocaleString()} a month
-            for all your listings. Clients contact you directly by phone or WhatsApp.
+            Your first {LISTING_FREE_COUNT} listings are free for {LISTING_FREE_MONTHS} months. Any more, and every listing after that,
+            are KES {LISTING_PRICE} a month each. New listings are checked by our team before they go live.
           </p>
         </div>
 
@@ -198,7 +198,7 @@ const ListingForm = () => {
         <Section title="What are you listing?">
           {LISTING_GROUPS.map((g) => (
             <div key={g.id}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+              <p className="inline-block text-xs font-semibold uppercase tracking-wide text-white bg-red-600 px-2.5 py-1 rounded-md mb-2">
                 {g.name} · {priceUnitLabel(g.priceUnit)}
               </p>
               <div className="flex flex-wrap gap-2">

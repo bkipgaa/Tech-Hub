@@ -1,11 +1,12 @@
 /**
  * listingPlanController.js
  * ========================
- * Stays & Spaces listing plan: free for the first 6 months after a user's
- * first listing, then KES 1,500 a month (card via Paystack or M-Pesa STK push).
+ * Stays & Spaces payments: KES 200 per listing per month, paid by card
+ * (Paystack) or M-Pesa STK push. The lister picks which approved listings to
+ * pay for; each payment covers the next month.
  *
- *   GET  /api/listings/plan                 → plan status + payment history
- *   POST /api/listings/plan/pay             → { method: 'card'|'mpesa', phoneNumber? }
+ *   GET  /api/listings/plan                 → free months + payment history
+ *   POST /api/listings/plan/pay             → { listingIds, months, method: 'card'|'mpesa', phoneNumber? }
  *   GET  /api/listings/plan/verify          → ?reference=  (after the Paystack redirect)
  *   GET  /api/listings/plan/mpesa-status    → ?checkoutRequestID=  (frontend polls)
  *   POST /api/listings/plan/mpesa-callback  → Safaricom (public; re-confirmed with Safaricom)
@@ -13,13 +14,12 @@
  * Card payments are also confirmed by the Paystack webhook (subscriptionController).
  */
 
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Listing = require('../models/Listing');
 const Paystack = require('../config/paystack');
 const mpesaService = require('../services/mpesaService');
 const listingPlan = require('../utils/listingPlan');
-
-const PRICE = listingPlan.MONTHLY_PRICE;
 
 const fail = (res, status, message, error) => {
   if (error) console.error('[listingPlanController]', message, error);
@@ -34,17 +34,22 @@ const cleanPhone = (phone = '') => {
 };
 
 /**
- * Apply a successful Paystack transaction to its user (used by verify and the
- * webhook). Checks the amount, currency and that it was for a listing plan.
+ * Apply a successful Paystack transaction (used by verify and the webhook).
+ * Checks it was for listings, in KES, and that the amount covers what was bought.
  * Returns the user, or null if the transaction doesn't qualify.
  */
 const applyPaystackTransaction = async (tx) => {
   const meta = tx?.metadata || {};
   if (tx?.status !== 'success' || meta.type !== 'listing_plan' || !meta.userId) return null;
-  if (tx.currency !== 'KES' || Number(tx.amount) < PRICE * 100) return null;
+  const listingIds = String(meta.listingIds || '').split(',').filter((id) => mongoose.isValidObjectId(id));
+  const months = Number(meta.months);
+  if (!listingIds.length || !listingPlan.PAY_MONTHS.includes(months)) return null;
+  if (tx.currency !== 'KES' || Number(tx.amount) < listingPlan.priceFor(listingIds.length, months) * 100) return null;
   const user = await User.findById(meta.userId);
   if (!user) return null;
-  await listingPlan.applyPayment(user, { amount: Number(tx.amount) / 100, months: 1, method: 'card', reference: tx.reference });
+  await listingPlan.applyPayment(user, {
+    listingIds, months, amount: Number(tx.amount) / 100, method: 'card', reference: tx.reference,
+  });
   return user;
 };
 exports.applyPaystackTransaction = applyPaystackTransaction;
@@ -54,12 +59,10 @@ exports.getPlan = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('listingPlan');
     if (!user) return fail(res, 401, 'Please sign in again.');
-    const listings = await Listing.countDocuments({ owner: user._id });
     res.json({
       success: true,
       data: {
-        ...listingPlan.planSummary(user),
-        listings,
+        ...(await listingPlan.planSummary(user)),
         payments: (user.listingPlan?.payments || []).slice(-12).reverse(),
       },
     });
@@ -72,25 +75,41 @@ exports.getPlan = async (req, res) => {
 exports.pay = async (req, res) => {
   try {
     const { method, phoneNumber } = req.body;
+    const months = Number(req.body.months) || 1;
     if (!['card', 'mpesa'].includes(method)) return fail(res, 400, 'Choose card or M-Pesa.');
+    if (!listingPlan.PAY_MONTHS.includes(months)) return fail(res, 400, 'Each payment covers one month.');
+
+    const ids = [...new Set((Array.isArray(req.body.listingIds) ? req.body.listingIds : []).map(String))]
+      .filter((id) => mongoose.isValidObjectId(id));
+    if (!ids.length) return fail(res, 400, 'Choose at least one listing to pay for.');
+    if (ids.length > 50) return fail(res, 400, 'You can pay for up to 50 listings at a time.');
+
     const user = await User.findById(req.user.userId);
     if (!user) return fail(res, 401, 'Please sign in again.');
+    // Only the user's own approved listings can be paid for
+    const listings = await Listing.find({ _id: { $in: ids }, owner: user._id, status: { $in: ['active', 'paused'] } }).select('_id title');
+    if (listings.length !== ids.length) {
+      return fail(res, 400, 'You can only pay for your own listings once they have been approved.');
+    }
+
+    const amount = listingPlan.priceFor(listings.length, months);
+    const listingIds = listings.map((l) => l._id);
+    user.listingPlan = user.listingPlan || {};
 
     if (method === 'card') {
       const response = await Paystack.transaction.initialize({
-        amount: PRICE * 100,
+        amount: amount * 100,
         email: user.email,
         currency: 'KES',
         channels: ['card'],
-        metadata: { type: 'listing_plan', userId: String(user._id), months: 1 },
+        metadata: { type: 'listing_plan', userId: String(user._id), months, listingIds: listingIds.join(',') },
         callback_url: `${process.env.FRONTEND_URL}/my-listings`,
       });
-      user.listingPlan = user.listingPlan || {};
-      user.listingPlan.pending = { method: 'card', reference: response.data.reference, amount: PRICE, initiatedAt: new Date() };
+      user.listingPlan.pending = { method: 'card', reference: response.data.reference, amount, months, listingIds, initiatedAt: new Date() };
       await user.save({ validateModifiedOnly: true });
       return res.json({
         success: true,
-        data: { method: 'card', authorization_url: response.data.authorization_url, reference: response.data.reference },
+        data: { method: 'card', amount, authorization_url: response.data.authorization_url, reference: response.data.reference },
       });
     }
 
@@ -98,18 +117,17 @@ exports.pay = async (req, res) => {
     if (!phone) return fail(res, 400, 'Enter an M-Pesa number like 0712 345 678.');
     const stk = await mpesaService.stkPush(
       phone,
-      PRICE,
+      amount,
       `LST-${Date.now()}`.slice(0, 12), // account reference, max 12 chars
-      'Listing plan',                  // max 13 chars
+      'Listings',                      // max 13 chars
       '/api/listings/plan/mpesa-callback'
     );
-    user.listingPlan = user.listingPlan || {};
-    user.listingPlan.pending = { method: 'mpesa', checkoutRequestID: stk.CheckoutRequestID, amount: PRICE, initiatedAt: new Date() };
+    user.listingPlan.pending = { method: 'mpesa', checkoutRequestID: stk.CheckoutRequestID, amount, months, listingIds, initiatedAt: new Date() };
     await user.save({ validateModifiedOnly: true });
     res.json({
       success: true,
       message: 'Check your phone and enter your M-Pesa PIN.',
-      data: { method: 'mpesa', checkoutRequestID: stk.CheckoutRequestID },
+      data: { method: 'mpesa', amount, checkoutRequestID: stk.CheckoutRequestID },
     });
   } catch (error) {
     fail(res, 500, 'Could not start the payment. Please try again.', error);
@@ -126,13 +144,13 @@ exports.verify = async (req, res) => {
     if (String(tx?.metadata?.userId) !== req.user.userId) return fail(res, 403, 'This payment belongs to another account.');
     const user = await applyPaystackTransaction(tx);
     if (!user) return res.json({ success: false, message: 'Payment was not successful.' });
-    res.json({ success: true, data: listingPlan.planSummary(user), message: 'Payment received. Your listings are live.' });
+    res.json({ success: true, message: 'Payment received. Your listings are showing in search.' });
   } catch (error) {
     fail(res, 500, 'Could not confirm the payment.', error);
   }
 };
 
-/** Confirm an STK push with Safaricom and apply it. Returns 'success' | 'failed' | 'pending'. */
+/** Confirm an STK push with Safaricom and apply it. Returns { status: 'success' | 'failed' | 'pending' }. */
 const settleMpesa = async (user, checkoutRequestID) => {
   const plan = user.listingPlan || {};
   if ((plan.payments || []).some((p) => p.checkoutRequestID === checkoutRequestID)) return { status: 'success' };
@@ -145,7 +163,8 @@ const settleMpesa = async (user, checkoutRequestID) => {
     await user.save({ validateModifiedOnly: true });
     return { status: 'failed', message: confirmation.resultDesc || 'Payment was not completed.' };
   }
-  await listingPlan.applyPayment(user, { amount: plan.pending.amount || PRICE, months: 1, method: 'mpesa', checkoutRequestID });
+  const { listingIds, months, amount } = plan.pending;
+  await listingPlan.applyPayment(user, { listingIds, months, amount, method: 'mpesa', checkoutRequestID });
   return { status: 'success' };
 };
 
@@ -156,8 +175,7 @@ exports.mpesaStatus = async (req, res) => {
     if (typeof checkoutRequestID !== 'string' || !checkoutRequestID) return fail(res, 400, 'checkoutRequestID required.');
     const user = await User.findById(req.user.userId);
     if (!user) return fail(res, 401, 'Please sign in again.');
-    const result = await settleMpesa(user, checkoutRequestID);
-    res.json({ success: true, data: { ...result, plan: listingPlan.planSummary(user) } });
+    res.json({ success: true, data: await settleMpesa(user, checkoutRequestID) });
   } catch (error) {
     fail(res, 500, 'Could not check the payment.', error);
   }

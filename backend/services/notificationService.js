@@ -59,10 +59,16 @@ exports.technicianClientRated = (data) =>
 // STAYS & SPACES LISTERS
 // ─────────────────────────────────────────────────────────────
 exports.listingPlanReminder = (data) =>
-  dispatch(data.email, templates.listingPlanReminder, data, `listing_plan_${data.phase}_${data.daysLeft ?? 0}`);
+  dispatch(data.email, templates.listingPlanReminder, data, 'listing_plan_reminder');
 
 exports.listingPlanPaid = (data) =>
   dispatch(data.email, templates.listingPlanPaid, data, 'listing_plan_paid');
+
+exports.listingApproved = (data) =>
+  dispatch(data.email, templates.listingApproved, data, 'listing_approved');
+
+exports.listingRejected = (data) =>
+  dispatch(data.email, templates.listingRejected, data, 'listing_rejected');
 
 // ─────────────────────────────────────────────────────────────
 // CLIENT NOTIFICATIONS

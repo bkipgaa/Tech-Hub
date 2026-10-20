@@ -58,13 +58,34 @@ const listingSchema = new mongoose.Schema({
   whatsapp: { type: Boolean, default: true },
   availableFrom: { type: Date, default: null },
 
-  // active: shown in search · paused: hidden by the lister · hidden: hidden by an admin
-  status: { type: String, enum: ['active', 'paused', 'hidden'], default: 'active', index: true },
+  // pending: waiting for admin approval · rejected: not approved (lister can fix and resubmit)
+  // active: approved and listed · paused: hidden by the lister · hidden: hidden by an admin
+  status: {
+    type: String,
+    enum: ['pending', 'rejected', 'active', 'paused', 'hidden'],
+    default: 'pending',
+    index: true,
+  },
+  review: {
+    submittedAt: Date,
+    reviewedAt: Date,
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminUser' },
+    rejectionReason: { type: String, trim: true, maxlength: 500 },
+  },
   views: { type: Number, default: 0 },
 
-  // Copy of the owner's listing-plan end date (free months or paid), so search
-  // can hide lapsed listings in the same query. Kept in sync by utils/listingPlan.
-  ownerActiveUntil: { type: Date, default: null, index: true },
+  // Pricing (utils/listingPlan.js): a lister's first 5 listings are free during
+  // their 3 free months (freeSlot); otherwise KES 200 per listing per month.
+  freeSlot: { type: Boolean, default: false },
+  paidUntil: { type: Date, default: null },
+  // When the listing stops showing: the later of paidUntil and, for a free
+  // slot, the end of the free months. Search filters on this directly.
+  activeUntil: { type: Date, default: null, index: true },
+  // Reminder emails already sent for the current activeUntil (jobs/listingPlanReminders.js)
+  reminders: {
+    until: Date,
+    sent: [String], // 'd7' | 'd3' | 'd1' | 'ended'
+  },
 }, { timestamps: true });
 
 listingSchema.index({ status: 1, category: 1, county: 1, town: 1, estate: 1, price: 1 });

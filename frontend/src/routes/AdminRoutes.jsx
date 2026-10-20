@@ -32,6 +32,7 @@ import ProtectedAdminRoute from '../components/admin/ProtectedAdminRoute';
 import AdminLogin from '../pages/Admin/AdminLogin';
 import Roles from '../pages/Admin/Roles';
 import Dashboard from '../pages/Admin/Dashboard';
+import AdminListings from '../pages/Admin/Listings';
 import Technicians from '../pages/Admin/Technicians';
 import TechnicianDetail from '../pages/Admin/TechnicianDetail';
 import Subscriptions from '../pages/Admin/Subscriptions';
@@ -211,6 +212,16 @@ const AdminRoutes = () => {
           element={
             <ProtectedAdminRoute permission="verifications.view">
               <Verifications />
+            </ProtectedAdminRoute>
+          }
+        />
+
+        {/* ── Stays & Spaces listings ──────────────── */}
+        <Route
+          path="listings"
+          element={
+            <ProtectedAdminRoute permission="listings.view">
+              <AdminListings />
             </ProtectedAdminRoute>
           }
         />

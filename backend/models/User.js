@@ -52,17 +52,18 @@ const userSchema = new mongoose.Schema({
     default: 'active'
   },
 
-  // Stays & Spaces listing plan: free for 6 months from the first listing,
-  // then KES 1,500 a month for all of the user's listings (utils/listingPlan.js)
+  // Stays & Spaces: 3 free months from the first listing (up to 5 listings),
+  // then KES 200 per listing per month (utils/listingPlan.js)
   listingPlan: {
     freeUntil: { type: Date, default: null },
-    paidUntil: { type: Date, default: null },
+    paidUntil: { type: Date, default: null }, // old account-wide plan; carried over to listings on upgrade
     payments: [{
       _id: false,
       amount: Number,
       months: Number,
+      listingIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Listing' }],
       method: { type: String, enum: ['card', 'mpesa'] },
-      reference: String,          // Paystack reference or M-Pesa receipt
+      reference: String,          // Paystack reference
       checkoutRequestID: String,  // M-Pesa STK request
       paidAt: Date,
     }],
@@ -71,12 +72,9 @@ const userSchema = new mongoose.Schema({
       reference: String,
       checkoutRequestID: String,
       amount: Number,
+      months: Number,
+      listingIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Listing' }],
       initiatedAt: Date,
-    },
-    // Reminder emails already sent for the current end date (jobs/listingPlanReminders.js)
-    reminders: {
-      until: Date,
-      sent: [String], // 'd7' | 'd3' | 'd1' | 'ended'
     },
   },
 }, {

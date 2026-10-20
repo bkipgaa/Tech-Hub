@@ -15,7 +15,7 @@ const BRAND = {
   colorDark: '#15803d',
   accentRed: '#dc2626',
   footer: '© Weba-Hub. All rights reserved.',
-  url: process.env.FRONTEND_URL || 'https://tech-hub-frontend-lime.vercel.app',
+  url: process.env.FRONTEND_URL || 'https://webafix.com',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -231,49 +231,55 @@ exports.technicianClientRated = (data) => ({
 // STAYS & SPACES LISTING PLAN
 // ─────────────────────────────────────────────────────────────
 
-// Reminder 7/3/1 days before the free months or a paid month end, and a
-// notice the day listings are hidden. data: { name, phase: 'free'|'paid'|'ended',
-// daysLeft, endDate, listings, price }
+// Reminder for listings whose free months or paid months end 7/3/1 days from
+// now, or ended today. One email per lister listing every affected listing.
+// data: { name, price, items: [{ title, endDate, daysLeft, ended, free }] }
 exports.listingPlanReminder = (data) => {
-  const places = `${data.listings} listing${data.listings === 1 ? '' : 's'}`;
-  const when = data.daysLeft === 1 ? 'tomorrow' : `in ${data.daysLeft} days`;
   const price = `KES ${Number(data.price).toLocaleString('en-KE')}`;
-  const copy = {
-    free: {
-      subject: `⏰ Your free listing period ends ${when}`,
-      title: `Your free months end ${when}`,
-      body: `<p>Your free period on Stays &amp; Spaces ends on <strong>${data.endDate}</strong>.</p>
-             <p>To keep your ${places} showing in search after that, pay <strong>${price} a month</strong>
-             by M-Pesa or card. One payment covers all your listings.</p>`,
-      cta: 'Keep my listings live',
-    },
-    paid: {
-      subject: `⏰ Your listing plan ends ${when}`,
-      title: `Your listing plan ends ${when}`,
-      body: `<p>Your Stays &amp; Spaces plan is paid until <strong>${data.endDate}</strong>.</p>
-             <p>Renew for <strong>${price}</strong> to keep your ${places} in search. Paying early adds a month
-             on top of the time you have left, so you don't lose any days.</p>`,
-      cta: 'Renew now',
-    },
-    ended: {
-      subject: `⚠️ Your listings are now hidden from search`,
-      title: 'Your listings are hidden from search',
-      body: `<p>Your Stays &amp; Spaces plan ended on <strong>${data.endDate}</strong>, so clients can no longer find
-             your ${places}.</p>
-             <p>Nothing has been deleted. Pay <strong>${price}</strong> and they show again straight away.</p>`,
-      cta: `Pay ${price}`,
-    },
-  }[data.phase];
+  const ended = data.items.filter((i) => i.ended);
+  const soon = data.items.filter((i) => !i.ended);
+  const minDays = soon.length ? Math.min(...soon.map((i) => i.daysLeft)) : 0;
+  const when = minDays === 1 ? 'tomorrow' : `in ${minDays} days`;
+  const anyFree = soon.some((i) => i.free);
+  const n = (k) => `${k} listing${k === 1 ? '' : 's'}`;
+
+  const subject = ended.length
+    ? `⚠️ ${n(ended.length)} now hidden from search`
+    : anyFree
+    ? `⏰ Your free listing period ends ${when}`
+    : `⏰ ${n(soon.length)} expire${soon.length === 1 ? 's' : ''} ${when}`;
+  const title = ended.length ? 'Some of your listings are hidden' : anyFree ? `Your free months end ${when}` : `Your listings expire ${when}`;
+
+  const row = (i) => `
+    <tr>
+      <td style="padding:8px 0;border-bottom:1px solid #e5e7eb;"><strong>${i.title}</strong></td>
+      <td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;color:${i.ended ? BRAND.accentRed : '#374151'};">
+        ${i.ended ? `Hidden since ${i.endDate}` : `${i.free ? 'Free until' : 'Paid until'} ${i.endDate}`}
+      </td>
+    </tr>`;
+
+  const intro = ended.length
+    ? `<p>These listings are no longer showing in search. Nothing has been deleted: pay ${price} a month per listing and they show again straight away.</p>`
+    : anyFree
+    ? `<p>Your 3 free months on Stays &amp; Spaces are ending. After that each listing is ${price} a month, so you only pay for the ones you want to keep.</p>`
+    : `<p>Renew to keep these listings in search. Each one is ${price} a month, and paying early adds time on top of what's left.</p>`;
 
   return {
-    subject: copy.subject,
-    html: layout(copy.title, `<p>Hi <strong>${data.name}</strong>,</p>${copy.body}`, `${BRAND.url}/my-listings`, copy.cta),
+    subject,
+    html: layout(
+      title,
+      `<p>Hi <strong>${data.name}</strong>,</p>${intro}
+       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;font-size:14px;">${data.items.map(row).join('')}</table>
+       <p style="font-size:13px;color:#6b7280;">You can also edit a listing any time while it's paid up.</p>`,
+      `${BRAND.url}/my-listings`,
+      ended.length ? 'Show them again' : 'Renew my listings'
+    ),
   };
 };
 
-// Receipt after a listing plan payment. data: { name, amount, method, paidUntil, listings }
+// Receipt after paying for listings. data: { name, amount, method, months, items: [{ title, until }] }
 exports.listingPlanPaid = (data) => ({
-  subject: `✅ Payment received: listings live until ${data.paidUntil}`,
+  subject: `✅ Payment received for ${data.items.length} listing${data.items.length === 1 ? '' : 's'}`,
   html: layout(
     'Payment received',
     `
@@ -282,12 +288,44 @@ exports.listingPlanPaid = (data) => ({
       <div style="background:#f9fafb;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid ${BRAND.color};">
         <p style="margin:4px 0;"><strong>Amount:</strong> KES ${Number(data.amount).toLocaleString('en-KE')}</p>
         <p style="margin:4px 0;"><strong>Paid by:</strong> ${data.method === 'mpesa' ? 'M-Pesa' : 'Card'}</p>
-        <p style="margin:4px 0;"><strong>Listings live until:</strong> ${data.paidUntil}</p>
+        <p style="margin:4px 0;"><strong>Period:</strong> ${data.months} month${data.months === 1 ? '' : 's'}</p>
       </div>
-      <p>All your ${data.listings} listing${data.listings === 1 ? ' is' : 's are'} showing in search.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+        ${data.items.map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #e5e7eb;">${i.title}</td>
+          <td style="padding:6px 0;border-bottom:1px solid #e5e7eb;text-align:right;">Live until ${i.until}</td></tr>`).join('')}
+      </table>
     `,
     `${BRAND.url}/my-listings`,
     'View my listings'
+  ),
+});
+
+// Admin approved a listing. data: { name, title, listingId, live, price }
+exports.listingApproved = (data) => ({
+  subject: `✅ Approved: ${data.title}`,
+  html: layout(
+    'Your listing is approved',
+    `<p>Hi <strong>${data.name}</strong>,</p>
+     <p>Good news: <strong>${data.title}</strong> has been approved.</p>
+     ${data.live
+       ? '<p>It is now live in Stays &amp; Spaces search, and clients can contact you directly.</p>'
+       : `<p>To show it in search, pay <strong>KES ${Number(data.price).toLocaleString('en-KE')} a month</strong> from My Listings.</p>`}`,
+    data.live ? `${BRAND.url}/stays/${data.listingId}` : `${BRAND.url}/my-listings`,
+    data.live ? 'View listing' : 'Pay and go live'
+  ),
+});
+
+// Admin rejected a listing. data: { name, title, listingId, reason }
+exports.listingRejected = (data) => ({
+  subject: `Changes needed: ${data.title}`,
+  html: layout(
+    'Your listing needs a few changes',
+    `<p>Hi <strong>${data.name}</strong>,</p>
+     <p>We couldn't approve <strong>${data.title}</strong> yet. Here's why:</p>
+     <div style="background:#fef2f2;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid ${BRAND.accentRed};">${data.reason}</div>
+     <p>Edit the listing to fix this and it will be sent for review again.</p>`,
+    `${BRAND.url}/stays/${data.listingId}/edit`,
+    'Edit listing'
   ),
 });
 

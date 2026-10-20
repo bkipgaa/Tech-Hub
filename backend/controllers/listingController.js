@@ -66,20 +66,28 @@ const tidyPlace = (s) =>
 // Case-insensitive exact match
 const exactly = (s) => new RegExp(`^${escapeRegex(s)}$`, 'i');
 
-// Live and the owner's plan (free months or paid) still running
-const visibleFilter = () => ({ status: 'active', ownerActiveUntil: { $gt: new Date() } });
+// Approved, not paused or hidden, and free or paid up
+const visibleFilter = () => ({ status: 'active', activeUntil: { $gt: new Date() } });
+
+// Pricing and review fields only the owner sees
+const OWNER_ONLY = ['activeUntil', 'paidUntil', 'freeSlot', 'reminders', 'review'];
 
 /**
  * Shape a listing for the browser. Contact details only for signed-in users;
  * the exact pin only for the owner (everyone else gets an approximate area).
  */
-const present = (listing, viewer) => {
+const present = (listing, viewer, ownerUser = null) => {
   const l = listing.toObject ? listing.toObject() : { ...listing };
   if (!viewer) delete l.contactPhone;
   if (!l.town && l.area) l.town = l.area;
   l.isOwner = !!viewer && String(l.owner?._id || l.owner) === viewer.userId;
-  if (l.isOwner) l.visibleInSearch = l.status === 'active' && !!l.ownerActiveUntil && new Date(l.ownerActiveUntil) > new Date();
-  delete l.ownerActiveUntil;
+  if (l.isOwner) {
+    l.visibleInSearch = l.status === 'active' && !!l.activeUntil && new Date(l.activeUntil) > new Date();
+    if (ownerUser) l.billing = listingPlan.listingBilling(l, ownerUser);
+    delete l.reminders;
+  } else {
+    OWNER_ONLY.forEach((k) => delete l[k]);
+  }
   const coords = l.location?.coordinates;
   if (l.isOwner && coords?.length === 2) {
     l.lat = coords[1];
@@ -306,7 +314,7 @@ exports.getPlaces = async (req, res) => {
 };
 
 // Fields never sent in result lists
-const LIST_HIDDEN = { contactPhone: 0, description: 0, location: 0, ownerActiveUntil: 0 };
+const LIST_HIDDEN = { contactPhone: 0, description: 0, location: 0, activeUntil: 0, paidUntil: 0, freeSlot: 0, reminders: 0, review: 0 };
 
 /**
  * Nearest-first search with $geoNear. Each item gets `distanceKm`;
@@ -421,12 +429,13 @@ exports.getListing = async (req, res) => {
     if (!listing) return fail(res, 404, 'Listing not found.');
 
     const isOwner = req.user && String(listing.owner?._id) === req.user.userId;
-    const visible = listing.status === 'active' && listing.ownerActiveUntil > new Date();
+    const visible = listing.status === 'active' && listing.activeUntil > new Date();
     if (!visible && !isOwner) return fail(res, 404, 'This listing is no longer available.');
 
     if (!isOwner) await Listing.updateOne({ _id: listing._id }, { $inc: { views: 1 } });
 
-    res.json({ success: true, data: present(listing, req.user) });
+    const ownerUser = isOwner ? await User.findById(req.user.userId).select('listingPlan') : null;
+    res.json({ success: true, data: present(listing, req.user, ownerUser) });
   } catch (error) {
     fail(res, 500, 'Failed to load listing.', error);
   }
@@ -469,8 +478,11 @@ exports.getNearbyListings = async (req, res) => {
 /** GET /api/listings/mine */
 exports.getMyListings = async (req, res) => {
   try {
-    const items = await Listing.find({ owner: req.user.userId }).sort({ updatedAt: -1 }).lean();
-    res.json({ success: true, data: items.map((l) => present(l, req.user)) });
+    const [items, user] = await Promise.all([
+      Listing.find({ owner: req.user.userId }).sort({ updatedAt: -1 }).lean(),
+      User.findById(req.user.userId).select('listingPlan'),
+    ]);
+    res.json({ success: true, data: items.map((l) => present(l, req.user, user)) });
   } catch (error) {
     fail(res, 500, 'Failed to load your listings.', error);
   }
@@ -487,21 +499,25 @@ exports.createListing = async (req, res) => {
     const user = await User.findById(req.user.userId);
     if (!user) return fail(res, 401, 'Please sign in again.');
     if (listingPlan.startFreePeriodIfNeeded(user)) await user.save({ validateModifiedOnly: true });
-    const plan = listingPlan.planSummary(user);
 
-    const listing = await Listing.create({
+    // New listings wait for an admin to approve them
+    const listing = new Listing({
       ...data,
       owner: req.user.userId,
-      status: 'active',
-      ownerActiveUntil: listingPlan.activeUntil(user),
+      status: 'pending',
+      review: { submittedAt: new Date() },
     });
+    await listingPlan.assignNewListing(listing, user);
+    await listing.save();
+
+    const price = listingPlan.PRICE_PER_LISTING;
     res.status(201).json({
       success: true,
-      data: present(listing, req.user),
-      plan,
-      message: plan.isActive
-        ? 'Your listing is live.'
-        : `Your listing is saved. Subscribe for KES ${listingPlan.MONTHLY_PRICE.toLocaleString()} a month to show it in search.`,
+      data: present(listing, req.user, user),
+      plan: await listingPlan.planSummary(user),
+      message: listing.freeSlot
+        ? "Submitted for review. We'll email you when it's approved. It's free during your free months."
+        : `Submitted for review. Once it's approved, pay KES ${price} a month to show it in search.`,
     });
   } catch (error) {
     if (error.name === 'ValidationError') return fail(res, 400, Object.values(error.errors)[0]?.message || 'Invalid listing.');
@@ -514,12 +530,31 @@ exports.updateListing = async (req, res) => {
   try {
     const listing = await findOwnListing(req, res);
     if (!listing) return;
+    // Approved listings can be edited while they're free or paid up; listings still in
+    // review (or rejected, to fix and resubmit) can always be edited
+    const user = await User.findById(req.user.userId).select('listingPlan');
+    if (listing.status === 'hidden') return fail(res, 403, 'Our team has hidden this listing. Please contact support.');
+    const approved = ['active', 'paused'].includes(listing.status);
+    if (approved && !listingPlan.listingBilling(listing, user).covered) {
+      return fail(res, 402, `Pay KES ${listingPlan.PRICE_PER_LISTING} to renew this listing before editing it.`);
+    }
+
     const { data, error } = readListingInput(req.body, listing);
     if (error) return fail(res, 400, error);
     await useKnownSpelling(data, listing);
     Object.assign(listing, data);
+    const resubmitted = listing.status === 'rejected';
+    if (resubmitted) {
+      listing.status = 'pending';
+      listing.review = { submittedAt: new Date() };
+      await listingPlan.assignNewListing(listing, user); // may get a free slot back
+    }
     await listing.save();
-    res.json({ success: true, data: present(listing, req.user), message: 'Listing updated.' });
+    res.json({
+      success: true,
+      data: present(listing, req.user, user),
+      message: resubmitted ? "Changes saved and sent for review again. We'll email you." : 'Listing updated.',
+    });
   } catch (error) {
     if (error.name === 'ValidationError') return fail(res, 400, Object.values(error.errors)[0]?.message || 'Invalid listing.');
     fail(res, 500, 'Failed to update listing.', error);
@@ -534,9 +569,13 @@ exports.setListingStatus = async (req, res) => {
     const { status } = req.body;
     if (!['active', 'paused'].includes(status)) return fail(res, 400, 'Status must be active or paused.');
     if (listing.status === 'hidden') return fail(res, 403, 'Our team has hidden this listing. Please contact support.');
+    if (!['active', 'paused'].includes(listing.status)) {
+      return fail(res, 400, 'You can pause or resume a listing once it has been approved.');
+    }
     listing.status = status;
     await listing.save();
-    res.json({ success: true, data: present(listing, req.user), message: status === 'active' ? 'Listing is live again.' : 'Listing paused.' });
+    const user = await User.findById(req.user.userId).select('listingPlan');
+    res.json({ success: true, data: present(listing, req.user, user), message: status === 'active' ? 'Listing is live again.' : 'Listing paused.' });
   } catch (error) {
     fail(res, 500, 'Failed to update listing.', error);
   }

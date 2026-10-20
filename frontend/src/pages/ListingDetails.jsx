@@ -123,12 +123,15 @@ const ListingDetails = () => {
               <Eye className="w-4 h-4" /> This is your listing ·{' '}
               {listing.visibleInSearch
                 ? 'live in search'
-                : listing.status !== 'active'
-                ? 'paused, not shown in search'
-                : 'not shown in search: your listing plan has ended'}{' '}
+                : {
+                    pending: 'waiting for approval by our team',
+                    rejected: `changes needed: ${listing.review?.rejectionReason || 'see My Listings'}`,
+                    hidden: 'hidden by Webafix',
+                    paused: 'paused, not shown in search',
+                  }[listing.status] || 'not shown in search: unpaid'}{' '}
               · {listing.views || 0} views
               {listing.status === 'active' && !listing.visibleInSearch && (
-                <Link to="/my-listings" className="font-semibold underline">Renew plan</Link>
+                <Link to="/my-listings" className="font-semibold underline">Pay to go live</Link>
               )}
             </span>
             <Link to={`/stays/${listing._id}/edit`} className="inline-flex items-center gap-1 font-semibold hover:underline">
