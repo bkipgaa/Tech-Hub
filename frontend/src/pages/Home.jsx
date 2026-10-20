@@ -151,11 +151,11 @@ const Home = () => {
               </h1>
               <div className="max-w-3xl mx-auto px-5 py-4 animate-fadeInUp">
                 <p className="text-xl sm:text-2xl font-extrabold text-white">
-                  Your trusted marketplace connecting you with verified professionals
+                  Your trusted marketplace for experts, stays and places to go
                 </p>
                 <p className="mt-2 text-base sm:text-lg font-bold text-white leading-relaxed">
-                  From IT solutions to home services, find qualified experts ready to help with your needs.
-                  Get matched with the best experts in your area.
+                  Hire verified professionals, from IT solutions to home repairs. Find Airbnbs, hotels,
+                  homes for rent and office space, or a club, bar or lounge for a night out. All near you.
                 </p>
               </div>
             </>
@@ -169,6 +169,12 @@ const Home = () => {
             >
               Find an Expert
               <ArrowRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => navigate('/stays')}
+              className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors"
+            >
+              Find Stays &amp; Places
             </button>
             {/* Already a technician → nothing to become */}
             {!isTechnician && (

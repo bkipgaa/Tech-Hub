@@ -141,9 +141,11 @@ export const COUNTIES = [
   'Turkana', 'Uasin Gishu', 'Vihiga', 'Wajir', 'West Pokot',
 ];
 
-// Listing plan (mirrors backend/utils/listingPlan.js)
-export const LISTING_FREE_MONTHS = 6;
-export const LISTING_MONTHLY_PRICE = 1500;
+// Listing pricing (mirrors backend/utils/listingPlan.js)
+export const LISTING_FREE_MONTHS = 3;   // free months from your first listing
+export const LISTING_FREE_COUNT = 5;    // listings that are free during those months
+export const LISTING_PRICE = 200;       // KES per listing per month otherwise
+export const LISTING_PAY_MONTHS = [1]; // each payment covers the next month
 
 export const formatPrice = (price, unit) => {
   if (unit === 'entry') return Number(price) > 0 ? `KES ${Number(price).toLocaleString('en-KE')} entry` : 'Free entry';

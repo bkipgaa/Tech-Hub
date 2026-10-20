@@ -26,6 +26,7 @@ const PAGE_TITLES = {
   'dashboard':      'Dashboard',
   'technicians':    'Experts',
   'verifications':  'Verifications',
+  'listings':       'Stays & Spaces',
   'subscriptions':  'Subscriptions',
   'bookings':       'Bookings',
   'jobs':           'Jobs',

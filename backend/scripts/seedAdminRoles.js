@@ -34,6 +34,10 @@ const PERMISSIONS = [
   { section: 'Verifications', key: 'verifications.reject',        label: 'Reject Verifications',      order: 3 },
   { section: 'Verifications', key: 'verifications.request_more',  label: 'Request More Info',         order: 4 },
 
+  // ── 3b. Stays & Spaces listings ─────────────────────────
+  { section: 'Listings', key: 'listings.view',   label: 'View Listings',                  order: 1 },
+  { section: 'Listings', key: 'listings.review', label: 'Approve, Reject & Hide Listings', order: 2 },
+
   // ── 4. Subscriptions ────────────────────────────────────
   { section: 'Subscriptions', key: 'subscriptions.view',           label: 'View Subscriptions',           order: 1 },
   { section: 'Subscriptions', key: 'subscriptions.view_details',   label: 'View Subscription Details',    order: 2 },
@@ -223,6 +227,7 @@ const ROLES = [
       'dashboard.view',
       'technicians.view', 'technicians.view_details',
       'verifications.view', 'verifications.approve', 'verifications.reject', 'verifications.request_more',
+      'listings.view', 'listings.review',
       'jobs.view', 'jobs.approve', 'jobs.reject', 'jobs.edit', 'jobs.delete',
       'jobs.view_applications', 'jobs.manage_applications',
       'catalog.view', 'catalog.create', 'catalog.edit', 'catalog.delete', 'catalog.reorder',

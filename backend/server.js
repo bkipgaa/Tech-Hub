@@ -70,14 +70,22 @@ if (process.env.TRUST_PROXY || process.env.NODE_ENV === 'production') {
 // ===========================================
 const httpServer = http.createServer(app);
 
+// Frontend origins allowed to call the API (custom domain + legacy Vercel URL)
+const allowedOrigins = process.env.FRONTEND_URL
+  ? [
+      process.env.FRONTEND_URL,
+      'https://webafix.com',
+      'https://www.webafix.com',
+      'https://tech-hub-frontend-lime.vercel.app'
+    ]
+  : ['http://localhost:3000', 'http://localhost:5173'];
+
 // ===========================================
 // INITIALIZE SOCKET.IO
 // ===========================================
 const io = require('socket.io')(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL
-      ? [process.env.FRONTEND_URL, 'https://tech-hub-frontend-lime.vercel.app']
-      : ['http://localhost:3000', 'http://localhost:5173'],
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST']
   },
@@ -118,9 +126,7 @@ process.on('unhandledRejection', (reason, promise) => {
 app.use(helmet());
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL
-    ? [process.env.FRONTEND_URL, 'https://tech-hub-frontend-lime.vercel.app']
-    : ['http://localhost:3000', 'http://localhost:5173'],
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -191,7 +197,12 @@ const connectDB = async () => {
     console.log(`📦 Database: ${mongoose.connection.name}`);
     console.log(`📍 Host: ${mongoose.connection.host}`);
 
-    // Bring older Stays & Spaces listings up to date (towns, listing plan)
+    // Admin roles that review listings get the listing permissions
+    require('./utils/ensureListingPermissions')().catch((err) =>
+      console.error('Listing permissions setup failed:', err.message)
+    );
+
+    // Bring older Stays & Spaces listings up to date (towns, per-listing pricing)
     require('./utils/listingPlan').migrateListings().catch((err) =>
       console.error('Listing upgrade failed:', err.message)
     );

@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   Wrench,
   BadgeCheck,
+  Building2,
   CreditCard,
   Briefcase,
   FileText,
@@ -56,6 +57,7 @@ const MENU_SECTIONS = [
     items: [
       { path: '/admin/technicians',   label: 'Experts',    icon: Wrench,     permission: 'technicians.view' },
       { path: '/admin/verifications', label: 'Verifications',  icon: BadgeCheck, permission: 'verifications.view' },
+      { path: '/admin/listings',      label: 'Stays & Spaces', icon: Building2,  permission: 'listings.view' },
       { path: '/admin/bookings',      label: 'Bookings',       icon: Briefcase,  permission: 'bookings.view' },
       { path: '/admin/jobs',          label: 'Jobs',           icon: FileText,   permission: 'jobs.view' },
       { path: '/admin/catalog',       label: 'Service Catalog', icon: ListTree,  permission: 'catalog.view' },
