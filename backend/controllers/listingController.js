@@ -17,9 +17,12 @@ const {
   PROPERTY_TYPES,
   AMENITIES,
   CATEGORY_IDS,
+  COUNTIES,
   groupFor,
   priceUnitFor,
 } = require('../utils/listingCategories');
+const User = require('../models/User');
+const listingPlan = require('../utils/listingPlan');
 const { uploadBufferToCloudinary } = require('../config/cloudinary');
 
 const MAX_PHOTOS = 12;
@@ -52,6 +55,20 @@ const approximate = (coords) =>
 
 const roundKm = (meters) => Math.round(meters / 100) / 10;
 
+// "  nyali   beach " → "Nyali Beach"-ish: trim, single spaces, first letter of each word capitalised
+// (the rest is kept, so "CBD" stays "CBD")
+const tidyPlace = (s) =>
+  String(s || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/(^|[\s-])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase());
+
+// Case-insensitive exact match
+const exactly = (s) => new RegExp(`^${escapeRegex(s)}$`, 'i');
+
+// Live and the owner's plan (free months or paid) still running
+const visibleFilter = () => ({ status: 'active', ownerActiveUntil: { $gt: new Date() } });
+
 /**
  * Shape a listing for the browser. Contact details only for signed-in users;
  * the exact pin only for the owner (everyone else gets an approximate area).
@@ -59,7 +76,10 @@ const roundKm = (meters) => Math.round(meters / 100) / 10;
 const present = (listing, viewer) => {
   const l = listing.toObject ? listing.toObject() : { ...listing };
   if (!viewer) delete l.contactPhone;
+  if (!l.town && l.area) l.town = l.area;
   l.isOwner = !!viewer && String(l.owner?._id || l.owner) === viewer.userId;
+  if (l.isOwner) l.visibleInSearch = l.status === 'active' && !!l.ownerActiveUntil && new Date(l.ownerActiveUntil) > new Date();
+  delete l.ownerActiveUntil;
   const coords = l.location?.coordinates;
   if (l.isOwner && coords?.length === 2) {
     l.lat = coords[1];
@@ -92,18 +112,26 @@ const readListingInput = (body, existing = null) => {
     return v.slice(0, max);
   };
 
+  const LABELS = { contactPhone: 'contact phone' };
   for (const [key, max, required] of [
     ['title', 120, true],
     ['description', 3000, false],
     ['county', 40, true],
-    ['area', 80, true],
+    ['town', 60, !existing?.town && !existing?.area],
+    ['estate', 60, false],
     ['landmark', 160, false],
+    ['openingHours', 120, false],
     ['contactPhone', 20, true],
   ]) {
     const v = text(key, max, required);
-    if (v === null) return { error: `Please fill in the ${key === 'contactPhone' ? 'contact phone' : key}.` };
-    if (v !== undefined) data[key] = v;
+    if (v === null) return { error: `Please fill in the ${LABELS[key] || key}.` };
+    if (v !== undefined) data[key] = ['town', 'estate'].includes(key) ? tidyPlace(v) : v;
   }
+
+  if (data.county !== undefined && !COUNTIES.includes(data.county)) {
+    return { error: 'Please choose a county from the list.' };
+  }
+  if (data.town !== undefined && !data.town && !existing?.area) return { error: 'Please fill in the town.' };
 
   if (data.contactPhone !== undefined && !/^\+?[0-9 ]{9,15}$/.test(data.contactPhone)) {
     return { error: 'Please enter a valid phone number, e.g. 0712 345 678.' };
@@ -111,7 +139,11 @@ const readListingInput = (body, existing = null) => {
 
   if (body.price !== undefined || !existing) {
     const price = toNumber(body.price);
-    if (!Number.isFinite(price) || price <= 0) return { error: 'Please enter a price above 0.' };
+    // Entertainment can be free to enter; everything else needs a price
+    const freeAllowed = data.priceUnit === 'entry';
+    if (!Number.isFinite(price) || price < 0 || (price === 0 && !freeAllowed)) {
+      return { error: freeAllowed ? 'Please enter the entry fee, or 0 for free entry.' : 'Please enter a price above 0.' };
+    }
     data.price = Math.round(price);
   }
 
@@ -164,6 +196,25 @@ const readListingInput = (body, existing = null) => {
   return { data };
 };
 
+/**
+ * Reuse the spelling already in use for a town (in that county) or estate
+ * (in that town), so "kilimani" and "Kilimani " don't become two options.
+ */
+const useKnownSpelling = async (data, existing) => {
+  const county = data.county ?? existing?.county;
+  const town = data.town ?? existing?.town;
+  if (data.town) {
+    const known = await Listing.findOne({ county, town: exactly(data.town) }).select('town').lean();
+    if (known) data.town = known.town;
+  }
+  if (data.estate) {
+    const known = await Listing.findOne({ county, town: exactly(data.town || town), estate: exactly(data.estate) })
+      .select('estate')
+      .lean();
+    if (known) data.estate = known.estate;
+  }
+};
+
 const findOwnListing = async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     fail(res, 404, 'Listing not found.');
@@ -189,7 +240,7 @@ const findOwnListing = async (req, res) => {
 exports.getMeta = async (req, res) => {
   try {
     const counts = await Listing.aggregate([
-      { $match: { status: 'active' } },
+      { $match: visibleFilter() },
       { $group: { _id: '$category', count: { $sum: 1 } } },
     ]);
     const countBy = Object.fromEntries(counts.map((c) => [c._id, c.count]));
@@ -209,8 +260,53 @@ exports.getMeta = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/listings/places?county=Nairobi            → towns in that county
+ * GET /api/listings/places?county=Nairobi&town=Nairobi → estates in that town
+ * Built from the listings themselves, so a town or estate a lister types
+ * shows up here as soon as that listing is live. Each comes with a count.
+ * &scope=all includes every listing (the listing form uses it for suggestions).
+ */
+exports.getPlaces = async (req, res) => {
+  try {
+    const { county, town, scope } = req.query;
+    if (typeof county !== 'string' || !COUNTIES.includes(county)) {
+      return res.json({ success: true, data: { counties: COUNTIES, towns: [], estates: [] } });
+    }
+    const match = scope === 'all' ? { county } : { ...visibleFilter(), county };
+    if (typeof town === 'string' && town.trim()) {
+      match.town = exactly(tidyPlace(town));
+      match.estate = { $nin: ['', null] };
+    } else {
+      match.town = { $nin: ['', null] };
+    }
+    const field = match.estate ? '$estate' : '$town';
+    const rows = await Listing.aggregate([
+      { $match: match },
+      // Group case-insensitively, keep the most common spelling
+      { $group: { _id: { $toLower: field }, names: { $push: field }, count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+      { $limit: 300 },
+    ]);
+    const mostCommon = (names) => {
+      const tally = {};
+      names.forEach((n) => { tally[n] = (tally[n] || 0) + 1; });
+      return Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
+    };
+    const list = rows
+      .map((r) => ({ name: mostCommon(r.names), count: r.count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json({
+      success: true,
+      data: match.estate ? { estates: list } : { towns: list },
+    });
+  } catch (error) {
+    fail(res, 500, 'Failed to load places.', error);
+  }
+};
+
 // Fields never sent in result lists
-const LIST_HIDDEN = { contactPhone: 0, description: 0, location: 0 };
+const LIST_HIDDEN = { contactPhone: 0, description: 0, location: 0, ownerActiveUntil: 0 };
 
 /**
  * Nearest-first search with $geoNear. Each item gets `distanceKm`;
@@ -246,25 +342,27 @@ const searchNear = async ({ point, filter, minKm, maxKm, sort, page, limit }) =>
 
 /**
  * GET /api/listings
- * Query: group, category, county, area, q, minPrice, maxPrice, bedrooms (min),
+ * Query: group, category, county, town, estate, q, minPrice, maxPrice, bedrooms (min),
  *        sort (newest | price_asc | price_desc | nearest), page, limit,
  *        lat, lng, minKm, maxKm (with lat/lng: nearest first, within the band)
  */
 exports.searchListings = async (req, res) => {
   try {
-    const { group, category, county, area, q, minPrice, maxPrice, bedrooms, sort } = req.query;
+    const { group, category, county, estate, q, minPrice, maxPrice, bedrooms, sort } = req.query;
+    const town = req.query.town ?? req.query.area; // "area" was the old name
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(48, Math.max(1, parseInt(req.query.limit, 10) || 12));
     const point = readPoint(req.query.lat, req.query.lng);
 
-    const filter = { status: 'active' };
+    const filter = visibleFilter();
     if (typeof category === 'string' && CATEGORY_IDS.includes(category)) filter.category = category;
     else if (typeof group === 'string' && LISTING_GROUPS.some((g) => g.id === group)) filter.group = group;
     if (typeof county === 'string' && county) filter.county = county;
-    if (typeof area === 'string' && area.trim()) filter.area = new RegExp(escapeRegex(area.trim()), 'i');
+    if (typeof town === 'string' && town.trim()) filter.town = exactly(tidyPlace(town));
+    if (typeof estate === 'string' && estate.trim()) filter.estate = exactly(tidyPlace(estate));
     if (typeof q === 'string' && q.trim()) {
       const rx = new RegExp(escapeRegex(q.trim()), 'i');
-      filter.$or = [{ title: rx }, { area: rx }, { landmark: rx }, { county: rx }];
+      filter.$or = [{ title: rx }, { town: rx }, { estate: rx }, { landmark: rx }, { county: rx }];
     }
     const min = toNumber(minPrice);
     const max = toNumber(maxPrice);
@@ -323,7 +421,8 @@ exports.getListing = async (req, res) => {
     if (!listing) return fail(res, 404, 'Listing not found.');
 
     const isOwner = req.user && String(listing.owner?._id) === req.user.userId;
-    if (listing.status !== 'active' && !isOwner) return fail(res, 404, 'This listing is no longer available.');
+    const visible = listing.status === 'active' && listing.ownerActiveUntil > new Date();
+    if (!visible && !isOwner) return fail(res, 404, 'This listing is no longer available.');
 
     if (!isOwner) await Listing.updateOne({ _id: listing._id }, { $inc: { views: 1 } });
 
@@ -344,7 +443,7 @@ exports.getNearbyListings = async (req, res) => {
     const coords = listing?.location?.coordinates;
     if (!coords?.length) return res.json({ success: true, data: [] });
 
-    const filter = { status: 'active', _id: { $ne: listing._id } };
+    const filter = { ...visibleFilter(), _id: { $ne: listing._id } };
     const { group } = req.query;
     if (typeof group === 'string' && LISTING_GROUPS.some((g) => g.id === group)) filter.group = group;
     const limit = Math.min(12, Math.max(1, parseInt(req.query.limit, 10) || 8));
@@ -382,8 +481,28 @@ exports.createListing = async (req, res) => {
   try {
     const { data, error } = readListingInput(req.body);
     if (error) return fail(res, 400, error);
-    const listing = await Listing.create({ ...data, owner: req.user.userId, status: 'active' });
-    res.status(201).json({ success: true, data: present(listing, req.user), message: 'Your listing is live.' });
+    await useKnownSpelling(data);
+
+    // The first listing starts the free months
+    const user = await User.findById(req.user.userId);
+    if (!user) return fail(res, 401, 'Please sign in again.');
+    if (listingPlan.startFreePeriodIfNeeded(user)) await user.save({ validateModifiedOnly: true });
+    const plan = listingPlan.planSummary(user);
+
+    const listing = await Listing.create({
+      ...data,
+      owner: req.user.userId,
+      status: 'active',
+      ownerActiveUntil: listingPlan.activeUntil(user),
+    });
+    res.status(201).json({
+      success: true,
+      data: present(listing, req.user),
+      plan,
+      message: plan.isActive
+        ? 'Your listing is live.'
+        : `Your listing is saved. Subscribe for KES ${listingPlan.MONTHLY_PRICE.toLocaleString()} a month to show it in search.`,
+    });
   } catch (error) {
     if (error.name === 'ValidationError') return fail(res, 400, Object.values(error.errors)[0]?.message || 'Invalid listing.');
     fail(res, 500, 'Failed to create listing.', error);
@@ -397,6 +516,7 @@ exports.updateListing = async (req, res) => {
     if (!listing) return;
     const { data, error } = readListingInput(req.body, listing);
     if (error) return fail(res, 400, error);
+    await useKnownSpelling(data, listing);
     Object.assign(listing, data);
     await listing.save();
     res.json({ success: true, data: present(listing, req.user), message: 'Listing updated.' });

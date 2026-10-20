@@ -190,6 +190,11 @@ const connectDB = async () => {
     console.log(`📦 Database: ${mongoose.connection.name}`);
     console.log(`📍 Host: ${mongoose.connection.host}`);
 
+    // Bring older Stays & Spaces listings up to date (towns, listing plan)
+    require('./utils/listingPlan').migrateListings().catch((err) =>
+      console.error('Listing upgrade failed:', err.message)
+    );
+
     mongoose.connection.on('error', (err) => {
       console.error('MongoDB connection error:', err);
     });

@@ -6,9 +6,9 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, BedDouble, Users, Ruler, ImageOff, Navigation } from 'lucide-react';
+import { MapPin, BedDouble, Users, Ruler, ImageOff, Navigation, Clock } from 'lucide-react';
 import { cldImage } from '../../utils/media';
-import { categoryById, formatPrice, formatDistance, propertyTypeLabel } from '../../utils/listingCategories';
+import { categoryById, formatPrice, formatDistance, propertyTypeLabel, placeLabel } from '../../utils/listingCategories';
 
 const ListingCard = ({ listing }) => {
   const cover = listing.photos?.[0]?.url;
@@ -19,6 +19,7 @@ const ListingCard = ({ listing }) => {
   else if (listing.bedrooms) facts.push({ icon: BedDouble, text: `${listing.bedrooms} bed${listing.bedrooms === 1 ? '' : 's'}` });
   if (listing.maxGuests) facts.push({ icon: Users, text: `Up to ${listing.maxGuests} guests` });
   if (listing.sizeSqft) facts.push({ icon: Ruler, text: `${listing.sizeSqft.toLocaleString()} sq ft` });
+  if (listing.openingHours) facts.push({ icon: Clock, text: listing.openingHours });
 
   return (
     <Link
@@ -54,7 +55,7 @@ const ListingCard = ({ listing }) => {
         <h3 className="font-semibold text-gray-800 group-hover:text-green-700 line-clamp-1">{listing.title}</h3>
         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
           <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="line-clamp-1">{listing.area}, {listing.county}</span>
+          <span className="line-clamp-1">{placeLabel(listing)}</span>
         </p>
 
         {facts.length > 0 && (

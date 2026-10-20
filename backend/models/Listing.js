@@ -30,12 +30,18 @@ const listingSchema = new mongoose.Schema({
   maxGuests: { type: Number, min: 0, max: 500, default: null },   // short stays
   sizeSqft: { type: Number, min: 0, default: null },               // offices and shops
 
+  // Per night, per month, or the entry fee for entertainment (0 = free entry)
   price: { type: Number, required: true, min: 0 },
-  priceUnit: { type: String, enum: ['night', 'month'], required: true },
+  priceUnit: { type: String, enum: ['night', 'month', 'entry'], required: true },
   deposit: { type: Number, min: 0, default: null },
+  openingHours: { type: String, trim: true, maxlength: 120, default: '' }, // entertainment
 
+  // County → town → estate. Towns and estates are free text: a new one typed by
+  // a lister becomes a search option as soon as the listing is live.
   county: { type: String, required: true, trim: true, index: true },
-  area: { type: String, required: true, trim: true, maxlength: 80 },   // estate / town, e.g. Kilimani
+  town: { type: String, trim: true, maxlength: 60 },     // e.g. Nairobi, Thika, Nyali
+  estate: { type: String, trim: true, maxlength: 60, default: '' }, // e.g. Kilimani (optional)
+  area: { type: String, trim: true, maxlength: 80 },     // legacy single field, read as the town
   landmark: { type: String, trim: true, maxlength: 160, default: '' },
 
   // Pin set by the lister on a map, as GeoJSON [lng, lat]. Never sent to other
@@ -55,10 +61,13 @@ const listingSchema = new mongoose.Schema({
   // active: shown in search · paused: hidden by the lister · hidden: hidden by an admin
   status: { type: String, enum: ['active', 'paused', 'hidden'], default: 'active', index: true },
   views: { type: Number, default: 0 },
+
+  // Copy of the owner's listing-plan end date (free months or paid), so search
+  // can hide lapsed listings in the same query. Kept in sync by utils/listingPlan.
+  ownerActiveUntil: { type: Date, default: null, index: true },
 }, { timestamps: true });
 
-listingSchema.index({ status: 1, category: 1, county: 1, price: 1 });
+listingSchema.index({ status: 1, category: 1, county: 1, town: 1, estate: 1, price: 1 });
 listingSchema.index({ location: '2dsphere' });
-listingSchema.index({ title: 'text', area: 'text', description: 'text' });
 
 module.exports = mongoose.model('Listing', listingSchema);

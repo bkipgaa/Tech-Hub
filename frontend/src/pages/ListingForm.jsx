@@ -12,9 +12,11 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { cldImage } from '../utils/media';
 import { LocationPicker } from '../components/stays/ListingMap';
+import usePlaces from '../hooks/usePlaces';
 import {
   LISTING_GROUPS, PROPERTY_TYPES, AMENITIES, LISTER_TYPES, COUNTIES,
-  categoryById, isShortStay, isBusiness,
+  categoryById, isShortStay, isBusiness, isEntertainment, amenitiesFor, priceUnitLabel,
+  LISTING_FREE_MONTHS, LISTING_MONTHLY_PRICE,
 } from '../utils/listingCategories';
 
 const MAX_PHOTOS = 12;
@@ -31,8 +33,10 @@ const EMPTY = {
   sizeSqft: '',
   price: '',
   deposit: '',
-  county: 'Nairobi',
-  area: '',
+  county: '',
+  town: '',
+  estate: '',
+  openingHours: '',
   landmark: '',
   lat: '',
   lng: '',
@@ -73,6 +77,10 @@ const ListingForm = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState('');
+
+  // Suggestions: towns already listed in the county, estates already listed in the town
+  const townSuggestions = usePlaces({ county: form.county, scope: 'all' });
+  const estateSuggestions = usePlaces({ county: form.county, town: form.town.trim(), scope: 'all' });
 
   useEffect(() => {
     if (!isEdit) return;
@@ -132,13 +140,15 @@ const ListingForm = () => {
     e.preventDefault();
     setError('');
     if (!form.category) return setError('Please choose a category.');
+    if (!form.county || !form.town.trim()) return setError('Please choose the county and fill in the town.');
     if (form.lat === '' || form.lng === '') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return setError('Please set the location on the map so clients nearby can find you.');
     }
     setSaving(true);
     try {
-      const payload = { ...form, availableFrom: form.availableFrom || null };
+      const allowed = new Set(amenitiesFor(form.category).map((a) => a.id));
+      const payload = { ...form, amenities: form.amenities.filter((a) => allowed.has(a)), availableFrom: form.availableFrom || null };
       const r = isEdit ? await api.put(`/listings/${id}`, payload) : await api.post('/listings', payload);
       navigate(`/stays/${r.data?.data?._id || id}`);
     } catch (err) {
@@ -160,6 +170,10 @@ const ListingForm = () => {
   const category = categoryById(form.category);
   const shortStay = isShortStay(form.category);
   const business = isBusiness(form.category);
+  const entertainment = isEntertainment(form.category);
+  const priceLabel = entertainment
+    ? 'Entry fee (KES)'
+    : `Price (KES)${category ? ` ${priceUnitLabel(category.priceUnit)}` : ''}`;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -170,7 +184,8 @@ const ListingForm = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">{isEdit ? 'Edit listing' : 'List your property'}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Free to list. Clients contact you directly by phone or WhatsApp.
+            Free for your first {LISTING_FREE_MONTHS} months, then KES {LISTING_MONTHLY_PRICE.toLocaleString()} a month
+            for all your listings. Clients contact you directly by phone or WhatsApp.
           </p>
         </div>
 
@@ -184,7 +199,7 @@ const ListingForm = () => {
           {LISTING_GROUPS.map((g) => (
             <div key={g.id}>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
-                {g.name} · priced per {g.priceUnit}
+                {g.name} · {priceUnitLabel(g.priceUnit)}
               </p>
               <div className="flex flex-wrap gap-2">
                 {g.categories.map((c) => (
@@ -195,7 +210,7 @@ const ListingForm = () => {
                     className={`px-3 py-2 rounded-lg text-sm border ${
                       form.category === c.id
                         ? 'bg-green-600 text-white border-green-600'
-                        : 'bg-white text-gray-700 border-gray-300 hover:border-green-500'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-green-100 hover:border-green-500'
                     }`}
                   >
                     {c.name}
@@ -212,15 +227,15 @@ const ListingForm = () => {
         </Section>
 
         <Section title="Describe the place">
-          <Field label="Title" required hint="e.g. Cosy 1-bedroom near Yaya Centre">
+          <Field label="Title" required hint={entertainment ? 'e.g. Rooftop lounge with live band, Westlands' : 'e.g. Cosy 1-bedroom near Yaya Centre'}>
             <input value={form.title} onChange={set('title')} maxLength={120} required className={inputClass} />
           </Field>
-          <Field label="Description" hint="What makes it good? Rules, nearby shops, transport, water and power.">
+          <Field label="Description" hint={entertainment ? 'Music, events, drinks and food, dress code, age limit.' : 'What makes it good? Rules, nearby shops, transport, water and power.'}>
             <textarea value={form.description} onChange={set('description')} rows={5} maxLength={3000} className={inputClass} />
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            {!business && (
+            {!business && !entertainment && (
               <Field label="Unit type">
                 <select value={form.propertyType} onChange={set('propertyType')} className={inputClass}>
                   <option value="">Choose…</option>
@@ -228,12 +243,12 @@ const ListingForm = () => {
                 </select>
               </Field>
             )}
-            {!business && (
+            {!business && !entertainment && (
               <Field label="Bedrooms">
                 <input type="number" min="0" value={form.bedrooms} onChange={set('bedrooms')} className={inputClass} />
               </Field>
             )}
-            {!business && (
+            {!business && !entertainment && (
               <Field label="Bathrooms">
                 <input type="number" min="0" value={form.bathrooms} onChange={set('bathrooms')} className={inputClass} />
               </Field>
@@ -241,6 +256,11 @@ const ListingForm = () => {
             {shortStay && (
               <Field label="Max guests">
                 <input type="number" min="1" value={form.maxGuests} onChange={set('maxGuests')} className={inputClass} />
+              </Field>
+            )}
+            {entertainment && (
+              <Field label="Opening hours" hint="e.g. Wed–Sun, 6pm–4am">
+                <input value={form.openingHours} onChange={set('openingHours')} maxLength={120} className={inputClass} />
               </Field>
             )}
             {business && (
@@ -253,29 +273,63 @@ const ListingForm = () => {
 
         <Section title="Price">
           <div className="grid grid-cols-2 gap-3">
-            <Field label={`Price (KES)${category ? ` per ${category.priceUnit}` : ''}`} required>
-              <input type="number" min="1" value={form.price} onChange={set('price')} required className={inputClass} />
+            <Field label={priceLabel} required hint={entertainment ? 'Enter 0 for free entry' : undefined}>
+              <input type="number" min={entertainment ? 0 : 1} value={form.price} onChange={set('price')} required className={inputClass} />
             </Field>
-            {!shortStay && (
+            {!shortStay && !entertainment && (
               <Field label="Deposit (KES)" hint="Leave empty if none">
                 <input type="number" min="0" value={form.deposit} onChange={set('deposit')} className={inputClass} />
               </Field>
             )}
-            <Field label="Available from" hint="Leave empty if available now">
+            {!entertainment && <Field label="Available from" hint="Leave empty if available now">
               <input type="date" value={form.availableFrom} onChange={set('availableFrom')} className={inputClass} />
-            </Field>
+            </Field>}
           </div>
         </Section>
 
         <Section title="Location">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="County" required>
-              <select value={form.county} onChange={set('county')} required className={inputClass}>
+              <select
+                value={form.county}
+                onChange={(e) => setForm((f) => ({ ...f, county: e.target.value, town: '', estate: '' }))}
+                required
+                className={inputClass}
+              >
+                <option value="">Choose a county…</option>
                 {COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
-            <Field label="Area / estate" required hint="e.g. Kilimani, Nyali, Milimani">
-              <input value={form.area} onChange={set('area')} maxLength={80} required className={inputClass} />
+            <Field label="Town" required hint={form.county ? 'Pick one or type a new town' : 'Choose the county first'}>
+              <input
+                value={form.town}
+                onChange={(e) => setForm((f) => ({ ...f, town: e.target.value, estate: '' }))}
+                list="town-options"
+                maxLength={60}
+                required
+                disabled={!form.county}
+                placeholder="e.g. Nairobi, Thika, Nyali"
+                className={inputClass}
+                autoComplete="off"
+              />
+              <datalist id="town-options">
+                {townSuggestions.items.map((t) => <option key={t.name} value={t.name} />)}
+              </datalist>
+            </Field>
+            <Field label="Estate" hint={form.town ? 'Optional. Pick one or type a new estate' : 'Optional'}>
+              <input
+                value={form.estate}
+                onChange={set('estate')}
+                list="estate-options"
+                maxLength={60}
+                disabled={!form.town.trim()}
+                placeholder="e.g. Kilimani, South B"
+                className={inputClass}
+                autoComplete="off"
+              />
+              <datalist id="estate-options">
+                {estateSuggestions.items.map((x) => <option key={x.name} value={x.name} />)}
+              </datalist>
             </Field>
           </div>
           <Field label="Nearby landmark" hint="Don't add the house number. Share it once you've spoken to the client.">
@@ -295,7 +349,7 @@ const ListingForm = () => {
 
         <Section title="What it offers">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {AMENITIES.map((a) => (
+            {amenitiesFor(form.category).map((a) => (
               <label key={a.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input
                   type="checkbox"

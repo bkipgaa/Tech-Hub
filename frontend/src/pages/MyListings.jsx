@@ -9,12 +9,14 @@ import { Link } from 'react-router-dom';
 import { Plus, Loader2, AlertCircle, Eye, Pencil, Trash2, Pause, Play, ImageOff, Home as HomeIcon } from 'lucide-react';
 import api from '../services/api';
 import { cldImage } from '../utils/media';
-import { categoryById, formatPrice } from '../utils/listingCategories';
+import { categoryById, formatPrice, placeLabel } from '../utils/listingCategories';
+import ListingPlanCard from '../components/stays/ListingPlanCard';
 
 const STATUS = {
   active: { label: 'Live', className: 'bg-green-100 text-green-700' },
   paused: { label: 'Paused', className: 'bg-gray-100 text-gray-600' },
   hidden: { label: 'Hidden by Webafix', className: 'bg-red-100 text-red-700' },
+  lapsed: { label: 'Hidden: plan ended', className: 'bg-red-100 text-red-700' },
 };
 
 const MyListings = () => {
@@ -22,6 +24,8 @@ const MyListings = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const planLapsed = plan?.phase === 'lapsed';
 
   const load = () => {
     setLoading(true);
@@ -77,6 +81,8 @@ const MyListings = () => {
           </Link>
         </div>
 
+        <ListingPlanCard onPlanChange={setPlan} />
+
         {error && (
           <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2">
             <AlertCircle className="w-4 h-4" /> {error}
@@ -92,13 +98,13 @@ const MyListings = () => {
             <HomeIcon className="w-10 h-10 text-gray-300 mx-auto" />
             <p className="mt-3 font-semibold text-gray-700">You haven't listed anything yet</p>
             <p className="text-sm text-gray-500 mt-1">
-              List an Airbnb, guest house, rental, hostel, office or shop. It's free.
+              List an Airbnb, guest house, rental, office, shop, club or bar. Your first 6 months are free.
             </p>
           </div>
         ) : (
           <div className="mt-6 space-y-3">
             {listings.map((l) => {
-              const status = STATUS[l.status] || STATUS.active;
+              const status = l.status === 'active' && planLapsed ? STATUS.lapsed : STATUS[l.status] || STATUS.active;
               const busy = busyId === l._id;
               return (
                 <div key={l._id} className="bg-white border border-gray-200 rounded-xl p-3 flex flex-col sm:flex-row gap-4">
@@ -119,7 +125,7 @@ const MyListings = () => {
                     <Link to={`/stays/${l._id}`} className="block font-semibold text-gray-800 hover:text-green-700 mt-1 truncate">
                       {l.title}
                     </Link>
-                    <p className="text-sm text-gray-500 truncate">{l.area}, {l.county}</p>
+                    <p className="text-sm text-gray-500 truncate">{placeLabel(l)}</p>
                     <p className="text-sm font-semibold text-green-700 mt-1">{formatPrice(l.price, l.priceUnit)}</p>
                     <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                       <Eye className="w-3.5 h-3.5" /> {l.views || 0} views

@@ -50,7 +50,30 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'suspended', 'pending'],
     default: 'active'
-  }
+  },
+
+  // Stays & Spaces listing plan: free for 6 months from the first listing,
+  // then KES 1,500 a month for all of the user's listings (utils/listingPlan.js)
+  listingPlan: {
+    freeUntil: { type: Date, default: null },
+    paidUntil: { type: Date, default: null },
+    payments: [{
+      _id: false,
+      amount: Number,
+      months: Number,
+      method: { type: String, enum: ['card', 'mpesa'] },
+      reference: String,          // Paystack reference or M-Pesa receipt
+      checkoutRequestID: String,  // M-Pesa STK request
+      paidAt: Date,
+    }],
+    pending: {
+      method: { type: String, enum: ['card', 'mpesa'] },
+      reference: String,
+      checkoutRequestID: String,
+      amount: Number,
+      initiatedAt: Date,
+    },
+  },
 }, {
   timestamps: true
 });

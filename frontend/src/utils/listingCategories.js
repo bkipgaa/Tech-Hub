@@ -37,6 +37,20 @@ export const LISTING_GROUPS = [
       { id: 'shop', name: 'Shops & commercial spaces' },
     ],
   },
+  {
+    id: 'entertainment',
+    name: 'Entertainment',
+    blurb: 'Clubs, bars, casinos and nights out',
+    priceUnit: 'entry',
+    categories: [
+      { id: 'club', name: 'Clubs & lounges' },
+      { id: 'bar', name: 'Bars & pubs' },
+      { id: 'casino', name: 'Casinos & betting lounges' },
+      { id: 'live_music', name: 'Live music & karaoke' },
+      { id: 'gaming', name: 'Gaming & arcades' },
+      { id: 'event_venue', name: 'Event venues & gardens' },
+    ],
+  },
 ];
 
 export const ALL_CATEGORIES = LISTING_GROUPS.flatMap((g) =>
@@ -48,6 +62,10 @@ export const groupById = (id) => LISTING_GROUPS.find((g) => g.id === id);
 
 export const isShortStay = (categoryId) => categoryById(categoryId)?.groupId === 'short_stays';
 export const isBusiness = (categoryId) => categoryById(categoryId)?.groupId === 'business';
+export const isEntertainment = (categoryId) => categoryById(categoryId)?.groupId === 'entertainment';
+
+/** How a group's price is described, e.g. "per night", "entry fee" */
+export const priceUnitLabel = (unit) => (unit === 'entry' ? 'entry fee' : `per ${unit}`);
 
 export const PROPERTY_TYPES = [
   { id: 'bedsitter', label: 'Bedsitter' },
@@ -85,7 +103,22 @@ export const AMENITIES = [
   { id: 'conference_room', label: 'Meeting room' },
   { id: 'air_conditioning', label: 'Air conditioning' },
   { id: 'laundry', label: 'Laundry' },
+  { id: 'live_music', label: 'Live music', for: 'entertainment' },
+  { id: 'dj', label: 'DJ', for: 'entertainment' },
+  { id: 'food', label: 'Food served', for: 'entertainment' },
+  { id: 'outdoor_seating', label: 'Outdoor seating', for: 'entertainment' },
+  { id: 'vip_area', label: 'VIP area', for: 'entertainment' },
+  { id: 'sports_screens', label: 'Sports on screen', for: 'entertainment' },
+  { id: 'dance_floor', label: 'Dance floor', for: 'entertainment' },
+  { id: 'card_payments', label: 'Card & M-Pesa accepted', for: 'entertainment' },
 ];
+
+// Amenities that make sense for a category (entertainment has its own set)
+export const amenitiesFor = (categoryId) => {
+  const ent = isEntertainment(categoryId);
+  const shared = ['wifi', 'parking', 'security', 'cctv', 'backup_power', 'air_conditioning'];
+  return AMENITIES.filter((a) => (ent ? a.for === 'entertainment' || shared.includes(a.id) : a.for !== 'entertainment'));
+};
 
 export const amenityLabel = (id) => AMENITIES.find((a) => a.id === id)?.label || id;
 
@@ -98,17 +131,32 @@ export const LISTER_TYPES = [
 
 export const listerTypeLabel = (id) => LISTER_TYPES.find((l) => l.id === id)?.label || 'Lister';
 
+// Kenya's 47 counties (same list the backend accepts)
 export const COUNTIES = [
-  'Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Kiambu', 'Machakos', 'Kajiado', 'Uasin Gishu',
   'Baringo', 'Bomet', 'Bungoma', 'Busia', 'Elgeyo-Marakwet', 'Embu', 'Garissa', 'Homa Bay',
-  'Isiolo', 'Kakamega', 'Kericho', 'Kilifi', 'Kirinyaga', 'Kisii', 'Kitui', 'Kwale', 'Laikipia',
-  'Lamu', 'Makueni', 'Mandera', 'Marsabit', 'Meru', 'Migori', 'Murang\'a', 'Nandi', 'Narok',
-  'Nyamira', 'Nyandarua', 'Nyeri', 'Samburu', 'Siaya', 'Taita-Taveta', 'Tana River',
-  'Tharaka-Nithi', 'Trans Nzoia', 'Turkana', 'Vihiga', 'Wajir', 'West Pokot',
+  'Isiolo', 'Kajiado', 'Kakamega', 'Kericho', 'Kiambu', 'Kilifi', 'Kirinyaga', 'Kisii', 'Kisumu',
+  'Kitui', 'Kwale', 'Laikipia', 'Lamu', 'Machakos', 'Makueni', 'Mandera', 'Marsabit', 'Meru',
+  'Migori', 'Mombasa', "Murang'a", 'Nairobi', 'Nakuru', 'Nandi', 'Narok', 'Nyamira', 'Nyandarua',
+  'Nyeri', 'Samburu', 'Siaya', 'Taita-Taveta', 'Tana River', 'Tharaka-Nithi', 'Trans Nzoia',
+  'Turkana', 'Uasin Gishu', 'Vihiga', 'Wajir', 'West Pokot',
 ];
 
-export const formatPrice = (price, unit) =>
-  `KES ${Number(price || 0).toLocaleString('en-KE')}${unit ? ` / ${unit}` : ''}`;
+// Listing plan (mirrors backend/utils/listingPlan.js)
+export const LISTING_FREE_MONTHS = 6;
+export const LISTING_MONTHLY_PRICE = 1500;
+
+export const formatPrice = (price, unit) => {
+  if (unit === 'entry') return Number(price) > 0 ? `KES ${Number(price).toLocaleString('en-KE')} entry` : 'Free entry';
+  return `KES ${Number(price || 0).toLocaleString('en-KE')}${unit ? ` / ${unit}` : ''}`;
+};
+
+/** "Kilimani, Nairobi, Nairobi" (estate, town, county), falling back to the old single area field */
+export const placeLabel = (l, { withCounty = true } = {}) => {
+  const town = l.town || l.area;
+  // "Kilimani, Nairobi", not "Kilimani, Nairobi, Nairobi" when the town shares the county's name
+  const county = withCounty && l.county && l.county.toLowerCase() !== String(town || '').toLowerCase() ? l.county : null;
+  return [l.estate, town, county].filter(Boolean).join(', ');
+};
 
 /** "0712 345 678" → "254712345678" for wa.me / tel: links */
 export const toInternationalPhone = (phone = '') => {
