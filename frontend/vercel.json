@@ -6,9 +6,9 @@
   "framework": "vite",
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "has": [{ "type": "host", "value": "tech-hub-frontend-lime.vercel.app" }],
-      "destination": "https://webafix.com/:path*",
+      "destination": "https://webafix.com/$1",
       "permanent": true
     }
   ],
