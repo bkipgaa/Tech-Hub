@@ -12,10 +12,8 @@
     useEffect(() => {
       const verifyPayment = async () => {
         // Paystack appends 'reference' (or 'trxref' on some channels).
-        // Our backend preserves the 'type' param we added to callback_url.
         const reference =
           searchParams.get('reference') || searchParams.get('trxref');
-        const type = searchParams.get('type'); // 'commission' | null (= subscription)
 
         if (!reference) {
           setStatus('error');
@@ -23,41 +21,16 @@
           return;
         }
 
-        // ── Route-specific config ─────────────────────────────────
-        const isCommission = type === 'commission';
-
-        const verifyUrl = isCommission
-          ? `/payments/commissions/verify?reference=${reference}`
-          : `/subscription/verify?reference=${reference}`;
-
-        const redirectTo = isCommission
-          ? '/technician/commissions' // ← adjust if your route differs
-          : '/subscription';
-
-        const redirectLabel = isCommission
-          ? 'commission dashboard'
-          : 'subscription page';
-
-        const successMessage = isCommission
-          ? 'Payment successful! Your commissions have been marked as paid.'
-          : 'Payment successful! Your subscription has been updated.';
-
-        const failureMessage = isCommission
-          ? 'Payment was not successful. Your commissions remain unpaid.'
-          : 'Payment was not successful. Please try again.';
+        const redirectTo = '/subscription';
+        const successMessage = 'Payment successful! Your subscription has been updated.';
+        const failureMessage = 'Payment was not successful. Please try again.';
 
         try {
-          const response = await api.get(verifyUrl);
+          const response = await api.get(`/subscription/verify?reference=${reference}`);
           const payload = response.data;
 
-          // Your subscription endpoint returns { success, data: { status } },
-          // commission endpoint returns { success, data }.
-          // Normalize both.
-          const isSuccess = isCommission
-            ? payload.success === true
-            : payload.data?.status === 'success';
-
-          if (isSuccess) {
+          // The subscription endpoint returns { success, data: { status } }
+          if (payload.data?.status === 'success') {
             setStatus('success');
             setMessage(successMessage);
             setTimeout(() => navigate(redirectTo), 2000);

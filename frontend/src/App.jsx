@@ -41,7 +41,6 @@ import Profile from './pages/Profile';
 import BecomeTechnician from './pages/BecomeTechnician';
 import CreateTechnicianProfile from './pages/CreateTechnicianProfile';
 import TechnicianDashboard from './components/technician/TechnicianDashboard';
-import TechnicianCommission from './pages/TechnicianCommission';
 import SubscriptionManager from './components/technician/subscriptionManager';
 import PrivateRoute from './components/PrivateRoute';
 import TechnicianRoute from './components/TechnicianRoute';
@@ -59,6 +58,10 @@ import TechnicianBookings from './pages/TechnicianBookings';
 import BookingDetails from './pages/BookingDetails';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import Stays from './pages/Stays';
+import ListingDetails from './pages/ListingDetails';
+import ListingForm from './pages/ListingForm';
+import MyListings from './pages/MyListings';
 
 import './App.css';
 
@@ -106,6 +109,34 @@ function App() {
           <Route path="create-technician-profile" element={<CreateTechnicianProfile />} />
           <Route path="technicians/search" element={<TechnicianSearchResults />} />
           <Route path="jobs/:jobId" element={<JobDetails />} />
+
+          {/* ── Stays & Spaces ───────────────────────────── */}
+          <Route path="stays" element={<Stays />} />
+          <Route
+            path="stays/new"
+            element={
+              <PrivateRoute>
+                <ListingForm />
+              </PrivateRoute>
+            }
+          />
+          <Route path="stays/:id" element={<ListingDetails />} />
+          <Route
+            path="stays/:id/edit"
+            element={
+              <PrivateRoute>
+                <ListingForm />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="my-listings"
+            element={
+              <PrivateRoute>
+                <MyListings />
+              </PrivateRoute>
+            }
+          />
 
           {/* ── Password reset / OAuth callbacks ─────────── */}
           <Route path="payment-callback" element={<PaymentCallback />} />
@@ -176,14 +207,6 @@ function App() {
               <PrivateRoute requiredRole="technician">
                 <TechnicianBookings />
               </PrivateRoute>
-            }
-          />
-          <Route
-            path="technician-dashboard/commissions"
-            element={
-              <TechnicianRoute>
-                <TechnicianCommission />
-              </TechnicianRoute>
             }
           />
           <Route

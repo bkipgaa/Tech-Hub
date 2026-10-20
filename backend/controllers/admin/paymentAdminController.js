@@ -1,14 +1,13 @@
 /**
  * paymentController.js
  * ====================
- * Read/act on payment transactions from subscriptions and commissions.
+ * Read/act on subscription payment transactions.
  * There is no separate Payment collection; transactions are derived
- * from Booking.commission + Technician.subscription.payments.
+ * from Technician.subscription.payments.
  *
  * Mounted at: /api/admin/payments
  */
 
-const Booking = require('../../models/Booking');
 const Technician = require('../../models/Technician');
 
 // ═══════════════════════════════════════════════════════════
@@ -23,7 +22,6 @@ exports.list = async (req, res) => {
     const { type, status, from, to, search } = req.query;
 
     const wantSubs = !type || type === 'all' || type === 'subscription';
-    const wantComms = !type || type === 'all' || type === 'commission';
 
     const subQuery = {};
     if (from || to) {
@@ -32,22 +30,11 @@ exports.list = async (req, res) => {
       if (to) subQuery['subscription.payments.paidAt'].$lte = new Date(to);
     }
 
-    const commQuery = { 'commission.amount': { $gt: 0 } };
-    if (status && status !== 'all') commQuery['commission.status'] = status;
-
-    const [subs, comms] = await Promise.all([
-      wantSubs
-        ? Technician.find({ 'subscription.payments.0': { $exists: true }, ...subQuery })
-            .populate('userId', 'firstName lastName email role')
-            .lean()
-        : [],
-      wantComms
-        ? Booking.find(commQuery)
-            .populate('technicianId', 'businessName userId')
-            .populate('technicianId.userId', 'firstName lastName email')
-            .lean()
-        : [],
-    ]);
+    const subs = wantSubs
+      ? await Technician.find({ 'subscription.payments.0': { $exists: true }, ...subQuery })
+          .populate('userId', 'firstName lastName email role')
+          .lean()
+      : [];
 
     const subTxns = subs.flatMap((t) =>
       (t.subscription?.payments || [])
@@ -73,26 +60,7 @@ exports.list = async (req, res) => {
         }))
     );
 
-    const commTxns = comms.map((b) => ({
-      _id: `${b._id}-comm`,
-      type: 'commission',
-      amount: b.commission?.amount || 0,
-      status: b.commission?.status || 'pending',
-      method: 'mpesa/card',
-      date: b.commission?.paidAt || b.commission?.createdAt || b.createdAt,
-      reference: b.commission?.reference || '',
-      user: b.technicianId?.userId
-        ? {
-            firstName: b.technicianId.userId.firstName,
-            lastName: b.technicianId.userId.lastName,
-            email: b.technicianId.userId.email,
-          }
-        : null,
-      description: `Commission — ${b.serviceCategory || ''}${b.subService ? ' / ' + b.subService : ''}`,
-      bookingId: b._id,
-    }));
-
-    let all = [...subTxns, ...commTxns];
+    let all = subTxns;
 
     if (status && status !== 'all') {
       all = all.filter((t) => t.status === status);
@@ -139,44 +107,11 @@ exports.stats = async (req, res) => {
       },
     ]);
 
-    const [commAgg] = await Booking.aggregate([
-      { $match: { 'commission.amount': { $gt: 0 } } },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$commission.amount' },
-          paid: {
-            $sum: { $cond: [{ $eq: ['$commission.status', 'paid'] }, '$commission.amount', 0] },
-          },
-          pending: {
-            $sum: {
-              $cond: [{ $in: ['$commission.status', ['pending', 'invoiced']] }, '$commission.amount', 0],
-            },
-          },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    const thisMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-
-    const [thisMonthAgg] = await Booking.aggregate([
-      { $match: { 'commission.status': 'paid', 'commission.paidAt': { $gte: thisMonthStart } } },
-      { $group: { _id: null, total: { $sum: '$commission.amount' } } },
-    ]);
-
     res.json({
       success: true,
       data: {
         subscriptions: { total: subsAgg?.total || 0, count: subsAgg?.count || 0 },
-        commission: {
-          total: commAgg?.total || 0,
-          paid: commAgg?.paid || 0,
-          pending: commAgg?.pending || 0,
-          count: commAgg?.count || 0,
-        },
-        thisMonthCommission: thisMonthAgg?.total || 0,
-        totalVolume: (subsAgg?.total || 0) + (commAgg?.total || 0),
+        totalVolume: subsAgg?.total || 0,
       },
     });
   } catch (err) {
@@ -192,9 +127,6 @@ exports.exportCsv = async (req, res) => {
   try {
     const subs = await Technician.find({ 'subscription.payments.0': { $exists: true } })
       .populate('userId', 'firstName lastName email')
-      .lean();
-    const comms = await Booking.find({ 'commission.amount': { $gt: 0 } })
-      .populate('technicianId.userId', 'firstName lastName email')
       .lean();
 
     const rows = [
@@ -217,21 +149,6 @@ exports.exportCsv = async (req, res) => {
       });
     });
 
-    comms.forEach((b) => {
-      rows.push([
-        'Commission',
-        `Booking ${b._id.toString()}`,
-        b.technicianId?.userId
-          ? `${b.technicianId.userId.firstName} ${b.technicianId.userId.lastName}`
-          : '',
-        b.technicianId?.userId?.email || '',
-        b.commission?.amount || 0,
-        b.commission?.status || '',
-        '',
-        b.commission?.reference || '',
-        b.commission?.paidAt ? new Date(b.commission.paidAt).toISOString() : '',
-      ]);
-    });
 
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     res.setHeader('Content-Type', 'text/csv');

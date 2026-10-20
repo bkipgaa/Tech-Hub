@@ -81,20 +81,6 @@ exports.getStats = async (req, res) => {
       Booking.countDocuments({ status: { $in: ['pending', 'quoted', 'agreed'] } }),
     ]);
 
-    // ── Commission aggregation ────────────────────────────
-    const commissionAgg = await Booking.aggregate([
-      { $match: { 'commission.status': { $in: ['pending', 'invoiced'] } } },
-      {
-        $group: {
-          _id: '$commission.status',
-          total: { $sum: '$commission.amount' },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-    const pendingCommission = commissionAgg.find(c => c._id === 'pending')?.total || 0;
-    const invoicedCommission = commissionAgg.find(c => c._id === 'invoiced')?.total || 0;
-
     // ── Jobs ──────────────────────────────────────────────
     let pendingJobs = 0;
     let activeJobs = 0;
@@ -128,10 +114,6 @@ exports.getStats = async (req, res) => {
           completed: completedBookings,
           pending: pendingBookings,
         },
-        commission: {
-          pending: pendingCommission,
-          invoiced: invoicedCommission,
-        },
         jobs: { pending: pendingJobs, active: activeJobs },
       },
     });
@@ -158,17 +140,11 @@ exports.getRevenueTimeline = async (req, res) => {
         { $group: { _id: null, total: { $sum: '$subscription.planDetails.price' } } },
       ]);
 
-      const commAgg = await Booking.aggregate([
-        { $match: { 'commission.invoicedAt': { $gte: start, $lt: end } } },
-        { $group: { _id: null, total: { $sum: '$commission.amount' } } },
-      ]);
-
       months.push({
         month: start.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
         monthShort: start.toLocaleString('en-US', { month: 'short' }),
         subscription: subsAgg[0]?.total || 0,
-        commission: commAgg[0]?.total || 0,
-        total: (subsAgg[0]?.total || 0) + (commAgg[0]?.total || 0),
+        total: subsAgg[0]?.total || 0,
       });
     }
 

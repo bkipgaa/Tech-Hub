@@ -7,6 +7,7 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import BookingBenefits from '../components/technician/BookingBenefits';
 import TechnicianHome from '../components/technician/TechnicianHome';
+import { LISTING_GROUPS } from '../utils/listingCategories';
 
 const CLIENT_STEPS = [
   { title: 'Search for a Service', text: 'Browse categories or search for specific services you need' },
@@ -17,8 +18,8 @@ const CLIENT_STEPS = [
 const TECHNICIAN_STEPS = [
   { title: 'Get a Booking', text: 'Clients near you find you in search and send a request' },
   { title: 'Quote & Do the Work', text: 'Send your quotation, agree with the client, and complete the job' },
-  { title: 'Get Rated', text: 'The client confirms the labor amount and rates you — ratings move you up in search' },
-  { title: 'Pay 5% Commission', text: 'Pay by M-Pesa or card within 30 days of finishing the job' },
+  { title: 'Get Rated', text: 'The client rates you after the job — ratings move you up in search' },
+  { title: 'Keep What You Earn', text: 'No commission on your jobs — just a simple monthly plan' },
 ];
 
 const Home = () => {
@@ -243,6 +244,34 @@ const Home = () => {
               </button>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Stays & Spaces Section */}
+      <div className="max-w-7xl mx-auto px-4 pt-10">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-1">Stays &amp; Spaces</h2>
+          <p className="text-gray-500 text-sm">Airbnbs, guest houses, homes for rent and office space. Contact hosts directly.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {LISTING_GROUPS.map((group) => (
+            <button
+              key={group.id}
+              onClick={() => navigate(`/stays?group=${group.id}`)}
+              className="group text-left bg-white p-4 rounded-md shadow-sm border border-gray-200 hover:shadow-md hover:border-green-500 hover:bg-green-50 transition-all duration-200"
+            >
+              <h3 className="font-semibold text-gray-800 group-hover:text-green-700">{group.name}</h3>
+              <p className="text-xs text-gray-500 mt-1">{group.categories.map((c) => c.name).join(' · ')}</p>
+            </button>
+          ))}
+        </div>
+        <div className="text-center mt-4">
+          <button
+            onClick={() => navigate(user ? '/stays/new' : '/stays')}
+            className="text-sm font-semibold text-green-700 hover:text-green-800 inline-flex items-center gap-1"
+          >
+            {user ? 'List your property for free' : 'Browse all places'} <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

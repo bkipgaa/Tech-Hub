@@ -40,17 +40,6 @@ router.post('/', bookingController.createBooking);
 // Get logged‑in user's bookings (client or technician)
 router.get('/my-bookings', bookingController.getMyBookings);
 
-// ─── COMMISSION MANAGEMENT (fixed paths) ────────────────────
-
-// Get pending commissions (optionally filter by month)
-router.get('/commissions', bookingController.getTechnicianCommissions);
-
-// Submit pending commissions for invoicing (technician)
-router.post('/commissions/submit', bookingController.submitCommissionInvoices);
-
-// Get commission history (invoiced & paid) with pagination
-router.get('/commissions/history', bookingController.getCommissionHistory);
-
 // ──────────────────────────────────────────────────────────────
 // PARAMETERISED ROUTES (with :bookingId)
 // ──────────────────────────────────────────────────────────────

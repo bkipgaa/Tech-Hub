@@ -31,7 +31,6 @@ const PAGE_TITLES = {
   'jobs':           'Jobs',
   'catalog':        'Service Catalog',
   'revenue':        'Revenue',
-  'commissions':    'Commissions',
   'payments':       'Payments',
   'users':          'Users',
   'admin-users':    'Admin Users',

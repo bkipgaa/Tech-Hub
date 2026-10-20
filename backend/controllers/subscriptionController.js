@@ -294,19 +294,6 @@ exports.paystackWebhook = async (req, res) => {
     const transaction = event.data;
     const metadata = transaction.metadata || {};
 
-    // ── Commission payment branch ──────────────────────────
-    if (metadata.type === 'commission') {
-      try {
-        const { markCommissionsPaid } = require('./commissionPaymentController');
-        const result = await markCommissionsPaid(transaction, 'webhook');
-        console.log('✅ Commission webhook processed:', result);
-      } catch (err) {
-        console.error('❌ Commission webhook error:', err);
-        return res.status(500).send('Internal Server Error');
-      }
-      return res.sendStatus(200);
-    }
-
     if (!metadata.technicianId || !metadata.planId) {
       console.error('❌ Missing metadata in webhook:', metadata);
       return res.status(400).send('Missing metadata');

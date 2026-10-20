@@ -21,7 +21,6 @@ import {
   CreditCard,
   TrendingUp,
   Briefcase,
-  DollarSign,
   AlertCircle,
   Loader2,
   Activity,
@@ -107,8 +106,7 @@ const RevenueChart = ({ data }) => {
   return (
     <div className="space-y-3">
       {data.map((m, i) => {
-        const subPercent  = (m.subscription / maxValue) * 100;
-        const commPercent = (m.commission / maxValue) * 100;
+        const subPercent = (m.subscription / maxValue) * 100;
 
         return (
           <div key={i} className="flex items-center gap-3">
@@ -119,11 +117,6 @@ const RevenueChart = ({ data }) => {
                 style={{ width: `${subPercent}%` }}
                 title={`Subscriptions: ${formatCurrency(m.subscription)}`}
               />
-              <div
-                className="bg-green-500 h-full transition-all"
-                style={{ width: `${commPercent}%` }}
-                title={`Commission: ${formatCurrency(m.commission)}`}
-              />
             </div>
             <span className="w-28 text-xs font-medium text-gray-700 text-right">
               {formatCurrency(m.total)}
@@ -131,18 +124,6 @@ const RevenueChart = ({ data }) => {
           </div>
         );
       })}
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-blue-500 rounded-sm" />
-          <span className="text-xs text-gray-600">Subscriptions</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-green-500 rounded-sm" />
-          <span className="text-xs text-gray-600">Commission</span>
-        </div>
-      </div>
     </div>
   );
 };
@@ -335,7 +316,7 @@ const Dashboard = () => {
             <h2 className="text-base font-semibold text-gray-800">
               Revenue — Last 6 Months
             </h2>
-            <span className="text-xs text-gray-500">Subscriptions + Commission</span>
+            <span className="text-xs text-gray-500">Subscriptions</span>
           </div>
           <RevenueChart data={timeline} />
         </div>
@@ -351,36 +332,6 @@ const Dashboard = () => {
 
       {/* ─── Secondary stats row ─────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
-              Pending Commission
-            </p>
-            <DollarSign className="w-4 h-4 text-yellow-500" />
-          </div>
-          <p className="text-2xl font-bold text-yellow-600">
-            {formatCurrency(stats?.commission?.pending)}
-          </p>
-          <Link
-            to="/admin/commissions"
-            className="text-xs text-blue-600 hover:underline mt-1 inline-block"
-          >
-            Manage commissions →
-          </Link>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
-              Invoiced Commission
-            </p>
-            <DollarSign className="w-4 h-4 text-green-500" />
-          </div>
-          <p className="text-2xl font-bold text-green-600">
-            {formatCurrency(stats?.commission?.invoiced)}
-          </p>
-        </div>
-
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">

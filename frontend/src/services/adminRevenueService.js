@@ -9,14 +9,6 @@ export const adminRevenueService = {
     adminApi.get('/revenue/export', { params, responseType: 'blob' }),
 };
 
-export const adminCommissionService = {
-  stats:    ()            => adminApi.get('/commissions/stats'),
-  list:     (params = {}) => adminApi.get('/commissions', { params }),
-  markPaid: (id, ref)     => adminApi.put(`/commissions/${id}/mark-paid`, { reference: ref }),
-  waive:    (id, reason)  => adminApi.put(`/commissions/${id}/waive`, { reason }),
-  export:   ()            => adminApi.get('/commissions/export', { responseType: 'blob' }),
-};
-
 export const adminPaymentService = {
   stats:  ()            => adminApi.get('/payments/stats'),
   list:   (params = {}) => adminApi.get('/payments', { params }),

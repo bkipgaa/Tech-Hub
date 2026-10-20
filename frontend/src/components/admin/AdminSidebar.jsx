@@ -24,7 +24,6 @@ import {
   FileText,
   ListTree,
   TrendingUp,
-  DollarSign,
   Wallet,
   Users,
   Shield,
@@ -67,7 +66,6 @@ const MENU_SECTIONS = [
     items: [
       { path: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard, permission: 'subscriptions.view' },
       { path: '/admin/revenue',       label: 'Revenue',       icon: TrendingUp, permission: 'revenue.view' },
-      { path: '/admin/commissions',   label: 'Commissions',   icon: DollarSign, permission: 'commission.view' },
       { path: '/admin/payments',      label: 'Payments',      icon: Wallet,     permission: 'payments.view' },
     ],
   },

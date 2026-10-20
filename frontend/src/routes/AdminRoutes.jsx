@@ -41,7 +41,6 @@ import BookingDetail from '../pages/Admin/BookingDetail';
 import ServiceCatalog from '../pages/Admin/ServiceCatalog';
 import AdminUsers from '../pages/Admin/AdminUsers';
 import Revenue from '../pages/Admin/Revenue';
-import Commissions from '../pages/Admin/Commissions';
 import Payments from '../pages/Admin/Payments';
 import Users from '../pages/Admin/Users';
 // ─── Placeholders for pages not yet built ────────────────────
@@ -145,7 +144,6 @@ const Placeholder = ({ title }) => (
 const JobsPage            = () => <Placeholder title="Jobs" />;
 const ServiceCatalogPage  = () => <Placeholder title="Service Catalog" />;
 const RevenuePage         = () => <Placeholder title="Revenue" />;
-const CommissionsPage     = () => <Placeholder title="Commissions" />;
 const PaymentsPage        = () => <Placeholder title="Payments" />;
 const UsersPage           = () => <Placeholder title="Users" />;
 const UserDetailPage      = () => <Placeholder title="User Detail" />;
@@ -275,15 +273,6 @@ const AdminRoutes = () => {
           }
         />
 
-        {/* ── Commissions ───────────────────────────── */}
-        <Route
-          path="commissions"
-          element={
-            <ProtectedAdminRoute permission="commission.view">
-              <Commissions/>
-            </ProtectedAdminRoute>
-          }
-        />
 
         {/* ── Payments ──────────────────────────────── */}
         <Route

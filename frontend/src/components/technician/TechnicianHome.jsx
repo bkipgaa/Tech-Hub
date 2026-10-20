@@ -4,7 +4,7 @@
  * Home page sections shown to a signed-in technician, above the regular
  * service browsing (technicians also hire others for jobs outside their skills).
  *
- *   1. Your business at a glance — job requests, commission, reputation, plan
+ *   1. Your business at a glance — job requests, reputation, plan
  *   2. Subscription plans — visibility radius per plan, current one highlighted
  *   3. Grow your business — profile completeness, jobs near you
  *
@@ -15,11 +15,9 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Inbox,
-  Wallet,
   Star,
   MapPin,
   ArrowRight,
-  AlertTriangle,
   CheckCircle,
   Briefcase,
   UserCheck,
@@ -27,9 +25,6 @@ import {
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { visiblePlans } from '../../utils/plans';
-
-const formatDate = (value) =>
-  value ? new Date(value).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) : '';
 
 const StatCard = ({ icon: Icon, title, children, action, onAction, tone = 'default' }) => {
   const tones = {
@@ -75,7 +70,6 @@ const TechnicianHome = () => {
   const { technicianProfile } = useAuth();
 
   const [pendingRequests, setPendingRequests] = useState(null);
-  const [commission, setCommission] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [plans, setPlans] = useState([]);
 
@@ -84,10 +78,6 @@ const TechnicianHome = () => {
       .get('/bookings/my-bookings', { params: { status: 'pending', limit: 1 } })
       .then((r) => setPendingRequests(r.data?.pagination?.total ?? r.data?.data?.length ?? 0))
       .catch(() => setPendingRequests(null));
-    api
-      .get('/bookings/commissions')
-      .then((r) => setCommission(r.data?.data?.summary || null))
-      .catch(() => setCommission(null));
     api
       .get('/subscription/current')
       .then((r) => setSubscription(r.data?.data || null))
@@ -108,7 +98,6 @@ const TechnicianHome = () => {
   const radius = subscription?.visibilityRadius;
   const completion = technicianProfile?.profileCompletionPercentage ?? 0;
   const missing = missingProfileItems(technicianProfile);
-  const commissionDue = commission?.totalDue || 0;
 
   return (
     <>
@@ -119,7 +108,7 @@ const TechnicianHome = () => {
           <p className="text-gray-500 text-sm">Everything that needs your attention, in one place</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
             icon={Inbox}
             title="Job requests"
@@ -129,23 +118,6 @@ const TechnicianHome = () => {
             <p className="text-3xl font-bold text-gray-800">{pendingRequests ?? '—'}</p>
             <p className="text-sm text-gray-500 mt-1">
               {pendingRequests ? 'waiting for your quotation' : 'No new requests right now'}
-            </p>
-          </StatCard>
-
-          <StatCard
-            icon={commission?.isOverdue ? AlertTriangle : Wallet}
-            title="Commission"
-            tone={commission?.isOverdue ? 'warning' : 'default'}
-            action={commissionDue > 0 ? 'Pay now' : 'View commissions'}
-            onAction={() => navigate('/technician-dashboard/commissions')}
-          >
-            <p className="text-3xl font-bold text-gray-800">KES {commissionDue.toLocaleString()}</p>
-            <p className={`text-sm mt-1 ${commission?.isOverdue ? 'text-red-700 font-medium' : 'text-gray-500'}`}>
-              {commission?.isOverdue
-                ? 'Overdue — new bookings are paused'
-                : commissionDue > 0
-                ? `Due ${formatDate(commission?.earliestDue)}`
-                : 'Nothing due'}
             </p>
           </StatCard>
 

@@ -30,7 +30,7 @@ const sections = [
   { id: 'payments', title: 'Payments', body: [
     { ul: [
       `**Service payments** are made directly between client and Technician by the methods the Technician offers (cash, M-Pesa, card, bank transfer). Unless the platform clearly says otherwise for a particular transaction, Webafix is not a party to service payments and does not hold them.`,
-      `Payments made through the platform, such as Technician subscriptions and commissions, are processed by **Paystack** (card) and **Safaricom M-Pesa**. Their terms also apply. We never see or store card details or M-Pesa PINs.`,
+      `Payments made through the platform, such as Technician subscriptions, are processed by **Paystack** (card) and **Safaricom M-Pesa**. Their terms also apply. We never see or store card details or M-Pesa PINs.`,
       `Prices are in **Kenya Shillings (KES)**. Prices shown by Technicians are estimates until a quotation is accepted.`,
       `Keep your receipts. Technicians must give clients a receipt for money received.`,
     ]},
@@ -40,7 +40,7 @@ const sections = [
       `**Client cancellation.** A client can cancel before the Technician starts work. Cancelling more than ${L.cancelWindow} before the scheduled time is free. After that, the Technician may charge a reasonable fee of up to ${L.cancelFee}.`,
       `**Technician cancellation.** Cancel as early as you can and give a reason. Repeated late cancellations or no-shows can lead to warnings, reduced visibility or suspension.`,
       `**Refunds for services** are agreed between client and Technician. If you cannot agree, use the dispute process in section 10. Webafix is not obliged to refund service payments it never received.`,
-      `Platform fees (subscriptions and commission) are covered by the Technician Terms below.`,
+      `Platform fees (subscriptions) are covered by the Technician Terms below.`,
     ]},
   ]},
   { id: 'reviews', title: 'Reviews and ratings', body: [
@@ -150,19 +150,14 @@ const sections = [
   { id: 't-standards', title: 'Service standards', body: [
     `Work with reasonable skill and care. Follow the law, safety standards and required permits. Reply to bookings promptly and keep appointments. Be honest about price, timing and materials. Carry the insurance your work needs. Treat clients with respect. Do not hand work to unqualified people or misrepresent who is doing it.`,
   ]},
-  { id: 't-fees', title: 'Subscriptions and commission', body: [
+  { id: 't-fees', title: 'Subscriptions', body: [
     { ul: [
       `**Subscription plans.** To appear in search you need an active plan. Plans differ by **visibility radius**, price (in KES, billed monthly) and features, as shown in the app when you buy. The plan details and prices shown in the app at purchase are the ones that apply.`,
       `**Expiry.** When your plan or free trial ends, **your profile stops appearing in search** until you renew. Bookings already made continue.`,
       `**Renewal and refunds.** ${L.autoRenew}. Subscription fees are non-refundable except where the law requires or where we end the service for our own reasons. We send reminders before a plan expires.`,
-      `**Commission.** For each booking completed through the platform you owe Webafix **${L.commissionRate} of ${L.commissionBase}**, **whether the client paid you in cash, M-Pesa or any other way**. It is recorded per booking and becomes payable when the booking is completed.`,
-      `**Paying commission.** Pay in the app by **card (Paystack) or M-Pesa STK Push**. You may be asked to settle all outstanding commission together. If it stays unpaid for more than ${L.commissionOverdue} we may reduce your visibility, restrict new bookings, suspend your account and recover the amount.`,
       `**Tax.** Fees are ${L.vatNote}.`,
       `**Changes.** We may change fees with ${L.feeChangeNotice} notice. Changes do not affect bookings already accepted.`,
     ]},
-  ]},
-  { id: 't-circumvent', title: 'No going around the platform', body: [
-    `Do not use the platform to find a client and then move the job off the platform to avoid commission, for ${L.circumventPeriod} after first contact through the platform. We may check booking, chat and payment records to enforce this. A breach can lead to recovery of the commission owed, an additional charge of ${L.circumventPenalty}, and suspension.`,
   ]},
   { id: 't-data', title: 'Client data you receive', body: [
     `You receive a client's name, phone, address and job details **only to carry out the booked service**. You must:`,
@@ -184,7 +179,7 @@ const sections = [
     `You are **solely liable** to clients for your work, including defects, damage, injury, delays and breach of contract, and you indemnify Webafix against related claims as set out in section 14.`,
   ]},
   { id: 't-suspend', title: 'Suspension and removal', body: [
-    `We may suspend or remove your profile for false information, unlicensed work, safety issues, fraud, serious or repeated complaints, unpaid fees or breach of these terms. If you delete your account, your data is handled as described in the Privacy Policy, and any commission you owe remains payable.`,
+    `We may suspend or remove your profile for false information, unlicensed work, safety issues, fraud, serious or repeated complaints, unpaid fees or breach of these terms. If you delete your account, your data is handled as described in the Privacy Policy, and any fees you owe remain payable.`,
   ]},
 ];
 

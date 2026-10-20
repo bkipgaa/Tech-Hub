@@ -3,11 +3,9 @@
  * ====================
  * Read-only revenue analytics for the admin dashboard.
  *
- * Revenue sources:
- *   - Subscription plan payments (real `subscription.payments[]` records
- *     OR, as a fallback, the current plan's price when no payment record
- *     exists — this keeps legacy/synthetic data visible).
- *   - Commission payments (5% of labor, marked "paid").
+ * Revenue comes from subscription plan payments (real `subscription.payments[]`
+ * records OR, as a fallback, the current plan's price when no payment record
+ * exists — this keeps legacy/synthetic data visible).
  *
  * Query params:
  *   period = day | week | month | year | all     (default: month)
@@ -15,7 +13,6 @@
  * Mounted at: /api/admin/revenue
  */
 
-const Booking = require('../../models/Booking');
 const Technician = require('../../models/Technician');
 
 // ═══════════════════════════════════════════════════════════
@@ -257,47 +254,6 @@ async function collectSubscriptionEvents() {
   return events;
 }
 
-/**
- * Commissions live on bookings. Only those with an amount > 0.
- * A commission is "paid" when commission.status === 'paid'.
- * The date used is paidAt (paid) or createdAt (pending).
- */
-async function collectCommissionEvents() {
-  const bookings = await Booking.find({ 'commission.amount': { $gt: 0 } })
-    .populate({
-      path: 'technicianId',
-      select: 'businessName userId',
-      populate: { path: 'userId', select: 'firstName lastName email' },
-    })
-    .lean();
-
-  return bookings.map((b) => ({
-    _id: `${b._id}-comm`,
-    type: 'commission',
-    amount: b.commission?.amount || 0,
-    status: b.commission?.status || 'pending',
-    method: 'mpesa/card',
-    date: b.commission?.paidAt
-      ? new Date(b.commission.paidAt)
-      : b.completedAt
-      ? new Date(b.completedAt)
-      : new Date(b.createdAt),
-    reference: b.commission?.reference || '',
-    user: b.technicianId?.userId
-      ? {
-          firstName: b.technicianId.userId.firstName,
-          lastName: b.technicianId.userId.lastName,
-          email: b.technicianId.userId.email,
-        }
-      : null,
-    bookingId: b._id,
-    label: `Commission — ${b.serviceCategory || ''}${
-      b.subService ? ' / ' + b.subService : ''
-    }`,
-    paidAt: b.commission?.paidAt ? new Date(b.commission.paidAt) : null,
-  }));
-}
-
 const within = (d, start, end) => d && d >= start && d < end;
 
 // ═══════════════════════════════════════════════════════════
@@ -308,29 +264,18 @@ exports.getOverview = async (req, res) => {
     const period = req.query.period || 'month';
     const { rangeStart, rangeEnd, prevStart, prevEnd, groupLabel } = buildPeriod(period);
 
-    const [subEvents, commEvents] = await Promise.all([
-      collectSubscriptionEvents(),
-      collectCommissionEvents(),
-    ]);
+    const subEvents = await collectSubscriptionEvents();
 
     // Sum over a window
-    const sumInWindow = (events, start, end, filter) =>
+    const sumInWindow = (events, start, end) =>
       events.reduce((total, e) => {
         if (!within(e.date, start, end)) return total;
-        if (filter && !filter(e)) return total;
         return total + (Number(e.amount) || 0);
       }, 0);
 
-    // Current window
-    const thisSubs = sumInWindow(subEvents, rangeStart, rangeEnd);
-    const thisComms = sumInWindow(commEvents, rangeStart, rangeEnd, (e) => e.status === 'paid');
-
-    // Previous window (for growth %)
-    const prevSubs = sumInWindow(subEvents, prevStart, prevEnd);
-    const prevComms = sumInWindow(commEvents, prevStart, prevEnd, (e) => e.status === 'paid');
-
-    const thisTotal = thisSubs + thisComms;
-    const prevTotal = prevSubs + prevComms;
+    // Current window, and the previous one for growth %
+    const thisTotal = sumInWindow(subEvents, rangeStart, rangeEnd);
+    const prevTotal = sumInWindow(subEvents, prevStart, prevEnd);
     const growth =
       prevTotal === 0
         ? thisTotal > 0
@@ -340,14 +285,6 @@ exports.getOverview = async (req, res) => {
 
     // All-time
     const allSubs = subEvents.reduce((a, e) => a + (Number(e.amount) || 0), 0);
-    const allCommsPaid = commEvents
-      .filter((e) => e.status === 'paid')
-      .reduce((a, e) => a + (Number(e.amount) || 0), 0);
-
-    // Pending commission (all-time, not windowed)
-    const pendingCommission = commEvents
-      .filter((e) => e.status === 'pending' || e.status === 'invoiced')
-      .reduce((a, e) => a + (Number(e.amount) || 0), 0);
 
     // Active paid subscriptions
     const activeSubscriptions = await Technician.countDocuments({
@@ -365,21 +302,17 @@ exports.getOverview = async (req, res) => {
         thisMonth: {
           // keep the legacy key so the existing frontend works
           total: thisTotal,
-          subscriptions: thisSubs,
-          commission: thisComms,
+          subscriptions: thisTotal,
         },
         lastMonth: {
           total: prevTotal,
-          subscriptions: prevSubs,
-          commission: prevComms,
+          subscriptions: prevTotal,
         },
         growth,
         allTime: {
-          total: allSubs + allCommsPaid,
+          total: allSubs,
           subscriptions: allSubs,
-          commission: allCommsPaid,
         },
-        pendingCommission,
         activeSubscriptions,
       },
     });
@@ -397,26 +330,18 @@ exports.getTimeline = async (req, res) => {
     const period = req.query.period || 'month';
     const { buckets } = buildPeriod(period);
 
-    const [subEvents, commEvents] = await Promise.all([
-      collectSubscriptionEvents(),
-      collectCommissionEvents(),
-    ]);
+    const subEvents = await collectSubscriptionEvents();
 
     const data = buckets.map((b) => {
       const subscriptions = subEvents
         .filter((e) => within(e.date, b.start, b.end))
         .reduce((a, e) => a + (Number(e.amount) || 0), 0);
 
-      const commission = commEvents
-        .filter((e) => e.status === 'paid' && within(e.date, b.start, b.end))
-        .reduce((a, e) => a + (Number(e.amount) || 0), 0);
-
       return {
         month: b.label,
         monthShort: b.label,
         subscriptions,
-        commission,
-        total: subscriptions + commission,
+        total: subscriptions,
       };
     });
 
@@ -435,10 +360,7 @@ exports.getBreakdown = async (req, res) => {
     const period = req.query.period || 'month';
     const { rangeStart, rangeEnd } = buildPeriod(period);
 
-    const [subEvents, commEvents] = await Promise.all([
-      collectSubscriptionEvents(),
-      collectCommissionEvents(),
-    ]);
+    const subEvents = await collectSubscriptionEvents();
 
     // Group subscription revenue by plan within the window
     const byPlanMap = new Map();
@@ -459,13 +381,9 @@ exports.getBreakdown = async (req, res) => {
 
     const byPlan = Array.from(byPlanMap.values()).sort((a, b) => b.revenue - a.revenue);
 
-    const commissionTotal = commEvents
-      .filter((e) => e.status === 'paid' && within(e.date, rangeStart, rangeEnd))
-      .reduce((a, e) => a + (Number(e.amount) || 0), 0);
-
     res.json({
       success: true,
-      data: { byPlan, commissionTotal },
+      data: { byPlan },
       period,
     });
   } catch (err) {
@@ -485,20 +403,9 @@ exports.getTransactions = async (req, res) => {
 
     const period = req.query.period || 'month';
     const { rangeStart, rangeEnd } = buildPeriod(period);
-    const { type } = req.query;
+    const subEvents = await collectSubscriptionEvents();
 
-    const [subEvents, commEvents] = await Promise.all([
-      collectSubscriptionEvents(),
-      collectCommissionEvents(),
-    ]);
-
-    let all = [...subEvents, ...commEvents].filter((e) =>
-      within(e.date, rangeStart, rangeEnd)
-    );
-
-    if (type === 'subscription') all = all.filter((e) => e.type === 'subscription');
-    if (type === 'commission') all = all.filter((e) => e.type === 'commission');
-
+    const all = subEvents.filter((e) => within(e.date, rangeStart, rangeEnd));
     all.sort((a, b) => b.date - a.date);
 
     const total = all.length;
@@ -524,22 +431,16 @@ exports.exportRevenue = async (req, res) => {
     const period = req.query.period || 'month';
     const { buckets } = buildPeriod(period);
 
-    const [subEvents, commEvents] = await Promise.all([
-      collectSubscriptionEvents(),
-      collectCommissionEvents(),
-    ]);
+    const subEvents = await collectSubscriptionEvents();
 
     const rows = [
       [`Period: ${period}`],
-      ['Bucket', 'Subscriptions (KES)', 'Commission (KES)', 'Total (KES)'],
+      ['Bucket', 'Subscriptions (KES)'],
       ...buckets.map((b) => {
         const s = subEvents
           .filter((e) => within(e.date, b.start, b.end))
           .reduce((a, e) => a + (Number(e.amount) || 0), 0);
-        const c = commEvents
-          .filter((e) => e.status === 'paid' && within(e.date, b.start, b.end))
-          .reduce((a, e) => a + (Number(e.amount) || 0), 0);
-        return [b.label, s, c, s + c];
+        return [b.label, s];
       }),
     ];
 

@@ -6,7 +6,7 @@
  * 
  * Features:
  * - View all booking details (service, location, pricing, dates)
- * - Quotation, materials, labor payment, and commission details
+ * - Quotation, materials and labor payment details
  * - Status timeline showing history of status changes
  * - Role-based action buttons for each step:
  *   - Technician: Send quotation, set material source, confirm materials money received,
@@ -50,7 +50,6 @@ import {
   Package,
   Truck,
   Gift,
-  Percent,
   Paperclip,
 } from 'lucide-react';
 import api from '../services/api';
@@ -274,9 +273,6 @@ const BookingDetails = () => {
     // Rating
     rating: 0,
     review: '',
-    // Client confirms the labor amount the technician reported
-    laborConfirmed: null, // null = not answered, true = correct, false = different
-    clientLaborAmount: '',
     needsRating: false,
   });
 
@@ -565,7 +561,7 @@ const BookingDetails = () => {
       },
       confirmLaborPayment: {
         title: 'Confirm Labor Payment',
-        message: 'Enter the amount you received for labor. A 5% commission will be calculated on it, and the client will be asked to confirm the amount when rating.',
+        message: 'Enter the amount you received for labor.',
         buttonText: 'Confirm Payment',
         buttonColor: 'bg-green-600 hover:bg-green-700',
         needsRating: false,
@@ -608,8 +604,6 @@ const BookingDetails = () => {
       reason: '',
       rating: 0,
       review: '',
-      laborConfirmed: null,
-      clientLaborAmount: '',
       quotationFiles: [],
       // Pre-fill the materials amount with the quoted materials cost (the expert can change or clear it)
       materialsAmount: action === 'confirmMaterialsMoneyReceived' && booking?.quotation?.materialsCost > 0
@@ -646,8 +640,6 @@ const BookingDetails = () => {
       reason: '',
       rating: 0,
       review: '',
-      laborConfirmed: null,
-      clientLaborAmount: '',
       quotationFiles: [],
       materialsAmount: '',
       needsRating: false,
@@ -677,8 +669,6 @@ const BookingDetails = () => {
       reason,
       rating,
       review,
-      laborConfirmed,
-      clientLaborAmount,
       quotationFiles,
       materialsAmount,
       needsRating,
@@ -699,16 +689,6 @@ const BookingDetails = () => {
       if (!review || review.trim() === '') {
         setActionModal((prev) => ({ ...prev, error: 'Please write a review.' }));
         return;
-      }
-      if (booking.laborPayment?.amount) {
-        if (laborConfirmed === null) {
-          setActionModal((prev) => ({ ...prev, error: 'Please confirm the labor amount you paid.' }));
-          return;
-        }
-        if (laborConfirmed === false && (!clientLaborAmount || parseFloat(clientLaborAmount) <= 0)) {
-          setActionModal((prev) => ({ ...prev, error: 'Please enter the labor amount you paid.' }));
-          return;
-        }
       }
     }
 
@@ -824,10 +804,6 @@ const BookingDetails = () => {
         case 'rate':
           endpoint = `/bookings/${booking._id}/rate`;
           payload = { rating, review: review.trim() };
-          if (booking.laborPayment?.amount) {
-            payload.laborAmountConfirmed = laborConfirmed;
-            if (laborConfirmed === false) payload.clientLaborAmount = parseFloat(clientLaborAmount);
-          }
           break;
         default:
           throw new Error('Invalid action');
@@ -1497,7 +1473,7 @@ const BookingDetails = () => {
               </div>
             )}
 
-            {/* Labor Payment & Commission Card */}
+            {/* Pricing & Payment Card */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-green-600" />
@@ -1553,20 +1529,6 @@ const BookingDetails = () => {
                   {booking.laborPayment.notes && (
                     <p className="text-xs text-green-600 mt-1">Note: {booking.laborPayment.notes}</p>
                   )}
-                </div>
-              )}
-
-              {/* Commission */}
-              {booking.commission?.amount > 0 && (
-                <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                  <p className="text-sm text-yellow-700 flex items-center gap-1">
-                    <Percent className="w-4 h-4" />
-                    <span>Commission (5% of labor): </span>
-                    <span className="font-bold">{formatCurrency(booking.commission.amount)}</span>
-                    <span className="text-xs text-yellow-600 ml-2">
-                      Status: {booking.commission.status || 'pending'}
-                    </span>
-                  </p>
                 </div>
               )}
             </div>
@@ -1867,7 +1829,6 @@ const BookingDetails = () => {
                       step="1"
                       required
                     />
-                    <p className="text-xs text-gray-400 mt-1">The system will calculate 5% commission automatically.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1990,56 +1951,6 @@ const BookingDetails = () => {
                       {actionModal.review.length}/500 characters
                     </p>
                   </div>
-
-                  {/* Labor amount confirmation */}
-                  {booking.laborPayment?.amount > 0 && (
-                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <p className="text-sm font-medium text-gray-700 mb-2">
-                        {technicianName} says you paid{' '}
-                        <strong>{formatCurrency(booking.laborPayment.amount)}</strong> for labor. Is this correct?{' '}
-                        <span className="text-red-500">*</span>
-                      </p>
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input
-                            type="radio"
-                            name="laborConfirmed"
-                            checked={actionModal.laborConfirmed === true}
-                            onChange={() => setActionModal((prev) => ({ ...prev, laborConfirmed: true, clientLaborAmount: '' }))}
-                            disabled={actionModal.loading}
-                          />
-                          Yes, that's correct
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input
-                            type="radio"
-                            name="laborConfirmed"
-                            checked={actionModal.laborConfirmed === false}
-                            onChange={() => setActionModal((prev) => ({ ...prev, laborConfirmed: false }))}
-                            disabled={actionModal.loading}
-                          />
-                          No, I paid a different amount
-                        </label>
-                      </div>
-                      {actionModal.laborConfirmed === false && (
-                        <div className="mt-2">
-                          <label className="block text-sm text-gray-700 mb-1">
-                            Amount you paid for labor (KES) <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="number"
-                            value={actionModal.clientLaborAmount}
-                            onChange={(e) => setActionModal((prev) => ({ ...prev, clientLaborAmount: e.target.value }))}
-                            placeholder="e.g. 3000"
-                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                            disabled={actionModal.loading}
-                            min="1"
-                            step="1"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </>
               )}
 

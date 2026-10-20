@@ -34,7 +34,7 @@ const buildCallbackUrl = (overridePath) => {
   }
 
   // 2. Env var — a relative override path is joined onto its origin, so
-  //    commission and subscription callbacks reach their own handlers
+  //    subscription callbacks reach their handler
   if (process.env.MPESA_CALLBACK_URL) {
     const url = process.env.MPESA_CALLBACK_URL.trim().replace(/\/+$/, '');
     if (!overridePath) return url;
