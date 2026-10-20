@@ -137,9 +137,9 @@ const Navbar = () => {
 
     {/* The logo image */}
     <img
-      src="/logo.jpg"
+      src="/logo.svg"
       alt="Webafix"
-      className="relative w-11 h-11 object-contain rounded-full ring-2 ring-white shadow-md
+      className="relative w-11 h-11 object-contain rounded-full bg-white p-1 ring-2 ring-white shadow-md
                  transition-all duration-300 ease-out
                  group-hover:scale-110 group-hover:shadow-xl
                  group-hover:ring-green-100"

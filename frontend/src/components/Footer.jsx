@@ -46,9 +46,9 @@ const Footer = () => {
     <div className="relative">
       <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400/40 to-red-400/40 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       <img
-        src="/logo.jpg"
+        src="/logo.svg"
         alt="Webafix"
-        className="relative w-12 h-12 object-contain rounded-full ring-2 ring-gray-700 shadow-lg
+        className="relative w-12 h-12 object-contain rounded-full bg-white p-1 ring-2 ring-gray-700 shadow-lg
                    transition-all duration-300 ease-out
                    group-hover:scale-110 group-hover:ring-green-500/50"
       />
