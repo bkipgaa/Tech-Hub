@@ -1,24 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="w" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="64" y2="0">
-      <stop offset="0.5" stop-color="#15803d" />
-      <stop offset="0.5" stop-color="#dc2626" />
-    </linearGradient>
-    <clipPath id="c"><rect x="0" y="7" width="64" height="57" /></clipPath>
-    <!-- open jaw of the spanner -->
+    <!-- open jaw and hanging hole of the spanner -->
     <mask id="jaw" maskUnits="userSpaceOnUse" x="-40" y="-40" width="80" height="80">
       <rect x="-40" y="-40" width="80" height="80" fill="#fff" />
-      <rect x="15" y="-3.2" width="12" height="6.4" fill="#000" />
+      <rect x="19" y="-3.8" width="16" height="7.6" fill="#000" />
+      <circle cx="-25.5" cy="0" r="1.7" fill="#000" />
     </mask>
     <g id="spanner">
-      <rect x="-25" y="-3.6" width="38" height="7.2" rx="3.6" />
-      <circle cx="17" cy="0" r="8.5" />
+      <rect x="-30" y="-3.8" width="46" height="7.6" rx="3.8" />
+      <circle cx="21" cy="0" r="9.5" />
     </g>
   </defs>
-  <path clip-path="url(#c)" fill="none" stroke="url(#w)" stroke-width="15" stroke-linejoin="bevel"
-        d="M8 0L19.5 52L32 20L44.5 52L56 0" />
-  <g transform="translate(32 34) rotate(-45)" mask="url(#jaw)">
-    <use href="#spanner" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round" />
-    <use href="#spanner" fill="#1f2937" />
+  <g transform="translate(32 32) scale(0.98)">
+    <!-- hammer: handle, head, striking face, claw -->
+    <g transform="rotate(-135)" fill="#15803d">
+      <rect x="-30" y="-3.2" width="52" height="6.4" rx="3.2" />
+      <rect x="20" y="-9" width="10" height="13" rx="1" />
+      <rect x="18.5" y="-14.5" width="13" height="6.5" rx="1" />
+      <path d="M20 3.5H30C30 10 26.5 14 19 15.5C21.5 11.5 22 7.5 20 3.5Z" />
+    </g>
+    <!-- spanner on top, with a white outline to separate it from the hammer -->
+    <g transform="rotate(-45)" mask="url(#jaw)">
+      <use href="#spanner" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round" />
+      <use href="#spanner" fill="#dc2626" />
+    </g>
   </g>
 </svg>
