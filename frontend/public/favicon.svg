@@ -5,7 +5,20 @@
       <stop offset="0.5" stop-color="#dc2626" />
     </linearGradient>
     <clipPath id="c"><rect x="0" y="7" width="64" height="57" /></clipPath>
+    <!-- open jaw of the spanner -->
+    <mask id="jaw" maskUnits="userSpaceOnUse" x="-40" y="-40" width="80" height="80">
+      <rect x="-40" y="-40" width="80" height="80" fill="#fff" />
+      <rect x="15" y="-3.2" width="12" height="6.4" fill="#000" />
+    </mask>
+    <g id="spanner">
+      <rect x="-25" y="-3.6" width="38" height="7.2" rx="3.6" />
+      <circle cx="17" cy="0" r="8.5" />
+    </g>
   </defs>
   <path clip-path="url(#c)" fill="none" stroke="url(#w)" stroke-width="15" stroke-linejoin="bevel"
         d="M8 0L19.5 52L32 20L44.5 52L56 0" />
+  <g transform="translate(32 34) rotate(-45)" mask="url(#jaw)">
+    <use href="#spanner" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round" />
+    <use href="#spanner" fill="#1f2937" />
+  </g>
 </svg>
