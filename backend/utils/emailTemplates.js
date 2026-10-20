@@ -329,6 +329,33 @@ exports.listingRejected = (data) => ({
   ),
 });
 
+// Admin approved a job post. data: { name, title, jobId }
+exports.jobApproved = (data) => ({
+  subject: `✅ Your job is live: ${data.title}`,
+  html: layout(
+    'Your job post is approved',
+    `<p>Hi <strong>${data.name}</strong>,</p>
+     <p><strong>${data.title}</strong> is now in Available Jobs, where experts can see it and apply.</p>
+     <p>It stays open for 30 days. You'll see applications under My Jobs.</p>`,
+    `${BRAND.url}/jobs/${data.jobId}`,
+    'View job'
+  ),
+});
+
+// Admin rejected or took down a job post. data: { name, title, reason }
+exports.jobRejected = (data) => ({
+  subject: `Changes needed: ${data.title}`,
+  html: layout(
+    'Your job post was not approved',
+    `<p>Hi <strong>${data.name}</strong>,</p>
+     <p>We couldn't publish <strong>${data.title}</strong>. Here's why:</p>
+     <div style="background:#fef2f2;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid ${BRAND.accentRed};">${data.reason}</div>
+     <p>You can post it again with the changes.</p>`,
+    `${BRAND.url}/post-job`,
+    'Post a job'
+  ),
+});
+
 // ─────────────────────────────────────────────────────────────
 // CLIENT NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────

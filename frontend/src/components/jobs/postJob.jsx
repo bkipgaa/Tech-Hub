@@ -4,6 +4,9 @@ import jobService from '../../services/jobService';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
+// Value of the "Other (type it)" option in the category dropdowns
+const OTHER = '__other__';
+
 const PostJob = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -45,8 +48,15 @@ const PostJob = () => {
     fetchCategories();
   }, []);
 
+  // Typed values for any level set to "Other"
+  const [typed, setTypedState] = useState({ main: '', service: '', sub: '' });
+  const setTyped = (key) => (e) => setTypedState((t) => ({ ...t, [key]: e.target.value }));
+  const mainIsOther = formData.mainCategory === OTHER;
+  const serviceIsOther = formData.serviceCategory === OTHER;
+  const subIsOther = formData.subService === OTHER;
+
   useEffect(() => {
-    if (formData.mainCategory) {
+    if (formData.mainCategory && !mainIsOther) {
       const fetchServiceCategories = async () => {
         try {
           const response = await api.get(`/service-catalog/${formData.mainCategory}/service-categories`);
@@ -61,10 +71,10 @@ const PostJob = () => {
     }
     setFormData(prev => ({ ...prev, serviceCategory: '', subService: '' }));
     setSubServices([]);
-  }, [formData.mainCategory]);
+  }, [formData.mainCategory, mainIsOther]);
 
   useEffect(() => {
-    if (formData.mainCategory && formData.serviceCategory) {
+    if (formData.mainCategory && formData.serviceCategory && !mainIsOther && !serviceIsOther) {
       const fetchSubServices = async () => {
         try {
           const response = await api.get(`/service-catalog/${formData.mainCategory}/${formData.serviceCategory}/sub-services`);
@@ -77,7 +87,7 @@ const PostJob = () => {
     } else {
       setSubServices([]);
     }
-  }, [formData.mainCategory, formData.serviceCategory]);
+  }, [formData.mainCategory, formData.serviceCategory, mainIsOther, serviceIsOther]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -111,7 +121,15 @@ const PostJob = () => {
     setSuccess('');
 
     try {
-      const response = await jobService.createJob(formData);
+      // "Other" levels send what was typed; anything left empty is "N/A"
+      const pick = (selected, typedValue, other) => (other ? typedValue.trim() : selected) || 'N/A';
+      const payload = {
+        ...formData,
+        mainCategory: mainIsOther ? typed.main.trim() : formData.mainCategory,
+        serviceCategory: pick(formData.serviceCategory, typed.service, mainIsOther || serviceIsOther),
+        subService: pick(formData.subService, typed.sub, mainIsOther || serviceIsOther || subIsOther),
+      };
+      await jobService.createJob(payload);
       setSuccess('Job posted successfully! Awaiting admin approval.');
       setTimeout(() => {
         navigate('/my-jobs');
@@ -166,56 +184,122 @@ const PostJob = () => {
           />
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">Main Category *</label>
-            <select
-              name="mainCategory"
-              value={formData.mainCategory}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border rounded-lg"
-            >
-              <option value="">Select Main Category</option>
-              {mainCategories.map(cat => (
-                <option key={cat.name} value={cat.name}>{cat.name}</option>
-              ))}
-            </select>
+        <div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Main category: from the catalog, or "Other" to type one */}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Main Category *</label>
+              <select
+                name="mainCategory"
+                value={formData.mainCategory}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                <option value="">Select Main Category</option>
+                {mainCategories.map(cat => (
+                  <option key={cat.name} value={cat.name}>{cat.name}</option>
+                ))}
+                <option value={OTHER}>Other (type it)</option>
+              </select>
+              {mainIsOther && (
+                <input
+                  type="text"
+                  value={typed.main}
+                  onChange={setTyped('main')}
+                  required
+                  maxLength={80}
+                  className="mt-2 w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                  placeholder="Type the category, e.g. Car Wash"
+                />
+              )}
+            </div>
+
+            {/* Service category: optional */}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Service Category</label>
+              {mainIsOther ? (
+                <input
+                  type="text"
+                  value={typed.service}
+                  onChange={setTyped('service')}
+                  maxLength={80}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                  placeholder="Optional, e.g. Mobile car wash"
+                />
+              ) : (
+                <>
+                  <select
+                    name="serviceCategory"
+                    value={formData.serviceCategory}
+                    onChange={handleChange}
+                    disabled={!formData.mainCategory}
+                    className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100"
+                  >
+                    <option value="">Not sure (N/A)</option>
+                    {serviceCategories.map(cat => (
+                      <option key={cat.name} value={cat.name}>{cat.name}</option>
+                    ))}
+                    <option value={OTHER}>Other (type it)</option>
+                  </select>
+                  {serviceIsOther && (
+                    <input
+                      type="text"
+                      value={typed.service}
+                      onChange={setTyped('service')}
+                      maxLength={80}
+                      className="mt-2 w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                      placeholder="Type the service category"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Sub-service: optional */}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Sub-Service</label>
+              {mainIsOther || serviceIsOther ? (
+                <input
+                  type="text"
+                  value={typed.sub}
+                  onChange={setTyped('sub')}
+                  maxLength={80}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                  placeholder="Optional, or leave blank for N/A"
+                />
+              ) : (
+                <>
+                  <select
+                    name="subService"
+                    value={formData.subService}
+                    onChange={handleChange}
+                    disabled={!formData.serviceCategory}
+                    className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100"
+                  >
+                    <option value="">Not sure (N/A)</option>
+                    {subServices.map(service => (
+                      <option key={service.name} value={service.name}>{service.name}</option>
+                    ))}
+                    <option value={OTHER}>Other (type it)</option>
+                  </select>
+                  {subIsOther && (
+                    <input
+                      type="text"
+                      value={typed.sub}
+                      onChange={setTyped('sub')}
+                      maxLength={80}
+                      className="mt-2 w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                      placeholder="Type the sub-service"
+                    />
+                  )}
+                </>
+              )}
+            </div>
           </div>
-          
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">Service Category *</label>
-            <select
-              name="serviceCategory"
-              value={formData.serviceCategory}
-              onChange={handleChange}
-              required
-              disabled={!formData.mainCategory}
-              className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100"
-            >
-              <option value="">Select Service Category</option>
-              {serviceCategories.map(cat => (
-                <option key={cat.name} value={cat.name}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">Sub-Service *</label>
-            <select
-              name="subService"
-              value={formData.subService}
-              onChange={handleChange}
-              required
-              disabled={!formData.serviceCategory}
-              className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100"
-            >
-              <option value="">Select Sub-Service</option>
-              {subServices.map(service => (
-                <option key={service.name} value={service.name}>{service.name}</option>
-              ))}
-            </select>
-          </div>
+          <p className="mt-2 text-sm text-gray-500">
+            Can't find your category? Choose <strong>Other</strong> and type it. Service category and sub-service are optional.
+          </p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

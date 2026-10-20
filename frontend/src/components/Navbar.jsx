@@ -170,8 +170,8 @@ const Navbar = () => {
                 </Link>
               ))}
 
-              {/* ─── CLIENT-SPECIFIC LINKS ────────── */}
-              {user?.role === 'client' && (
+              {/* ─── POST A JOB (clients and experts) ─── */}
+              {(user?.role === 'client' || isTechnician) && (
                 <>
                   <Link
                     to="/post-job"
@@ -409,6 +409,28 @@ const Navbar = () => {
                     <span className="font-medium">{link.name}</span>
                   </Link>
                 ))}
+
+                {/* Post a job (clients and experts) */}
+                {(user?.role === 'client' || isTechnician) && (
+                  <>
+                    <Link
+                      to="/post-job"
+                      onClick={closeMobileMenu}
+                      className="flex items-center space-x-3 px-3 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700"
+                    >
+                      <span className="font-medium">Post a Job</span>
+                    </Link>
+                    <Link
+                      to="/my-jobs"
+                      onClick={closeMobileMenu}
+                      className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                        isActive('/my-jobs') ? "bg-green-50 text-green-700" : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="font-medium">My Jobs</span>
+                    </Link>
+                  </>
+                )}
 
                 {/* Mobile chat link with badge */}
                 {user && (

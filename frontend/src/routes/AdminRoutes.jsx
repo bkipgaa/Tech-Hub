@@ -33,6 +33,7 @@ import AdminLogin from '../pages/Admin/AdminLogin';
 import Roles from '../pages/Admin/Roles';
 import Dashboard from '../pages/Admin/Dashboard';
 import AdminListings from '../pages/Admin/Listings';
+import AdminJobs from '../pages/Admin/Jobs';
 import Technicians from '../pages/Admin/Technicians';
 import TechnicianDetail from '../pages/Admin/TechnicianDetail';
 import Subscriptions from '../pages/Admin/Subscriptions';
@@ -142,7 +143,6 @@ const Placeholder = ({ title }) => (
 
 
 
-const JobsPage            = () => <Placeholder title="Jobs" />;
 const ServiceCatalogPage  = () => <Placeholder title="Service Catalog" />;
 const RevenuePage         = () => <Placeholder title="Revenue" />;
 const PaymentsPage        = () => <Placeholder title="Payments" />;
@@ -259,7 +259,7 @@ const AdminRoutes = () => {
           path="jobs"
           element={
             <ProtectedAdminRoute permission="jobs.view">
-              <JobsPage />
+              <AdminJobs />
             </ProtectedAdminRoute>
           }
         />

@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import jobService from '../../services/jobService';
 import ApplyModal from '../applications/ApplyModal';
@@ -201,14 +201,30 @@ const JobDetails = () => {
 
               {/* Action Buttons */}
               <div className="space-y-3">
-                {user?.role === 'technician' && job.status === 'approved' && (
-                  <button
-                    onClick={() => setShowApplyModal(true)}
-                    className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
-                  >
-                    Apply for This Job
-                  </button>
-                )}
+                {(() => {
+                  // Experts can post jobs too; they review applicants instead of applying to their own
+                  const myId = user?.id || user?._id;
+                  const posterId = job.clientId?._id || job.clientId;
+                  const isMine = !!myId && String(posterId) === String(myId);
+                  if (isMine) {
+                    return (
+                      <Link
+                        to="/my-jobs"
+                        className="block w-full text-center border border-green-600 text-green-700 py-3 rounded-lg font-semibold hover:bg-green-50 transition"
+                      >
+                        This is your job: see applicants in My Jobs
+                      </Link>
+                    );
+                  }
+                  return user?.role === 'technician' && job.status === 'approved' ? (
+                    <button
+                      onClick={() => setShowApplyModal(true)}
+                      className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+                    >
+                      Apply for This Job
+                    </button>
+                  ) : null;
+                })()}
               </div>
 
               {/* Contact details are only shared through chat */}

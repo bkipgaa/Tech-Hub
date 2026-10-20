@@ -87,8 +87,12 @@ const jobApplicationSchema = new mongoose.Schema({
   availableFrom: {
     type: Date,
     validate: {
+      // Optional; "today" (midnight from a date picker) counts as not in the past
       validator: function(date) {
-        return date >= new Date();
+        if (!date) return true;
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        return date >= startOfToday;
       },
       message: 'Available from date cannot be in the past'
     }
@@ -99,7 +103,7 @@ const jobApplicationSchema = new mongoose.Schema({
     type: Date,
     validate: {
       validator: function(date) {
-        return !this.availableFrom || date > this.availableFrom;
+        return !date || !this.availableFrom || date > this.availableFrom; // optional
       },
       message: 'Available until date must be after available from date'
     }
@@ -399,10 +403,17 @@ jobApplicationSchema.methods.accept = async function(bookingData = {}) {
     throw new Error('Job not found');
   }
   
+  // Bookings point at the expert's Technician profile, not their User account
+  const Technician = mongoose.model('Technician');
+  const profile = await Technician.findOne({ userId: this.technicianId }).select('_id');
+  if (!profile) {
+    throw new Error('This expert has no expert profile yet, so a booking cannot be created.');
+  }
+
   // Create booking from the application
   const booking = new Booking({
     clientId: job.clientId,
-    technicianId: this.technicianId,
+    technicianId: profile._id,
     serviceCategory: job.serviceCategory,
     subService: job.subService,
     serviceDescription: job.description,
@@ -808,41 +819,21 @@ jobApplicationSchema.statics.findBestMatches = async function(jobId, limit = 5) 
 /**
  * Pre-save middleware: Validate and set defaults
  */
-jobApplicationSchema.pre('save', function(next) {
-  // Ensure proposed price doesn't exceed job budget significantly (optional validation)
-  if (this.proposedPrice && this.jobId) {
-    // This would require populating job, so skip for now
-    // Can be implemented in pre-validate instead
-  }
-  
-  // Set technician denormalized fields if not set
-  if (this.technicianId && !this.technicianName) {
-    // This should be handled in pre-validate with population
-  }
-  
-  next();
-});
-
 /**
- * Pre-validate middleware: Populate technician information
+ * Pre-validate middleware: Populate technician information.
+ * Mongoose 9 hooks don't receive next(): return (or throw) instead.
  */
-jobApplicationSchema.pre('validate', async function(next) {
+jobApplicationSchema.pre('validate', async function() {
   if (this.technicianId && !this.technicianName) {
-    try {
-      const User = mongoose.model('User');
-      const technician = await User.findById(this.technicianId);
-      
-      if (technician) {
-        this.technicianName = `${technician.firstName} ${technician.lastName}`;
-        this.technicianProfileImage = technician.profileImage || '';
-        this.technicianRating = technician.rating || 0;
-      }
-    } catch (error) {
-      return next(error);
+    const User = mongoose.model('User');
+    const technician = await User.findById(this.technicianId);
+
+    if (technician) {
+      this.technicianName = `${technician.firstName} ${technician.lastName}`;
+      this.technicianProfileImage = technician.profileImage || '';
+      this.technicianRating = technician.rating || 0;
     }
   }
-  
-  next();
 });
 
 /**

@@ -28,16 +28,16 @@ router.put('/:applicationId/withdraw', auth, authorize('technician'), jobApplica
 // ===========================================
 
 // Get applications for my jobs (client view)
-router.get('/my-job-applications', auth, authorize('client'), jobApplicationController.getApplicationsForMyJobs);
+router.get('/my-job-applications', auth, authorize('client', 'technician'), jobApplicationController.getApplicationsForMyJobs);
 
 // Accept an application
-router.put('/:applicationId/accept', auth, authorize('client'), jobApplicationController.acceptApplication);
+router.put('/:applicationId/accept', auth, authorize('client', 'technician'), jobApplicationController.acceptApplication);
 
 // Reject an application
-router.put('/:applicationId/reject', auth, authorize('client'), jobApplicationController.rejectApplication);
+router.put('/:applicationId/reject', auth, authorize('client', 'technician'), jobApplicationController.rejectApplication);
 
 // Get application stats for a specific job
-router.get('/job/:jobId/stats', auth, authorize('client'), jobApplicationController.getJobApplicationStats);
+router.get('/job/:jobId/stats', auth, authorize('client', 'technician'), jobApplicationController.getJobApplicationStats);
 
 // ===========================================
 // SHARED ROUTES (Client + Technician + Admin)

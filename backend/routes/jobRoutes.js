@@ -12,6 +12,7 @@ const jobController = require('../controllers/jobController');
 // ===========================================
 
 // Get available jobs (approved, not expired)
+router.get('/categories', jobController.getJobCategories);
 router.get('/available', jobController.getAvailableJobs);
 
 // Search jobs
@@ -46,19 +47,19 @@ router.put('/admin/:jobId/feature', auth, authorize('admin'), jobController.feat
 // ===========================================
 
 // Create new job posting
-router.post('/', auth, authorize('client'), jobController.createJob);
+router.post('/', auth, authorize('client', 'technician'), jobController.createJob);
 
 // Get jobs posted by the authenticated client
-router.get('/my-jobs', auth, authorize('client'), jobController.getMyJobs);
+router.get('/my-jobs', auth, authorize('client', 'technician'), jobController.getMyJobs);
 
 // Get job statistics for dashboard
-router.get('/stats/my', auth, authorize('client'), jobController.getJobStats);
+router.get('/stats/my', auth, authorize('client', 'technician'), jobController.getJobStats);
 
 // Update job (only if pending)
-router.put('/:jobId', auth, authorize('client'), jobController.updateJob);
+router.put('/:jobId', auth, authorize('client', 'technician'), jobController.updateJob);
 
 // Delete job (only if pending)
-router.delete('/:jobId', auth, authorize('client'), jobController.deleteJob);
+router.delete('/:jobId', auth, authorize('client', 'technician'), jobController.deleteJob);
 
 // ===========================================
 // PUBLIC ROUTE WITH PARAM (MUST be LAST)

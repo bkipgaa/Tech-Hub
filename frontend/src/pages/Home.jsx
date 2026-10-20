@@ -176,6 +176,12 @@ const Home = () => {
             >
               Find Stays &amp; Places
             </button>
+            <button
+              onClick={() => navigate('/available-jobs')}
+              className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors"
+            >
+              Available Jobs
+            </button>
             {/* Already a technician → nothing to become */}
             {!isTechnician && (
               <button
@@ -185,11 +191,15 @@ const Home = () => {
                 Become an Expert
               </button>
             )}
+          </div>
+
+          {/* Booking benefits: its own, smaller row below the main buttons */}
+          <div className="mt-4 flex justify-center animate-fadeInUp">
             <button
               onClick={() => setShowBenefits(true)}
-              className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors"
+              className="bg-white/15 hover:bg-white/25 border border-white/50 text-white px-4 py-2 rounded-full font-semibold text-xs sm:text-sm transition-colors"
             >
-              {isTechnician ? 'Why Complete Jobs Through Bookings?' : 'Why Request Services Through Our Booking System?'}
+              {isTechnician ? 'Why complete jobs through bookings?' : 'Why request services through our booking system?'}
             </button>
           </div>
         </div>

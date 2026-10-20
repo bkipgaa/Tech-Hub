@@ -13,6 +13,7 @@
 
 const Job = require('../models/Job');
 const User = require('../models/User');
+const { resolveJobCategories, jobFilterCategories } = require('../utils/jobCategories');
 
 // ===========================================
 // HELPER FUNCTIONS
@@ -44,6 +45,21 @@ const isValidObjectId = (id) => {
 // ===========================================
 
 /**
+ * @desc    Main categories for the Available Jobs filter: the catalog's and
+ *          ones posters typed in, each with its number of open jobs
+ * @route   GET /api/jobs/categories
+ * @access  Public
+ */
+exports.getJobCategories = async (req, res) => {
+  try {
+    res.json({ success: true, data: await jobFilterCategories() });
+  } catch (error) {
+    console.error('Error loading job categories:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+/**
  * @desc    Get available jobs (approved, not expired)
  * @route   GET /api/jobs/available
  * @access  Public
@@ -69,8 +85,10 @@ exports.getAvailableJobs = async (req, res) => {
       expiresAt: { $gt: new Date() }
     };
 
-    // Apply category filters
-    if (mainCategory && mainCategory !== 'all') {
+    // Apply category filters ("other" = every job whose main category was typed in)
+    if (mainCategory === 'other') {
+      query.customCategory = true;
+    } else if (mainCategory && mainCategory !== 'all') {
       query.mainCategory = mainCategory;
     }
     if (serviceCategory && serviceCategory !== 'all') {
@@ -350,13 +368,18 @@ exports.createJob = async (req, res) => {
       requirements = []
     } = req.body;
 
-    // Validate required fields
-    if (!title || !description || !mainCategory || !serviceCategory || 
-        !subService || !address || !location || !budget) {
+    // Validate required fields (service category and sub-service may be "N/A")
+    if (!title || !description || !mainCategory || !address || !location || !budget) {
       return res.status(400).json({
         success: false,
         message: 'Please provide all required fields'
       });
+    }
+
+    // Catalog categories, or ones the poster typed in ("Other")
+    const categories = await resolveJobCategories({ mainCategory, serviceCategory, subService });
+    if (categories.error) {
+      return res.status(400).json({ success: false, message: categories.error });
     }
 
     // Get client information from authenticated User
@@ -373,9 +396,7 @@ exports.createJob = async (req, res) => {
       clientId: req.user.userId,
       title: title.trim(),
       description: description.trim(),
-      mainCategory,
-      serviceCategory,
-      subService,
+      ...categories.data,
       address: address.trim(),
       location: location.trim(),
       budget: parseFloat(budget),

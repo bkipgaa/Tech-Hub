@@ -14,20 +14,29 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 
+// Filter value meaning "every job whose category was typed in" (matches the backend)
+const OTHER = 'other';
+
 const JobSearch = ({ filters, setFilters }) => {
   const [categories, setCategories] = useState([]);
+  const [customCategories, setCustomCategories] = useState([]);
+  const [otherCount, setOtherCount] = useState(0);
+  const isCatalogMain = !!filters.mainCategory && categories.some((c) => c.name === filters.mainCategory);
   const [serviceCategories, setServiceCategories] = useState([]);
   const [subServices, setSubServices] = useState([]);
 
   /**
-   * Fetch main categories on component mount
-   * Gets all available service categories from the backend
+   * Fetch main categories on component mount: the catalog's, plus categories
+   * posters typed in themselves (each with its number of open jobs)
    */
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await api.get('/service-catalog/main-categories');
-        setCategories(response.data.data || []);
+        const response = await api.get('/jobs/categories');
+        const data = response.data.data || {};
+        setCategories(data.catalog || []);
+        setCustomCategories(data.custom || []);
+        setOtherCount(data.otherCount || 0);
       } catch (err) {
         console.error('Error fetching categories:', err);
       }
@@ -40,7 +49,8 @@ const JobSearch = ({ filters, setFilters }) => {
    * Cascade dropdown: Main Category -> Service Category -> Sub-Service
    */
   useEffect(() => {
-    if (filters.mainCategory) {
+    // Typed categories have no catalog service categories to choose from
+    if (isCatalogMain) {
       const fetchServiceCategories = async () => {
         try {
           const response = await api.get(`/service-catalog/${filters.mainCategory}/service-categories`);
@@ -56,14 +66,14 @@ const JobSearch = ({ filters, setFilters }) => {
     // Reset dependent filters
     setFilters(prev => ({ ...prev, serviceCategory: '', subService: '' }));
     setSubServices([]);
-  }, [filters.mainCategory, setFilters]);
+  }, [filters.mainCategory, isCatalogMain, setFilters]);
 
   /**
    * Fetch sub-services when service category changes
    * Third level of cascade dropdown
    */
   useEffect(() => {
-    if (filters.mainCategory && filters.serviceCategory) {
+    if (isCatalogMain && filters.serviceCategory) {
       const fetchSubServices = async () => {
         try {
           const response = await api.get(`/service-catalog/${filters.mainCategory}/${filters.serviceCategory}/sub-services`);
@@ -76,7 +86,7 @@ const JobSearch = ({ filters, setFilters }) => {
     } else {
       setSubServices([]);
     }
-  }, [filters.mainCategory, filters.serviceCategory]);
+  }, [filters.mainCategory, filters.serviceCategory, isCatalogMain]);
 
   /**
    * Handle filter input changes
@@ -123,8 +133,18 @@ const JobSearch = ({ filters, setFilters }) => {
           >
             <option value="">All Categories</option>
             {categories.map(cat => (
-              <option key={cat.name} value={cat.name}>{cat.name}</option>
+              <option key={cat.name} value={cat.name}>
+                {cat.name}{cat.count ? ` (${cat.count})` : ''}
+              </option>
             ))}
+            {customCategories.length > 0 && (
+              <optgroup label="Typed by posters">
+                {customCategories.map(cat => (
+                  <option key={`custom-${cat.name}`} value={cat.name}>{cat.name} ({cat.count})</option>
+                ))}
+              </optgroup>
+            )}
+            <option value={OTHER}>Other: not in our list ({otherCount})</option>
           </select>
         </div>
         
@@ -137,7 +157,7 @@ const JobSearch = ({ filters, setFilters }) => {
             name="serviceCategory"
             value={filters.serviceCategory}
             onChange={handleFilterChange}
-            disabled={!filters.mainCategory}
+            disabled={!isCatalogMain}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100 focus:ring-2 focus:ring-green-500"
           >
             <option value="">All Services</option>
