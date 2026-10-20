@@ -294,6 +294,18 @@ exports.paystackWebhook = async (req, res) => {
     const transaction = event.data;
     const metadata = transaction.metadata || {};
 
+    // ── Stays & Spaces listing plan ────────────────────────
+    if (metadata.type === 'listing_plan') {
+      try {
+        const { applyPaystackTransaction } = require('./listingPlanController');
+        await applyPaystackTransaction(transaction);
+      } catch (err) {
+        console.error('❌ Listing plan webhook error:', err);
+        return res.status(500).send('Internal Server Error');
+      }
+      return res.sendStatus(200);
+    }
+
     if (!metadata.technicianId || !metadata.planId) {
       console.error('❌ Missing metadata in webhook:', metadata);
       return res.status(400).send('Missing metadata');

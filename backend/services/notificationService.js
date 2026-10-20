@@ -56,6 +56,15 @@ exports.technicianClientRated = (data) =>
   dispatch(data.technicianEmail, templates.technicianClientRated, data, 'technician_client_rated');
 
 // ─────────────────────────────────────────────────────────────
+// STAYS & SPACES LISTERS
+// ─────────────────────────────────────────────────────────────
+exports.listingPlanReminder = (data) =>
+  dispatch(data.email, templates.listingPlanReminder, data, `listing_plan_${data.phase}_${data.daysLeft ?? 0}`);
+
+exports.listingPlanPaid = (data) =>
+  dispatch(data.email, templates.listingPlanPaid, data, 'listing_plan_paid');
+
+// ─────────────────────────────────────────────────────────────
 // CLIENT NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────
 exports.clientBookingConfirmed = (data) =>

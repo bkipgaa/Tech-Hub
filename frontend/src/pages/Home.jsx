@@ -252,9 +252,9 @@ const Home = () => {
       <div className="max-w-7xl mx-auto px-4 pt-10">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-1">Stays &amp; Spaces</h2>
-          <p className="text-gray-500 text-sm">Airbnbs, guest houses, homes for rent and office space. Contact hosts directly.</p>
+          <p className="text-gray-500 text-sm">Airbnbs, hotels, homes for rent, office space and places to go out. Contact owners directly.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {LISTING_GROUPS.map((group) => (
             <button
               key={group.id}

@@ -9,7 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, MapPin, Phone, MessageCircle, BedDouble, Bath, Users, Ruler, CalendarDays,
+  ArrowLeft, MapPin, Phone, MessageCircle, BedDouble, Bath, Users, Ruler, CalendarDays, Clock,
   CheckCircle, Loader2, AlertCircle, ImageOff, Wrench, Pencil, Eye, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import api from '../services/api';
@@ -18,7 +18,7 @@ import { cldImage } from '../utils/media';
 import ListingCard from '../components/stays/ListingCard';
 import { AreaMap } from '../components/stays/ListingMap';
 import {
-  categoryById, formatPrice, propertyTypeLabel, amenityLabel, listerTypeLabel, toInternationalPhone,
+  categoryById, formatPrice, propertyTypeLabel, amenityLabel, listerTypeLabel, toInternationalPhone, placeLabel,
 } from '../utils/listingCategories';
 
 const Fact = ({ icon: Icon, label, value }) => (
@@ -99,6 +99,7 @@ const ListingDetails = () => {
   if (listing.bathrooms) facts.push({ icon: Bath, label: 'Bathrooms', value: listing.bathrooms });
   if (listing.maxGuests) facts.push({ icon: Users, label: 'Guests', value: `Up to ${listing.maxGuests}` });
   if (listing.sizeSqft) facts.push({ icon: Ruler, label: 'Size', value: `${listing.sizeSqft.toLocaleString()} sq ft` });
+  if (listing.openingHours) facts.push({ icon: Clock, label: 'Opening hours', value: listing.openingHours });
   if (listing.availableFrom) {
     facts.push({
       icon: CalendarDays,
@@ -120,7 +121,15 @@ const ListingDetails = () => {
           <div className="mt-3 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800 flex flex-wrap items-center justify-between gap-2">
             <span className="flex items-center gap-2">
               <Eye className="w-4 h-4" /> This is your listing ·{' '}
-              {listing.status === 'active' ? 'live in search' : 'paused, not shown in search'} · {listing.views || 0} views
+              {listing.visibleInSearch
+                ? 'live in search'
+                : listing.status !== 'active'
+                ? 'paused, not shown in search'
+                : 'not shown in search: your listing plan has ended'}{' '}
+              · {listing.views || 0} views
+              {listing.status === 'active' && !listing.visibleInSearch && (
+                <Link to="/my-listings" className="font-semibold underline">Renew plan</Link>
+              )}
             </span>
             <Link to={`/stays/${listing._id}/edit`} className="inline-flex items-center gap-1 font-semibold hover:underline">
               <Pencil className="w-4 h-4" /> Edit listing
@@ -186,7 +195,7 @@ const ListingDetails = () => {
               {category && <p className="text-xs font-semibold uppercase tracking-wide text-green-700">{category.name}</p>}
               <h1 className="text-2xl font-bold text-gray-800 mt-1">{listing.title}</h1>
               <p className="text-gray-500 flex items-center gap-1 mt-1">
-                <MapPin className="w-4 h-4" /> {listing.area}, {listing.county}
+                <MapPin className="w-4 h-4" /> {placeLabel(listing)}
                 {listing.landmark ? ` · ${listing.landmark}` : ''}
               </p>
 
@@ -222,7 +231,7 @@ const ListingDetails = () => {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="font-semibold text-gray-800 mb-1">Where it is</h2>
                 <p className="text-sm text-gray-500 mb-3">
-                  {listing.area}, {listing.county}. The {listing.isOwner ? 'circle shows what clients see' : 'exact address is shared by the lister'}.
+                  {placeLabel(listing)}. The {listing.isOwner ? 'circle shows what clients see' : 'exact address is shared by the lister'}.
                 </p>
                 <AreaMap center={listing.approxLocation || { lat: listing.lat, lng: listing.lng }} />
               </div>
@@ -281,7 +290,7 @@ const ListingDetails = () => {
                 <Wrench className="w-4 h-4 text-green-600" /> Need a fundi for this property?
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                Movers, cleaners, plumbers and electricians near {listing.area}.
+                Movers, cleaners, plumbers and electricians near {listing.estate || listing.town || listing.area}.
               </p>
               <Link to="/services" className="inline-block mt-3 text-sm font-semibold text-green-700 hover:underline">
                 Find an expert →

@@ -9,18 +9,19 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Search, Plus, Loader2, AlertCircle, Home as HomeIcon, Wrench, SlidersHorizontal, LocateFixed, X,
+  Plus, Loader2, AlertCircle, Home as HomeIcon, Wrench, SlidersHorizontal, LocateFixed, X,
 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import useMyLocation from '../hooks/useMyLocation';
 import ListingCard from '../components/stays/ListingCard';
 import NearYou from '../components/stays/NearYou';
+import PlaceSearch from '../components/stays/PlaceSearch';
 import {
-  LISTING_GROUPS, COUNTIES, DISTANCE_BANDS, categoryById, groupById, bandById,
+  LISTING_GROUPS, DISTANCE_BANDS, categoryById, groupById, bandById, priceUnitLabel, placeLabel,
 } from '../utils/listingCategories';
 
-const FILTER_KEYS = ['group', 'category', 'county', 'q', 'minPrice', 'maxPrice', 'bedrooms', 'sort', 'page'];
+const FILTER_KEYS = ['group', 'category', 'county', 'town', 'estate', 'minPrice', 'maxPrice', 'bedrooms', 'sort', 'page'];
 
 const Stays = () => {
   const { user } = useAuth();
@@ -33,7 +34,6 @@ const Stays = () => {
   // Last finished search, keyed by the query string it was for
   const [result, setResult] = useState({ key: null, listings: [], pagination: { page: 1, pages: 1, total: 0 }, error: '' });
   const [showFilters, setShowFilters] = useState(false);
-  const [query, setQuery] = useState(params.get('q') || '');
 
   const category = params.get('category') || '';
   const group = params.get('group') || '';
@@ -108,18 +108,20 @@ const Stays = () => {
   const pickGroup = (id) => update({ group: id === activeGroup && !category ? '' : id, category: '' });
   const pickCategory = (id) => update({ category: id === category ? '' : id, group: '' });
 
+  const place = { county: params.get('county') || '', town: params.get('town') || '', estate: params.get('estate') || '' };
+  const placeText = place.county && place.town ? placeLabel(place) : '';
+
+  // Near me and a chosen place are two ways of searching; picking one clears the other
   const turnNearOn = async () => {
     // Sorting by price isn't the point of near me; start nearest-first
-    update({ near: '1', sort: '' });
+    update({ near: '1', sort: '', county: '', town: '', estate: '' });
     // First try is made by the effect above; this retries after a failure
     if (!location && locStatus === 'error') await locate();
   };
   const turnNearOff = () => update({ near: '', band: '', sort: '' });
 
-  const submitSearch = (e) => {
-    e.preventDefault();
-    update({ q: query.trim() });
-  };
+  const searchPlace = ({ county, town, estate }) => update({ county, town, estate, near: '', band: '' });
+  const clearPlace = () => update({ county: '', town: '', estate: '' });
 
   const groupCount = (g) => g.categories.reduce((sum, c) => sum + (counts[c.id] || 0), 0);
   const visibleGroups = activeGroup ? LISTING_GROUPS.filter((g) => g.id === activeGroup) : LISTING_GROUPS;
@@ -133,8 +135,8 @@ const Stays = () => {
             <div>
               <h1 className="text-3xl md:text-4xl font-bold">Stays &amp; Spaces</h1>
               <p className="text-green-50 mt-2 max-w-xl">
-                Airbnbs, guest houses, hotels, homes for rent and office space across Kenya.
-                Contact hosts and landlords directly. No booking fees.
+                Airbnbs, hotels, homes for rent, office space and places to go out across Kenya.
+                Contact hosts and owners directly. No booking fees.
               </p>
             </div>
             <Link
@@ -146,40 +148,21 @@ const Stays = () => {
             </Link>
           </div>
 
-          <form onSubmit={submitSearch} className="mt-6 flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search an area or estate, e.g. Kilimani, Nyali, Westlands"
-                className="w-full pl-10 pr-3 py-3 rounded-lg text-gray-800 outline-none focus:ring-2 focus:ring-green-300"
-              />
-            </div>
-            <select
-              value={params.get('county') || ''}
-              onChange={(e) => update({ county: e.target.value })}
-              className="px-3 py-3 rounded-lg text-gray-800 outline-none sm:w-48"
-              aria-label="County"
-            >
-              <option value="">All counties</option>
-              {COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <button type="submit" className="px-6 py-3 rounded-lg bg-gray-900 text-white font-semibold hover:bg-gray-800">
-              Search
-            </button>
-          </form>
+          <div className="mt-6">
+            <p className="text-sm text-green-50 mb-2">Choose a county and town, then an estate if you like</p>
+            <PlaceSearch key={placeText} value={place} onSearch={searchPlace} />
+          </div>
 
           {/* ─── Near me ──────────────────────────────────── */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {nearOn ? (
               <>
-                <span className="inline-flex items-center gap-1.5 bg-white text-green-700 text-sm font-semibold pl-3 pr-1 py-1 rounded-full">
+                <span className="inline-flex items-center gap-1.5 bg-red-600 text-white text-sm font-semibold pl-3 pr-1 py-1 rounded-full shadow-sm">
                   <LocateFixed className="w-4 h-4" /> Near me
                   <button
                     onClick={turnNearOff}
                     aria-label="Turn off near me"
-                    className="ml-1 w-6 h-6 rounded-full hover:bg-green-50 flex items-center justify-center"
+                    className="ml-1 w-6 h-6 rounded-full hover:bg-red-700 flex items-center justify-center"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -201,7 +184,7 @@ const Stays = () => {
             ) : (
               <button
                 onClick={turnNearOn}
-                className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/40 text-white text-sm font-semibold px-4 py-2 rounded-full"
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-sm"
               >
                 <LocateFixed className="w-4 h-4" /> Near me
               </button>
@@ -220,7 +203,7 @@ const Stays = () => {
         {!nearOn && <NearYou className="mb-8" />}
 
         {/* ─── Groups & categories ──────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {LISTING_GROUPS.map((g) => (
             <button
               key={g.id}
@@ -228,11 +211,11 @@ const Stays = () => {
               className={`text-left p-4 rounded-xl border transition-all ${
                 activeGroup === g.id
                   ? 'bg-green-50 border-green-500 ring-1 ring-green-500'
-                  : 'bg-white border-gray-200 hover:border-green-400'
+                  : 'bg-white border-gray-200 hover:bg-green-100 hover:border-green-500'
               }`}
             >
               <p className="font-semibold text-gray-800">{g.name}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{g.blurb} · priced per {g.priceUnit}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{g.blurb} · {priceUnitLabel(g.priceUnit)}</p>
               <p className="text-xs text-green-700 font-medium mt-2">{groupCount(g)} listed</p>
             </button>
           ))}
@@ -246,7 +229,7 @@ const Stays = () => {
               className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                 category === c.id
                   ? 'bg-green-600 text-white border-green-600'
-                  : 'bg-white text-gray-700 border-gray-200 hover:border-green-400 hover:text-green-700'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-green-100 hover:border-green-500 hover:text-green-800'
               }`}
             >
               {c.name}
@@ -256,6 +239,18 @@ const Stays = () => {
         </div>
 
         {/* ─── Filters ──────────────────────────────────── */}
+        {placeText && (
+          <div className="mt-6 inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 text-sm font-medium pl-3 pr-1 py-1 rounded-full">
+            Showing places in {placeText}
+            <button
+              onClick={clearPlace}
+              aria-label="Clear place"
+              className="w-6 h-6 rounded-full hover:bg-green-100 flex items-center justify-center"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 mt-6">
           <p className="text-sm text-gray-600">
             {waitingForLocation
@@ -329,7 +324,6 @@ const Stays = () => {
             <div className="flex items-end">
               <button
                 onClick={() => {
-                  setQuery('');
                   setParams(new URLSearchParams());
                 }}
                 className="w-full px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"

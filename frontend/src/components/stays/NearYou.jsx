@@ -21,6 +21,7 @@ const TABS = [
   { id: 'short_stays', label: 'Stays', hint: 'Airbnbs, guest houses & hotels' },
   { id: 'rentals', label: 'Rentals', hint: 'Homes, hostels & rooms' },
   { id: 'business', label: 'Business spaces', hint: 'Offices & shops' },
+  { id: 'entertainment', label: 'Entertainment', hint: 'Clubs, bars, casinos & more' },
   { id: 'experts', label: 'Experts', hint: 'Fundis & professionals' },
 ];
 
@@ -46,7 +47,9 @@ const NearYou = ({ className = '' }) => {
   }, [tab, location, key]);
 
   const loading = location && result.key !== key;
-  const seeAll = tab === 'experts' ? '/services' : `/stays?near=1&group=${tab}`;
+  // Experts open the expert search, which finds your location and sorts by distance
+  const seeAll = tab === 'experts' ? '/search' : `/stays?near=1&group=${tab}`;
+  const seeAllLabel = `See all nearby ${(TABS.find((t) => t.id === tab)?.label || '').toLowerCase()}`;
 
   return (
     <section className={className}>
@@ -59,18 +62,18 @@ const NearYou = ({ className = '' }) => {
         </div>
         {location && (
           <Link to={seeAll} className="text-sm font-semibold text-green-700 hover:text-green-800 inline-flex items-center gap-1">
-            See all nearby <ChevronRight className="w-4 h-4" />
+            {seeAllLabel} <ChevronRight className="w-4 h-4" />
           </Link>
         )}
       </div>
 
       {!location ? (
         <div className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
-            <LocateFixed className="w-6 h-6 text-green-600" />
+          <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+            <LocateFixed className="w-6 h-6 text-red-600" />
           </div>
           <div className="flex-1">
-            <p className="font-semibold text-gray-800">See Airbnbs, rentals, offices and experts around you</p>
+            <p className="font-semibold text-gray-800">See Airbnbs, rentals, offices, places to go out and experts around you</p>
             <p className="text-sm text-gray-500">
               We use your location only to sort results by distance. It isn't saved or shared.
             </p>
@@ -83,7 +86,7 @@ const NearYou = ({ className = '' }) => {
           <button
             onClick={locate}
             disabled={status === 'locating'}
-            className="inline-flex items-center justify-center gap-2 bg-green-600 text-white font-semibold px-5 py-2.5 rounded-lg hover:bg-green-700 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 bg-red-600 text-white font-semibold px-5 py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-60"
           >
             {status === 'locating' ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
             {status === 'locating' ? 'Finding you…' : 'Show what’s near me'}
@@ -101,7 +104,7 @@ const NearYou = ({ className = '' }) => {
                 className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
                   tab === t.id
                     ? 'bg-green-600 text-white border-green-600'
-                    : 'bg-white text-gray-700 border-gray-200 hover:border-green-400'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-green-100 hover:border-green-500'
                 }`}
                 title={t.hint}
               >
