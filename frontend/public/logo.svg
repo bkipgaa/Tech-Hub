@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Webafix mark: a W whose left arm is a hammer and right arm is a spanner -->
+  <defs>
+    <linearGradient id="split" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="64" y2="0">
+      <stop offset="0.5" stop-color="#15803d" />
+      <stop offset="0.5" stop-color="#dc2626" />
+    </linearGradient>
+    <!-- open jaw of the spanner -->
+    <mask id="jaw" maskUnits="userSpaceOnUse" x="-30" y="-30" width="60" height="60">
+      <rect x="-30" y="-30" width="60" height="60" fill="#fff" />
+      <rect x="-4" y="-24" width="8" height="18.5" fill="#000" />
+    </mask>
+  </defs>
+  <g transform="translate(2.6 5.2) scale(0.92)">
+    <path fill="none" stroke="url(#split)" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"
+          d="M14 15L23 55L32 28L41 55L50 15" />
+    <!-- hammer head: striking face on the left, claw on the right -->
+    <g transform="translate(14 12) rotate(-12)" fill="#15803d">
+      <rect x="-9" y="-7" width="17" height="11.5" rx="1.4" />
+      <rect x="-14.5" y="-8.2" width="7" height="14" rx="1.4" />
+      <path d="M7 -7C14 -7 18.5 -2.5 20 4.5C16.5 1.8 12.5 0.8 7 1.2Z" />
+    </g>
+    <!-- spanner head -->
+    <g transform="translate(50 12) rotate(12)" mask="url(#jaw)">
+      <circle cx="0" cy="-4" r="10.5" fill="#dc2626" />
+    </g>
+  </g>
+</svg>
