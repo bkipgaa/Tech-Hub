@@ -335,8 +335,7 @@ exports.paystackWebhook = async (req, res) => {
         return res.status(400).send('Invalid plan');
       }
 
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
+      const endDate = paidPlanEndDate(technician, plan);
 
       technician.subscription = {
         plan: planId,
@@ -499,8 +498,7 @@ exports.mpesaCallback = async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
+      const endDate = paidPlanEndDate(technician, plan);
 
       technician.subscription = {
         plan: planId,
@@ -662,8 +660,7 @@ exports.mpesaStatus = async (req, res) => {
         );
 
         if (!alreadyProcessed) {
-          const endDate = new Date();
-          endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
+          const endDate = paidPlanEndDate(technician, plan);
 
           technician.subscription = {
             plan: planId,
@@ -875,6 +872,22 @@ exports.startFreeMonth = async (req, res) => {
 // ─── HELPER ──────────────────────────────────────────────────────────────────
 function getVisibilityRadius(technician) {
   return getEffectivePlan(technician.subscription).visibilityRadius;
+}
+
+/**
+ * End of a newly paid plan: the plan's length (30 days) added to whatever time
+ * the technician still has (paid plan, free month or free trial), so paying
+ * early never loses days. Must run before technician.subscription is replaced.
+ */
+function paidPlanEndDate(technician, plan) {
+  const now = new Date();
+  const current = technician.subscription;
+  // The free trial keeps its end in trialEndDate; other plans use endDate
+  const currentEndValue = current?.isTrial || current?.plan === 'trial' ? current?.trialEndDate : current?.endDate;
+  const currentEnd = currentEndValue ? new Date(currentEndValue) : null;
+  const endDate = currentEnd && currentEnd > now ? new Date(currentEnd) : now;
+  endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
+  return endDate;
 }
 
 /**

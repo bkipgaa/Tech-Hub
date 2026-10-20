@@ -50,9 +50,7 @@ export const LEGAL = {
   keepVerificationDocs: '{{12 months after the decision}}',
   keepFinancialRecords: '{{7 years}}',
   keepChats: '{{24 months}}',
-  keepEvidence: '{{24 months after the booking}}',
-  keepListingPhotosAfterDelete: '{{30 days}}',
-  keepLogs: '{{24 months}}',
+  keepEvidence: '{{24 months after the booking}}',  keepLogs: '{{24 months}}',
   keepConsentProof: '{{3 years}}',
 
   // Vendors to confirm

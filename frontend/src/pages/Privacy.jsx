@@ -85,7 +85,7 @@ const sections = [
       ['Bookings, quotations, payments and invoice records', `${L.keepFinancialRecords} (tax and accounting)`],
       ['Chat messages', `${L.keepChats} after the related booking (dispute window)`],
       ['Proof-of-work photos, their location data and job pins', L.keepEvidence],
-      ['Stays & Spaces listings', `While the listing exists. When you delete a listing we delete its details; its photos are removed from our storage within ${L.keepListingPhotosAfterDelete}. Listing payment records are kept as financial records.`],
+      ['Stays & Spaces listings', `While the listing exists. When you delete a listing, or remove photos from it, we delete those details and photos from our storage at the same time. Listing payment records are kept as financial records.`],
       ['Reviews', 'While the reviewed account exists, then anonymised'],
       ['Security and admin logs', L.keepLogs],
       ['Marketing consent records', `Until you withdraw, plus proof of consent for ${L.keepConsentProof}`],

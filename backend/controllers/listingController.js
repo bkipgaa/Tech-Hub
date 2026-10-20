@@ -23,15 +23,36 @@ const {
 } = require('../utils/listingCategories');
 const User = require('../models/User');
 const listingPlan = require('../utils/listingPlan');
-const { uploadBufferToCloudinary } = require('../config/cloudinary');
+const { uploadBufferToCloudinary, cloudinary } = require('../config/cloudinary');
 
 const MAX_PHOTOS = 12;
+const PHOTO_FOLDER = 'listings';
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const toNumber = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
 
 const fail = (res, status, message, error) => {
   if (error) console.error('[listingController]', message, error);
   return res.status(status).json({ success: false, message });
+};
+
+/**
+ * Remove listing photos from Cloudinary once no listing uses them (after a
+ * listing is deleted, or photos are taken off it). The photo list comes from
+ * the browser, so only files in the listings folder are touched, and never one
+ * another listing still shows. Failures are logged; they never block the user.
+ */
+const removeUnusedPhotos = async (photos) => {
+  const ids = [...new Set((photos || [])
+    .map((p) => p.publicId)
+    .filter((id) => typeof id === 'string' && id.startsWith(`${PHOTO_FOLDER}/`)))];
+  if (!ids.length) return;
+  try {
+    const stillUsed = await Listing.distinct('photos.publicId', { 'photos.publicId': { $in: ids } });
+    const unused = ids.filter((id) => !stillUsed.includes(id));
+    await Promise.all(unused.map((id) => cloudinary.uploader.destroy(id, { resource_type: 'image', invalidate: true })));
+  } catch (error) {
+    console.error('[listingController] Could not remove listing photos', ids, error.message);
+  }
 };
 
 const OWNER_FIELDS = 'firstName lastName profileImage';
@@ -542,6 +563,7 @@ exports.updateListing = async (req, res) => {
     const { data, error } = readListingInput(req.body, listing);
     if (error) return fail(res, 400, error);
     await useKnownSpelling(data, listing);
+    const photosBefore = listing.photos.map((p) => ({ publicId: p.publicId }));
     Object.assign(listing, data);
     const resubmitted = listing.status === 'rejected';
     if (resubmitted) {
@@ -550,6 +572,8 @@ exports.updateListing = async (req, res) => {
       await listingPlan.assignNewListing(listing, user); // may get a free slot back
     }
     await listing.save();
+    // Photos taken off this listing (checked after saving, so they no longer count as used)
+    if (data.photos) await removeUnusedPhotos(photosBefore);
     res.json({
       success: true,
       data: present(listing, req.user, user),
@@ -587,6 +611,7 @@ exports.deleteListing = async (req, res) => {
     const listing = await findOwnListing(req, res);
     if (!listing) return;
     await listing.deleteOne();
+    await removeUnusedPhotos(listing.photos);
     res.json({ success: true, message: 'Listing deleted.' });
   } catch (error) {
     fail(res, 500, 'Failed to delete listing.', error);
@@ -599,7 +624,7 @@ exports.uploadPhoto = async (req, res) => {
     if (!req.file) return fail(res, 400, 'Please attach a photo.');
     if (!req.file.mimetype.startsWith('image/')) return fail(res, 400, 'Only photos can be added to a listing.');
     const result = await uploadBufferToCloudinary(req.file.buffer, {
-      folder: 'listings',
+      folder: PHOTO_FOLDER,
       resource_type: 'image',
       transformation: [{ width: 1920, height: 1920, crop: 'limit', quality: 'auto' }],
     });
