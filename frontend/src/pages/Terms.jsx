@@ -20,33 +20,28 @@ const sections = [
   ]},
   { id: 'bookings', title: 'How bookings work', body: [
     { ol: [
-      `A client sends a booking request describing the service, date, time and location. The Technician can accept, decline, or reply with a quotation.`,
-      `A booking exists once the Technician accepts, and, where a quotation is used, once the client accepts it. A quotation can include **labour** and **materials**.`,
-      `**Materials.** If a client gives the Technician money for materials, the Technician must record it on the platform and provide receipts on request. Webafix does not hold or handle materials money and is not liable for money a client hands to a Technician.`,
-      `**Completion.** When a Technician marks the work complete, the client should check it and confirm or raise an issue promptly. Confirming and rating closes the booking.`,
-      `Status changes (confirmed, in progress, completed, cancelled) are recorded and may be used as evidence in a dispute.`,
+      `**Booking.** A client sends a booking request describing the service, date, time and location.`,
+      `**Quotation.** The Technician replies with a quotation: **one total price for the whole job**, including any materials. They may attach a written quotation.`,
+      `**Acceptance.** The client accepts or rejects the quotation. Accepting it creates the service contract between the client and the Technician, and the Technician can start the work. Rejecting it ends the booking. Either side can cancel on the platform until the quotation is accepted.`,
+      `**Completion.** When the work is finished **and the client has paid in full**, the Technician marks it complete. To do so they must add proof: photos of the finished work taken through the platform at the job (which record the time and the device's location), or a live link for digital work. They also confirm the amount they were paid.`,
+      `**Confirmation and rating.** The client checks the proof, then confirms the work and rates the Technician. This closes the booking. If something is wrong, the client should report a problem on the platform instead; the Technician can add more proof and our team may review it.`,
+      `Quotations, status changes, proof of work, confirmed payments and ratings are recorded and may be used as evidence in a dispute.`,
     ]},
   ]},
   { id: 'payments', title: 'Payments', body: [
     { ul: [
-      `**Service payments** are made directly between client and Technician by the methods the Technician offers (cash, M-Pesa, card, bank transfer). Unless the platform clearly says otherwise for a particular transaction, Webafix is not a party to service payments and does not hold them.`,
+      `**Webafix does not hold, receive or pass on money for services.** Clients pay Technicians directly, by the methods the Technician offers (cash, M-Pesa, card, bank transfer). Webafix is not a party to these payments, so it cannot refund them. Any refund, deposit or money for materials is agreed between the client and the Technician.`,
       `Payments made through the platform, such as Technician subscriptions, are processed by **Paystack** (card) and **Safaricom M-Pesa**. Their terms also apply. We never see or store card details or M-Pesa PINs.`,
       `Prices are in **Kenya Shillings (KES)**. Prices shown by Technicians are estimates until a quotation is accepted.`,
       `Keep your receipts. Technicians must give clients a receipt for money received.`,
     ]},
   ]},
-  { id: 'cancellations', title: 'Cancellations and refunds', body: [
-    { ul: [
-      `**Client cancellation.** A client can cancel before the Technician starts work. Cancelling more than ${L.cancelWindow} before the scheduled time is free. After that, the Technician may charge a reasonable fee of up to ${L.cancelFee}.`,
-      `**Technician cancellation.** Cancel as early as you can and give a reason. Repeated late cancellations or no-shows can lead to warnings, reduced visibility or suspension.`,
-      `**Refunds for services** are agreed between client and Technician. If you cannot agree, use the dispute process in section 10. Webafix is not obliged to refund service payments it never received.`,
-      `Platform fees (subscriptions) are covered by the Technician Terms below.`,
-    ]},
-  ]},
   { id: 'reviews', title: 'Reviews and ratings', body: [
     { ul: [
       `Reviews must be honest, based on real experience, and free from defamation, hate, other people's personal data, and irrelevant content. Reviews are limited to 500 characters.`,
-      `You can only review completed bookings you took part in. We may remove reviews that break these Terms. We do not edit reviews, and we are not required to remove a review just because it is unfavourable.`,
+      `Only the client on a booking can rate it, once the Technician has marked the work complete. **Rating a booking confirms the work was done.**`,
+      `To protect against fake ratings, if a Technician receives more ratings in a short time than a real job allows, the extra ratings are checked by our team before they count. We may hold or remove ratings that look manipulated.`,
+      `We may remove reviews that break these Terms. We do not edit reviews, and we are not required to remove a review just because it is unfavourable.`,
       `You give us a licence to display your reviews on the platform.`,
     ]},
   ]},
@@ -65,6 +60,7 @@ const sections = [
     `You must not:`,
     { ul: [
       `give false identity, qualifications, licences or reviews, or impersonate anyone;`,
+      `submit fake, edited or reused proof-of-work photos, or mark work as complete or paid when it is not;`,
       `harass, threaten, discriminate against or defraud anyone;`,
       `use the platform for illegal work, or work you are not licensed to do;`,
       `scrape, hack, probe, overload, reverse-engineer or interfere with the platform, which may also be an offence under the Computer Misuse and Cybercrimes Act, 2018;`,
@@ -148,7 +144,8 @@ const sections = [
     ]},
   ]},
   { id: 't-standards', title: 'Service standards', body: [
-    `Work with reasonable skill and care. Follow the law, safety standards and required permits. Reply to bookings promptly and keep appointments. Be honest about price, timing and materials. Carry the insurance your work needs. Treat clients with respect. Do not hand work to unqualified people or misrepresent who is doing it.`,
+    `Work with reasonable skill and care. Follow the law, safety standards and required permits. Reply to bookings promptly and keep appointments. Be honest about price, timing and materials, and include everything in your quoted price. Carry the insurance your work needs. Treat clients with respect. Do not hand work to unqualified people or misrepresent who is doing it.`,
+    `Mark a job complete only when the work is finished and you have been paid in full. Proof-of-work photos must be genuine photos of that job, taken at the job location. Repeated late cancellations, no-shows or false completions can lead to warnings, reduced visibility or suspension.`,
   ]},
   { id: 't-fees', title: 'Subscriptions', body: [
     { ul: [
@@ -176,7 +173,7 @@ const sections = [
     `Do not offer incentives for reviews, review yourself, pressure clients, or retaliate against clients for honest reviews. We may adjust or hide ratings to reflect fraud or manipulation.`,
   ]},
   { id: 't-liability', title: 'Your liability', body: [
-    `You are **solely liable** to clients for your work, including defects, damage, injury, delays and breach of contract, and you indemnify Webafix against related claims as set out in section 14.`,
+    `You are **solely liable** to clients for your work, including defects, damage, injury, delays and breach of contract, and you indemnify Webafix against related claims as set out under "Indemnity" above.`,
   ]},
   { id: 't-suspend', title: 'Suspension and removal', body: [
     `We may suspend or remove your profile for false information, unlicensed work, safety issues, fraud, serious or repeated complaints, unpaid fees or breach of these terms. If you delete your account, your data is handled as described in the Privacy Policy, and any fees you owe remain payable.`,
