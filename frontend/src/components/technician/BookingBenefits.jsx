@@ -48,7 +48,7 @@ const CONTENT = {
       {
         icon: FileText,
         title: 'A clear record if something goes wrong',
-        text: 'The quote, agreed price and any materials money are saved on the booking, so you have proof if you need to raise a dispute.',
+        text: 'The quote, agreed price and payment you confirmed are saved on the booking, so you have proof if you need to raise a dispute.',
       },
     ],
   },

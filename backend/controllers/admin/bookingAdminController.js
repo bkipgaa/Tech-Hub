@@ -38,15 +38,11 @@ const handleError = (res, error, message, status = 500, code = 'SERVER_ERROR') =
   });
 };
 
-const ACTIVE_STATUSES = [
-  'pending', 'quoted', 'agreed', 'materials_delivered',
-  'materials_confirmed', 'in_progress', 'work_completed', 'labor_paid',
-];
+const ACTIVE_STATUSES = ['pending', 'quoted', 'in_progress', 'work_completed'];
 
 const ALL_STATUSES = [
-  'pending', 'quoted', 'agreed', 'materials_delivered',
-  'materials_confirmed', 'in_progress', 'work_completed',
-  'labor_paid', 'completed', 'cancelled', 'no-show',
+  'pending', 'quoted', 'in_progress', 'work_completed',
+  'completed', 'cancelled', 'no-show',
 ];
 
 // ─────────────────────────────────────────────────────────────

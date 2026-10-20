@@ -96,34 +96,14 @@ const StatusBadge = ({ status, expertName }) => {
       color: 'bg-orange-100 text-orange-800 border-orange-200',
       icon: <AlertCircle className="w-3 h-3 mr-1" />,
     },
-    agreed: {
-      label: 'Quote accepted',
-      color: 'bg-blue-100 text-blue-800 border-blue-200',
-      icon: <CheckCircle className="w-3 h-3 mr-1" />,
-    },
-    materials_delivered: {
-      label: 'Materials delivered — confirm',
-      color: 'bg-orange-100 text-orange-800 border-orange-200',
-      icon: <AlertCircle className="w-3 h-3 mr-1" />,
-    },
-    materials_confirmed: {
-      label: 'Materials confirmed',
-      color: 'bg-blue-100 text-blue-800 border-blue-200',
-      icon: <CheckCircle className="w-3 h-3 mr-1" />,
-    },
     in_progress: {
       label: 'In Progress',
       color: 'bg-purple-100 text-purple-800 border-purple-200',
       icon: <Loader2 className="w-3 h-3 mr-1 animate-spin" />,
     },
     work_completed: {
-      label: 'Work completed',
-      color: 'bg-blue-100 text-blue-800 border-blue-200',
-      icon: <CheckCircle className="w-3 h-3 mr-1" />,
-    },
-    labor_paid: {
-      // Client sees who to rate; the expert sees that a rating is pending
-      label: expertName ? `Rate ${expertName}` : 'Waiting for rating',
+      // Client sees who to confirm and rate; the expert sees that a rating is pending
+      label: expertName ? `Work done — confirm & rate ${expertName}` : 'Waiting for client rating',
       color: 'bg-orange-100 text-orange-800 border-orange-200',
       icon: <AlertCircle className="w-3 h-3 mr-1" />,
     },

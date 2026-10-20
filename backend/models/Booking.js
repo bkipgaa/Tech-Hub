@@ -89,15 +89,13 @@ const bookingSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: [
-      'pending',              // initial
+      'pending',              // client booked
       'quoted',               // technician sent quotation
-      'agreed',               // client accepted
-      'materials_delivered',  // technician delivered materials
-      'materials_confirmed',  // client confirmed materials
-      'in_progress',          // work started
-      'work_completed',       // technician finished work
-      'labor_paid',           // technician received labor payment
-      'completed',            // client rated – final
+      'in_progress',          // client accepted the quotation; work started
+      'work_completed',       // technician added proof and confirmed full payment
+      'completed',            // client confirmed the work and rated – final
+      // Older flow, moved to the statuses above on startup (utils/bookingFlow.js)
+      'agreed', 'materials_delivered', 'materials_confirmed', 'labor_paid',
       'cancelled',
       'no-show'
     ],
@@ -167,7 +165,7 @@ const bookingSchema = new mongoose.Schema({
     }],
   },
 
-  // ── Materials ──────────────────────────────────────────────────
+  // ── Materials (older bookings only; materials steps were removed) ──
   materials: {
     providedByClient: { type: Boolean, default: false },
     sourceSetAt: Date,            // technician chose who provides materials
@@ -178,7 +176,7 @@ const bookingSchema = new mongoose.Schema({
     notes: String,
   },
 
-  // ── Labor Payment ─────────────────────────────────────────────
+  // ── Payment the technician confirmed when completing the work ──
   laborPayment: {
     confirmedAt: Date,
     amount: { type: Number, min: 0, default: 0 },

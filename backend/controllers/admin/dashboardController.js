@@ -78,7 +78,7 @@ exports.getStats = async (req, res) => {
       Booking.countDocuments({ createdAt: { $gte: startOfMonth } }),
       Booking.countDocuments(),
       Booking.countDocuments({ status: 'completed' }),
-      Booking.countDocuments({ status: { $in: ['pending', 'quoted', 'agreed'] } }),
+      Booking.countDocuments({ status: { $in: ['pending', 'quoted'] } }),
     ]);
 
     // ── Jobs ──────────────────────────────────────────────

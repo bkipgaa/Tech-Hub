@@ -3,7 +3,8 @@
  * ====================
  * Handles the full booking lifecycle:
  * - Create, read, cancel (basic CRUD)
- * - 12‑step advanced flow: quotation → materials → work → labor payment → rating
+ * - Booking flow: booked → quoted → accepted (work starts) → expert marks done
+ *   with a photo and confirms full payment → client confirms and rates
  * - Technician statistics (completed jobs count)
  * - Email notifications for key events
  *
@@ -26,8 +27,6 @@ const TECHNICIAN_WITH_NAME = {
   select: 'businessName mainCategory userId',
   populate: { path: 'userId', select: 'firstName lastName' },
 };
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ============================================================
 // HELPERS
@@ -258,15 +257,16 @@ exports.createBooking = async (req, res) => {
     try {
       console.log(`🔔 Attempting to notify technician for booking ${booking._id}`);
 
-      const techUser = await User.findById(technician.userId).select('email firstName lastName');
+      const techUser = await User.findById(technician.userId).select('email phone firstName lastName');
 
       if (!techUser) {
         console.warn(`⚠️ No User found for technician userId=${technician.userId}`);
-      } else if (!techUser.email) {
-        console.warn(`⚠️ Technician ${techUser._id} has no email`);
+      } else if (!techUser.email && !techUser.phone) {
+        console.warn(`⚠️ Technician ${techUser._id} has no email or phone`);
       } else {
         await notify.technicianNewBooking({
           technicianEmail: techUser.email,
+          technicianPhone: techUser.phone,
           technicianName: `${techUser.firstName} ${techUser.lastName}`.trim() || 'Technician',
           clientName: clientUser
             ? `${clientUser.firstName} ${clientUser.lastName}`.trim()
@@ -283,7 +283,7 @@ exports.createBooking = async (req, res) => {
           address: location?.address,
         });
 
-        console.log(`📧 Booking notification sent to ${techUser.email}`);
+        console.log(`📧 Booking notification sent to ${techUser.email || techUser.phone}`);
       }
     } catch (notifyErr) {
       console.error('❌ Booking notification failed:', notifyErr.message);
@@ -440,7 +440,6 @@ exports.getBooking = async (req, res) => {
         evidenceRules: {
           linkAllowed: jobEvidence.isDigitalCategory(booking.serviceCategory),
           maxPhotos: jobEvidence.MAX_PHOTOS,
-          autoConfirmDays: jobEvidence.AUTO_CONFIRM_DAYS,
         },
       },
     });
@@ -492,7 +491,7 @@ exports.cancelBooking = async (req, res) => {
 };
 
 // ============================================================
-// 12‑STEP ADVANCED BOOKING FLOW
+// BOOKING FLOW
 // ============================================================
 
 /**
@@ -505,18 +504,10 @@ exports.sendQuotation = async (req, res) => {
     // JSON or multipart (when a quotation photo/PDF is attached), so read numbers explicitly
     const toAmount = (v) => (v === undefined || v === null || v === '' ? NaN : Number(v));
     const totalCost = toAmount(req.body.totalCost);
-    const laborCost = toAmount(req.body.laborCost);
-    const materialsCost = toAmount(req.body.materialsCost);
     const userId = req.user.userId || req.user.id || req.user._id;
 
     if (!Number.isFinite(totalCost) || totalCost <= 0) {
       return handleControllerError(res, new Error('Total cost required'), 'Total cost must be > 0', 400, 'sendQuotation');
-    }
-    if (!Number.isFinite(laborCost) || laborCost < 0) {
-      return handleControllerError(res, new Error('Labor cost required'), 'Labor cost is required (can be 0)', 400, 'sendQuotation');
-    }
-    if (!Number.isFinite(materialsCost) || materialsCost < 0) {
-      return handleControllerError(res, new Error('Materials cost required'), 'Materials cost is required (can be 0)', 400, 'sendQuotation');
     }
 
     const technicianId = await getTechnicianId(userId);
@@ -544,10 +535,9 @@ exports.sendQuotation = async (req, res) => {
       });
     }
 
+    // One price for the whole job (no separate labor/materials)
     booking.quotation = {
       totalCost,
-      laborCost,
-      materialsCost,
       sentAt: new Date(),
       attachments,
     };
@@ -566,7 +556,7 @@ exports.sendQuotation = async (req, res) => {
 };
 
 /**
- * 2. Client accepts quotation.
+ * 2. Client accepts quotation — the work starts straight away.
  * POST /api/bookings/:bookingId/accept-quotation
  */
 exports.acceptQuotation = async (req, res) => {
@@ -585,8 +575,10 @@ exports.acceptQuotation = async (req, res) => {
       return handleControllerError(res, new Error('Invalid status'), 'No quotation to accept', 400, 'acceptQuotation');
     }
 
-    booking.quotation.acceptedAt = new Date();
-    booking.status = 'agreed';
+    const now = new Date();
+    booking.quotation.acceptedAt = now;
+    booking.status = 'in_progress';
+    booking.startedAt = now;
     await booking.save();
 
     await booking.populate('clientId', 'firstName lastName');
@@ -637,217 +629,24 @@ exports.rejectQuotation = async (req, res) => {
 };
 
 /**
- * 4. Technician sets material source.
- * POST /api/bookings/:bookingId/material-source
- */
-exports.setMaterialSource = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const { providedByClient } = req.body;
-    const userId = req.user.userId || req.user.id || req.user._id;
-
-    if (typeof providedByClient !== 'boolean') {
-      return handleControllerError(res, new Error('Invalid value'), 'providedByClient must be boolean', 400, 'setMaterialSource');
-    }
-
-    const technicianId = await getTechnicianId(userId);
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'setMaterialSource');
-    }
-    if (booking.technicianId.toString() !== technicianId.toString()) {
-      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'setMaterialSource');
-    }
-    if (booking.status !== 'agreed') {
-      return handleControllerError(res, new Error('Invalid status'), 'Booking must be in "agreed" state', 400, 'setMaterialSource');
-    }
-
-    booking.materials.providedByClient = providedByClient;
-    booking.materials.sourceSetAt = new Date();
-    await booking.save();
-
-    await booking.populate('clientId', 'firstName lastName');
-    await booking.populate(TECHNICIAN_WITH_NAME);
-
-    res.json({ success: true, message: 'Material source set', data: booking });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to set material source', 500, 'setMaterialSource');
-  }
-};
-
-/**
- * 5. Technician confirms money received for materials (only if tech buys).
- * POST /api/bookings/:bookingId/materials-money-received
- */
-exports.confirmMaterialsMoneyReceived = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const userId = req.user.userId || req.user.id || req.user._id;
-
-    const technicianId = await getTechnicianId(userId);
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'confirmMaterialsMoneyReceived');
-    }
-    if (booking.technicianId.toString() !== technicianId.toString()) {
-      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'confirmMaterialsMoneyReceived');
-    }
-    if (booking.status !== 'agreed') {
-      return handleControllerError(res, new Error('Invalid status'), 'Booking must be in "agreed" state', 400, 'confirmMaterialsMoneyReceived');
-    }
-    if (booking.materials.providedByClient) {
-      return handleControllerError(res, new Error('Invalid action'), 'Client provides materials, no payment needed', 400, 'confirmMaterialsMoneyReceived');
-    }
-    if (booking.materials.moneyReceivedAt) {
-      return handleControllerError(res, new Error('Already confirmed'), 'Money already received', 400, 'confirmMaterialsMoneyReceived');
-    }
-
-    // Optional: how much the client gave for materials
-    const { amount } = req.body || {};
-    if (amount !== undefined && amount !== null && amount !== '') {
-      const received = Number(amount);
-      if (!Number.isFinite(received) || received < 0) {
-        return handleControllerError(res, new Error('Invalid amount'), 'Materials amount must be a positive number.', 400, 'confirmMaterialsMoneyReceived');
-      }
-      booking.materials.moneyReceivedAmount = received;
-    }
-
-    booking.materials.moneyReceivedAt = new Date();
-    await booking.save();
-
-    await booking.populate('clientId', 'firstName lastName');
-    await booking.populate(TECHNICIAN_WITH_NAME);
-
-    res.json({ success: true, message: 'Materials money receipt confirmed', data: booking });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to confirm money receipt', 500, 'confirmMaterialsMoneyReceived');
-  }
-};
-
-/**
- * 6. Technician confirms materials delivered.
- * POST /api/bookings/:bookingId/materials-delivered
- */
-exports.confirmMaterialsDelivered = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const userId = req.user.userId || req.user.id || req.user._id;
-
-    const technicianId = await getTechnicianId(userId);
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'confirmMaterialsDelivered');
-    }
-    if (booking.technicianId.toString() !== technicianId.toString()) {
-      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'confirmMaterialsDelivered');
-    }
-    if (booking.status !== 'agreed') {
-      return handleControllerError(res, new Error('Invalid status'), 'Booking must be in "agreed" state', 400, 'confirmMaterialsDelivered');
-    }
-    if (!booking.materials.providedByClient && !booking.materials.moneyReceivedAt) {
-      return handleControllerError(res, new Error('Payment required'), 'Please confirm money received for materials first', 400, 'confirmMaterialsDelivered');
-    }
-    if (booking.materials.deliveredAt) {
-      return handleControllerError(res, new Error('Already delivered'), 'Materials already confirmed delivered', 400, 'confirmMaterialsDelivered');
-    }
-
-    booking.materials.deliveredAt = new Date();
-    booking.status = 'materials_delivered';
-    await booking.save();
-
-    await booking.populate('clientId', 'firstName lastName');
-    await booking.populate(TECHNICIAN_WITH_NAME);
-
-    res.json({ success: true, message: 'Materials delivered', data: booking });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to confirm delivery', 500, 'confirmMaterialsDelivered');
-  }
-};
-
-/**
- * 7. Client confirms materials received.
- * POST /api/bookings/:bookingId/materials-received
- */
-exports.confirmMaterialsReceived = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const userId = req.user.userId || req.user.id || req.user._id;
-
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(res, new Error('Not found'), 'Booking not found', 404, 'confirmMaterialsReceived');
-    }
-    if (booking.clientId.toString() !== userId.toString()) {
-      return handleControllerError(res, new Error('Unauthorized'), 'Not your booking', 403, 'confirmMaterialsReceived');
-    }
-    if (booking.status !== 'materials_delivered') {
-      return handleControllerError(res, new Error('Invalid status'), 'Materials not delivered yet', 400, 'confirmMaterialsReceived');
-    }
-    if (booking.materials.confirmedByClientAt) {
-      return handleControllerError(res, new Error('Already confirmed'), 'Materials already confirmed by client', 400, 'confirmMaterialsReceived');
-    }
-
-    booking.materials.confirmedByClientAt = new Date();
-    booking.status = 'materials_confirmed';
-    await booking.save();
-
-    await booking.populate('clientId', 'firstName lastName');
-    await booking.populate(TECHNICIAN_WITH_NAME);
-
-    res.json({ success: true, message: 'Materials receipt confirmed by client', data: booking });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to confirm receipt', 500, 'confirmMaterialsReceived');
-  }
-};
-
-/**
- * 8. Technician starts work (only after materials confirmed).
- * POST /api/bookings/:bookingId/start
- */
-exports.startBooking = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const userId = req.user.userId || req.user.id || req.user._id;
-
-    let technicianId;
-    try {
-      technicianId = await getTechnicianId(userId);
-    } catch (err) {
-      return handleControllerError(res, err, 'Technician profile not found.', 404, 'startBooking');
-    }
-
-    const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return handleControllerError(res, new Error('Booking not found'), 'Booking not found.', 404, 'startBooking');
-    }
-
-    if (booking.technicianId.toString() !== technicianId.toString()) {
-      return handleControllerError(res, new Error('Unauthorized'), 'You are not the technician for this booking.', 403, 'startBooking');
-    }
-
-    if (booking.status !== 'materials_confirmed') {
-      return handleControllerError(res, new Error('Invalid status'), 'Cannot start work. Materials must be confirmed first.', 400, 'startBooking');
-    }
-
-    await booking.start();
-
-    await booking.populate('clientId', 'firstName lastName');
-    await booking.populate(TECHNICIAN_WITH_NAME);
-
-    res.json({ success: true, message: 'Work started successfully.', data: booking });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to start booking.', 500, 'startBooking');
-  }
-};
-
-/**
- * 9. Technician marks work as completed.
+ * 4. Technician marks work as completed: needs proof, and confirms they were
+ *    paid the full amount.
  * POST /api/bookings/:bookingId/complete-work
+ * Body: { amountPaid, paidInFull: true, note? }
  */
 exports.completeWork = async (req, res) => {
   try {
     const { bookingId } = req.params;
+    const { paidInFull, note } = req.body;
+    const amountPaid = Number(req.body.amountPaid);
     const userId = req.user.userId || req.user.id || req.user._id;
+
+    if (paidInFull !== true) {
+      return handleControllerError(res, new Error('Payment not confirmed'), 'Confirm that the client has paid you in full before marking the work completed.', 400, 'completeWork');
+    }
+    if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
+      return handleControllerError(res, new Error('Invalid amount'), 'Enter the amount the client paid you.', 400, 'completeWork');
+    }
 
     const technicianId = await getTechnicianId(userId);
     const booking = await Booking.findById(bookingId);
@@ -892,6 +691,12 @@ exports.completeWork = async (req, res) => {
     jobEvidence.refreshReviewStatus(booking);
 
     booking.workCompletedAt = now;
+    booking.laborPayment = {
+      confirmedAt: now,
+      amount: amountPaid,
+      notes: String(note || '').trim().slice(0, 500),
+    };
+    booking.paymentStatus = 'paid';
     booking.status = 'work_completed';
     await booking.save();
 
@@ -920,7 +725,8 @@ exports.completeWork = async (req, res) => {
 };
 
 /**
- * 10. Technician confirms labor payment received.
+ * Technician records the payment on a booking finished before payment was
+ * part of completing the work (new bookings record it in complete-work).
  * POST /api/bookings/:bookingId/confirm-labor-payment
  */
 exports.confirmLaborPayment = async (req, res) => {
@@ -944,35 +750,8 @@ exports.confirmLaborPayment = async (req, res) => {
     if (booking.status !== 'work_completed') {
       return handleControllerError(res, new Error('Invalid status'), 'Work must be completed first', 400, 'confirmLaborPayment');
     }
-    if (booking.laborPayment.confirmedAt) {
-      return handleControllerError(res, new Error('Already confirmed'), 'Labor payment already confirmed', 400, 'confirmLaborPayment');
-    }
-
-    // Bookings finished with evidence need the client's OK first (or an admin's
-    // after a dispute). If the client simply never answers, the work counts as
-    // confirmed after a few days. Older bookings finished before evidence existed skip this.
-    const evidence = booking.completionEvidence;
-    const confirmation = booking.clientWorkConfirmation;
-    if (evidence?.submittedAt) {
-      if (evidence.reviewStatus === 'admin_rejected') {
-        return handleControllerError(res, new Error('Evidence rejected'), 'Our team rejected the proof for this job. Please contact support.', 400, 'confirmLaborPayment');
-      }
-      if (!confirmation?.confirmedAt && evidence.reviewStatus !== 'admin_ok') {
-        const waitedMs = Date.now() - new Date(booking.workCompletedAt || evidence.submittedAt).getTime();
-        const clientSilent = !confirmation?.disputedAt && waitedMs >= jobEvidence.AUTO_CONFIRM_DAYS * DAY_MS;
-        if (!clientSilent) {
-          return handleControllerError(
-            res,
-            new Error('Client confirmation required'),
-            confirmation?.disputedAt
-              ? 'The client disputed the work. Add more proof or contact support before recording payment.'
-              : `Waiting for the client to confirm the work. If they don't answer within ${jobEvidence.AUTO_CONFIRM_DAYS} days you can continue.`,
-            400,
-            'confirmLaborPayment'
-          );
-        }
-        booking.clientWorkConfirmation.autoConfirmedAt = new Date();
-      }
+    if (booking.laborPayment?.confirmedAt) {
+      return handleControllerError(res, new Error('Already confirmed'), 'Payment already confirmed', 400, 'confirmLaborPayment');
     }
 
     booking.laborPayment = {
@@ -980,25 +759,21 @@ exports.confirmLaborPayment = async (req, res) => {
       amount: Number(amount),
       notes: note || '',
     };
-    booking.status = 'labor_paid';
-
+    booking.paymentStatus = 'paid';
     await booking.save();
 
     await booking.populate('clientId', 'firstName lastName');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
-    res.json({
-      success: true,
-      message: 'Labor payment confirmed.',
-      data: jobEvidence.participantView(booking),
-    });
+    res.json({ success: true, message: 'Payment confirmed.', data: jobEvidence.participantView(booking) });
   } catch (error) {
-    handleControllerError(res, error, 'Failed to confirm labor payment', 500, 'confirmLaborPayment');
+    handleControllerError(res, error, 'Failed to confirm payment', 500, 'confirmLaborPayment');
   }
 };
 
 /**
- * 11. Client rates technician (only after labor paid).
+ * 5. Client confirms the work is done and rates the technician — this
+ *    finishes the booking.
  * POST /api/bookings/:bookingId/rate
  * 
  * Sends a notification email to the technician after rating.
@@ -1020,10 +795,10 @@ exports.rateTechnician = async (req, res) => {
     const booking = await Booking.findOne({
       _id: bookingId,
       clientId: clientId,
-      status: 'labor_paid',
+      status: 'work_completed',
     });
     if (!booking) {
-      return handleControllerError(res, new Error('Booking not found or not ready for rating'), 'You can only rate after labor payment is confirmed.', 404, 'rateTechnician');
+      return handleControllerError(res, new Error('Booking not found or not ready for rating'), 'You can rate once the expert has marked the work as completed.', 404, 'rateTechnician');
     }
 
     if (booking.clientRating) {
@@ -1050,10 +825,12 @@ exports.rateTechnician = async (req, res) => {
       status: 'completed',
       completedAt: ratedAt,
       ratingCheck,
+      // Rating is the client's confirmation that the work was done
+      'clientWorkConfirmation.confirmedAt': booking.clientWorkConfirmation?.confirmedAt || ratedAt,
     };
     if (review) update.clientReview = review.trim();
     const claimed = await Booking.findOneAndUpdate(
-      { _id: booking._id, status: 'labor_paid', clientRating: null },
+      { _id: booking._id, status: 'work_completed', clientRating: null },
       { $set: update },
       { returnDocument: 'after', runValidators: true }
     );

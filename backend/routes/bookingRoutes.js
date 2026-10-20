@@ -53,21 +53,16 @@ router.post('/:bookingId/cancel', bookingController.cancelBooking);
 // Client pins the job location from their device (checked against evidence photo GPS)
 router.post('/:bookingId/location-pin', evidenceController.pinLocation);
 
-// 12‑STEP ADVANCED BOOKING FLOW
+// BOOKING FLOW: quote → accept (work starts) → complete (proof + paid in full) → confirm & rate
 router.post('/:bookingId/quotation', quotationFiles, bookingController.sendQuotation);
 router.post('/:bookingId/accept-quotation', bookingController.acceptQuotation);
 router.post('/:bookingId/reject-quotation', bookingController.rejectQuotation);
-router.post('/:bookingId/material-source', bookingController.setMaterialSource);
-router.post('/:bookingId/materials-money-received', bookingController.confirmMaterialsMoneyReceived);
-router.post('/:bookingId/materials-delivered', bookingController.confirmMaterialsDelivered);
-router.post('/:bookingId/materials-received', bookingController.confirmMaterialsReceived);
-router.post('/:bookingId/start', bookingController.startBooking);
 router.post('/:bookingId/evidence/photo', evidencePhotoUpload, evidenceController.addEvidencePhoto);
 router.post('/:bookingId/evidence/link', evidenceController.setEvidenceLink);
-router.post('/:bookingId/complete-work', bookingController.completeWork);   // needs evidence
-router.post('/:bookingId/confirm-work', evidenceController.confirmWork);    // client confirms or disputes
-router.post('/:bookingId/confirm-labor-payment', bookingController.confirmLaborPayment);
-router.post('/:bookingId/rate', bookingController.rateTechnician);
+router.post('/:bookingId/complete-work', bookingController.completeWork);   // needs evidence + full payment
+router.post('/:bookingId/confirm-work', evidenceController.confirmWork);    // client reports a problem
+router.post('/:bookingId/confirm-labor-payment', bookingController.confirmLaborPayment);   // older bookings only
+router.post('/:bookingId/rate', bookingController.rateTechnician);          // client confirms the work and rates
 
 // ──────────────────────────────────────────────────────────────
 // DEPRECATED / REMOVED ENDPOINTS
@@ -75,6 +70,8 @@ router.post('/:bookingId/rate', bookingController.rateTechnician);
 // - PATCH /:bookingId/status        (replaced by step‑specific endpoints)
 // - POST /:bookingId/confirm        (replaced by accept/reject quotation)
 // - POST /:bookingId/complete       (replaced by complete-work + confirm-labor-payment + rate)
-// - POST /:bookingId/confirm-payment (replaced by confirm-labor-payment)
+// - POST /:bookingId/confirm-payment (replaced by complete-work)
+// - POST /:bookingId/material-source, materials-money-received, materials-delivered,
+//   materials-received, start (materials steps removed; accepting the quote starts the work)
 
 module.exports = router;

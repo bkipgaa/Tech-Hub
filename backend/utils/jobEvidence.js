@@ -21,7 +21,6 @@ const STALE_CAPTURE_MS = 10 * 60 * 1000;
 const CLOCK_SKEW_MS = 2 * 60 * 1000;
 const NEAR_DUPLICATE_BITS = 6;         // max differing bits (of 64) for "same photo"
 const MIN_WORK_MINUTES = 10;
-const AUTO_CONFIRM_DAYS = 3;           // client silence after work_completed counts as confirmation
 const LINK_TIMEOUT_MS = 8000;
 const LINK_MAX_REDIRECTS = 3;
 
@@ -261,7 +260,6 @@ module.exports = {
   MAX_PHOTOS,
   NEAR_DUPLICATE_BITS,
   MIN_WORK_MINUTES,
-  AUTO_CONFIRM_DAYS,
   isDigitalCategory,
   isValidLatLng,
   distanceMeters,

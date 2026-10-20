@@ -7,7 +7,8 @@
  * - The technician (canEdit) takes photos with the device camera — not from the
  *   gallery — and the live GPS location is captured at the moment of the shot.
  *   Digital jobs can give a live link instead.
- * - The "Mark work completed" button only works once there is proof.
+ * - The "Mark work completed" button only works once there is proof, and the
+ *   technician confirms the amount the client paid them in full.
  *
  * Camera capture uses getUserMedia into a <canvas>. Browsers without it (or
  * where the camera is blocked) fall back to <input capture="environment">,
@@ -282,6 +283,9 @@ const JobEvidence = ({ booking, canEdit, canComplete, onUpdated }) => {
   const [savingLink, setSavingLink] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [confirmComplete, setConfirmComplete] = useState(false);
+  // Payment is confirmed together with completing the work (pre-filled with the quoted total)
+  const [amountPaid, setAmountPaid] = useState(booking.quotation?.totalCost > 0 ? String(booking.quotation.totalCost) : '');
+  const [paidInFull, setPaidInFull] = useState(false);
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState([]);
   const [viewer, setViewer] = useState(null);
@@ -329,10 +333,18 @@ const JobEvidence = ({ booking, canEdit, canComplete, onUpdated }) => {
   };
 
   const completeWork = async () => {
+    if (!(Number(amountPaid) > 0)) {
+      setError('Enter the amount the client paid you.');
+      return;
+    }
+    if (!paidInFull) {
+      setError('Tick the box to confirm the client has paid you in full.');
+      return;
+    }
     setCompleting(true);
     setError('');
     try {
-      await api.post(`/bookings/${booking._id}/complete-work`);
+      await api.post(`/bookings/${booking._id}/complete-work`, { amountPaid: Number(amountPaid), paidInFull });
       setConfirmComplete(false);
       await onUpdated();
     } catch (err) {
@@ -457,10 +469,35 @@ const JobEvidence = ({ booking, canEdit, canComplete, onUpdated }) => {
 
           {canComplete && (
             confirmComplete ? (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
                 <p className="text-sm text-blue-800">
-                  Mark the work as completed? The client will be asked to check your proof and confirm.
+                  Mark the work as completed? The client will be asked to check your proof, confirm and rate you.
                 </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount the client paid you (KES) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    placeholder="e.g. 5000"
+                    min="0"
+                    step="1"
+                    disabled={completing}
+                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <label className="flex items-start gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={paidInFull}
+                    onChange={(e) => setPaidInFull(e.target.checked)}
+                    disabled={completing}
+                    className="mt-0.5"
+                  />
+                  I confirm the client has paid me all the money for this job.
+                </label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setConfirmComplete(false)}
@@ -471,7 +508,7 @@ const JobEvidence = ({ booking, canEdit, canComplete, onUpdated }) => {
                   </button>
                   <button
                     onClick={completeWork}
-                    disabled={completing}
+                    disabled={completing || !paidInFull || !(Number(amountPaid) > 0)}
                     className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {completing && <Loader2 className="w-4 h-4 animate-spin" />}
