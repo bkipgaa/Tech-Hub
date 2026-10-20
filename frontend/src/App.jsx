@@ -58,6 +58,10 @@ import TechnicianBookings from './pages/TechnicianBookings';
 import BookingDetails from './pages/BookingDetails';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import Stays from './pages/Stays';
+import ListingDetails from './pages/ListingDetails';
+import ListingForm from './pages/ListingForm';
+import MyListings from './pages/MyListings';
 
 import './App.css';
 
@@ -105,6 +109,34 @@ function App() {
           <Route path="create-technician-profile" element={<CreateTechnicianProfile />} />
           <Route path="technicians/search" element={<TechnicianSearchResults />} />
           <Route path="jobs/:jobId" element={<JobDetails />} />
+
+          {/* ── Stays & Spaces ───────────────────────────── */}
+          <Route path="stays" element={<Stays />} />
+          <Route
+            path="stays/new"
+            element={
+              <PrivateRoute>
+                <ListingForm />
+              </PrivateRoute>
+            }
+          />
+          <Route path="stays/:id" element={<ListingDetails />} />
+          <Route
+            path="stays/:id/edit"
+            element={
+              <PrivateRoute>
+                <ListingForm />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="my-listings"
+            element={
+              <PrivateRoute>
+                <MyListings />
+              </PrivateRoute>
+            }
+          />
 
           {/* ── Password reset / OAuth callbacks ─────────── */}
           <Route path="payment-callback" element={<PaymentCallback />} />

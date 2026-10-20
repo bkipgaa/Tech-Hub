@@ -30,7 +30,7 @@ import { Wordmark } from "./Wordmark";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Menu, X, User, ChevronDown, LogOut, UserCircle, Wrench,
-  LayoutDashboard, MessageSquare
+  LayoutDashboard, MessageSquare, Building2
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { userRoleLabel } from "../utils/roleHelpers";
@@ -96,6 +96,7 @@ const Navbar = () => {
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "Services", path: "/services" },
+    { name: "Stays & Spaces", path: "/stays" },
     { name: "Available Jobs", path: "/available-jobs" },
     { name: "My Bookings", path: "/bookings" },
   ];
@@ -285,6 +286,15 @@ const Navbar = () => {
                         >
                           <UserCircle className="w-4 h-4 text-gray-500" />
                           <span>View Profile</span>
+                        </Link>
+
+                        <Link
+                          to="/my-listings"
+                          onClick={() => setIsProfileMenuOpen(false)}
+                          className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Building2 className="w-4 h-4 text-gray-500" />
+                          <span>My Listings</span>
                         </Link>
 
                         <Link
@@ -494,6 +504,15 @@ const Navbar = () => {
                     >
                       <User className="w-5 h-5 text-gray-500" />
                       <span>View Profile</span>
+                    </Link>
+
+                    <Link
+                      to="/my-listings"
+                      onClick={closeMobileMenu}
+                      className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
+                    >
+                      <Building2 className="w-5 h-5 text-gray-500" />
+                      <span>My Listings</span>
                     </Link>
 
                     {user.role === 'client' && (
