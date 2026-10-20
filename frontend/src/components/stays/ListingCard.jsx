@@ -6,9 +6,9 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, BedDouble, Users, Ruler, ImageOff } from 'lucide-react';
+import { MapPin, BedDouble, Users, Ruler, ImageOff, Navigation } from 'lucide-react';
 import { cldImage } from '../../utils/media';
-import { categoryById, formatPrice, propertyTypeLabel } from '../../utils/listingCategories';
+import { categoryById, formatPrice, formatDistance, propertyTypeLabel } from '../../utils/listingCategories';
 
 const ListingCard = ({ listing }) => {
   const cover = listing.photos?.[0]?.url;
@@ -41,6 +41,11 @@ const ListingCard = ({ listing }) => {
         {category && (
           <span className="absolute top-2 left-2 bg-white/95 text-gray-700 text-xs font-medium px-2 py-1 rounded-md shadow-sm">
             {category.name}
+          </span>
+        )}
+        {listing.distanceKm != null && (
+          <span className="absolute bottom-2 left-2 bg-green-600 text-white text-xs font-semibold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
+            <Navigation className="w-3 h-3" /> {formatDistance(listing.distanceKm)}
           </span>
         )}
       </div>

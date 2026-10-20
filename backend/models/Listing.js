@@ -38,6 +38,13 @@ const listingSchema = new mongoose.Schema({
   area: { type: String, required: true, trim: true, maxlength: 80 },   // estate / town, e.g. Kilimani
   landmark: { type: String, trim: true, maxlength: 160, default: '' },
 
+  // Pin set by the lister on a map, as GeoJSON [lng, lat]. Never sent to other
+  // users as-is: they get a distance and an approximate area (see the controller).
+  location: {
+    type: { type: String, enum: ['Point'] },
+    coordinates: { type: [Number], default: undefined },
+  },
+
   amenities: [{ type: String, enum: AMENITIES }],
   photos: { type: [photoSchema], validate: [(v) => v.length <= 12, 'At most 12 photos'] },
 
@@ -51,6 +58,7 @@ const listingSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 listingSchema.index({ status: 1, category: 1, county: 1, price: 1 });
+listingSchema.index({ location: '2dsphere' });
 listingSchema.index({ title: 'text', area: 'text', description: 'text' });
 
 module.exports = mongoose.model('Listing', listingSchema);

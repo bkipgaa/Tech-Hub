@@ -11,6 +11,7 @@ import { ArrowLeft, Loader2, AlertCircle, ImagePlus, X, Star } from 'lucide-reac
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { cldImage } from '../utils/media';
+import { LocationPicker } from '../components/stays/ListingMap';
 import {
   LISTING_GROUPS, PROPERTY_TYPES, AMENITIES, LISTER_TYPES, COUNTIES,
   categoryById, isShortStay, isBusiness,
@@ -33,6 +34,8 @@ const EMPTY = {
   county: 'Nairobi',
   area: '',
   landmark: '',
+  lat: '',
+  lng: '',
   amenities: [],
   photos: [],
   contactPhone: '',
@@ -129,6 +132,10 @@ const ListingForm = () => {
     e.preventDefault();
     setError('');
     if (!form.category) return setError('Please choose a category.');
+    if (form.lat === '' || form.lng === '') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return setError('Please set the location on the map so clients nearby can find you.');
+    }
     setSaving(true);
     try {
       const payload = { ...form, availableFrom: form.availableFrom || null };
@@ -274,6 +281,16 @@ const ListingForm = () => {
           <Field label="Nearby landmark" hint="Don't add the house number. Share it once you've spoken to the client.">
             <input value={form.landmark} onChange={set('landmark')} maxLength={160} className={inputClass} />
           </Field>
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-1">
+              Pin on the map <span className="text-red-500">*</span>
+            </p>
+            <p className="text-xs text-gray-500 mb-2">This is how clients searching “near me” find your place.</p>
+            <LocationPicker
+              value={form.lat !== '' && form.lng !== '' ? { lat: Number(form.lat), lng: Number(form.lng) } : null}
+              onChange={({ lat, lng }) => setForm((f) => ({ ...f, lat, lng }))}
+            />
+          </div>
         </Section>
 
         <Section title="What it offers">

@@ -8,17 +8,27 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, Plus, Loader2, AlertCircle, Home as HomeIcon, Wrench, SlidersHorizontal } from 'lucide-react';
+import {
+  Search, Plus, Loader2, AlertCircle, Home as HomeIcon, Wrench, SlidersHorizontal, LocateFixed, X,
+} from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import useMyLocation from '../hooks/useMyLocation';
 import ListingCard from '../components/stays/ListingCard';
-import { LISTING_GROUPS, COUNTIES, categoryById, groupById } from '../utils/listingCategories';
+import NearYou from '../components/stays/NearYou';
+import {
+  LISTING_GROUPS, COUNTIES, DISTANCE_BANDS, categoryById, groupById, bandById,
+} from '../utils/listingCategories';
 
 const FILTER_KEYS = ['group', 'category', 'county', 'q', 'minPrice', 'maxPrice', 'bedrooms', 'sort', 'page'];
 
 const Stays = () => {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
+  // "Near me" mode lives in the URL (near=1&band=1-10); the coordinates never do
+  const nearOn = params.get('near') === '1';
+  const band = bandById(params.get('band'));
+  const { location, status: locStatus, error: locError, locate } = useMyLocation();
   const [counts, setCounts] = useState({});
   // Last finished search, keyed by the query string it was for
   const [result, setResult] = useState({ key: null, listings: [], pagination: { page: 1, pages: 1, total: 0 }, error: '' });
@@ -42,14 +52,28 @@ const Stays = () => {
       .catch(() => setCounts({}));
   }, []);
 
-  // Results
-  const searchKey = params.toString();
+  // Opening a near-me link (e.g. from "See all nearby") asks for location once
   useEffect(() => {
+    if (nearOn && !location && locStatus === 'idle') locate();
+  }, [nearOn, location, locStatus, locate]);
+
+  const waitingForLocation = nearOn && !location;
+
+  // Results
+  const searchKey = params.toString() + (nearOn && location ? `@${location.lat},${location.lng}` : '');
+  useEffect(() => {
+    if (waitingForLocation) return;
     const filters = {};
     FILTER_KEYS.forEach((k) => {
       const v = params.get(k);
       if (v) filters[k] = v;
     });
+    if (nearOn && location) {
+      filters.lat = location.lat;
+      filters.lng = location.lng;
+      if (band.minKm) filters.minKm = band.minKm;
+      if (band.maxKm) filters.maxKm = band.maxKm;
+    }
     let cancelled = false;
     api
       .get('/listings', { params: { ...filters, limit: 12 } })
@@ -66,9 +90,9 @@ const Stays = () => {
         error: 'Could not load listings. Please try again.',
       })));
     return () => { cancelled = true; };
-  }, [params, searchKey]);
+  }, [params, searchKey, waitingForLocation, nearOn, location, band.minKm, band.maxKm]);
 
-  const loading = result.key !== searchKey;
+  const loading = !waitingForLocation && result.key !== searchKey;
   const { listings, pagination, error } = result;
 
   const update = (changes) => {
@@ -83,6 +107,14 @@ const Stays = () => {
 
   const pickGroup = (id) => update({ group: id === activeGroup && !category ? '' : id, category: '' });
   const pickCategory = (id) => update({ category: id === category ? '' : id, group: '' });
+
+  const turnNearOn = async () => {
+    // Sorting by price isn't the point of near me; start nearest-first
+    update({ near: '1', sort: '' });
+    // First try is made by the effect above; this retries after a failure
+    if (!location && locStatus === 'error') await locate();
+  };
+  const turnNearOff = () => update({ near: '', band: '', sort: '' });
 
   const submitSearch = (e) => {
     e.preventDefault();
@@ -137,10 +169,56 @@ const Stays = () => {
               Search
             </button>
           </form>
+
+          {/* ─── Near me ──────────────────────────────────── */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {nearOn ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 bg-white text-green-700 text-sm font-semibold pl-3 pr-1 py-1 rounded-full">
+                  <LocateFixed className="w-4 h-4" /> Near me
+                  <button
+                    onClick={turnNearOff}
+                    aria-label="Turn off near me"
+                    className="ml-1 w-6 h-6 rounded-full hover:bg-green-50 flex items-center justify-center"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+                {DISTANCE_BANDS.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => update({ band: b.id === 'any' ? '' : b.id })}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                      band.id === b.id
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-white/10 text-white border-white/40 hover:bg-white/20'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </>
+            ) : (
+              <button
+                onClick={turnNearOn}
+                className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/40 text-white text-sm font-semibold px-4 py-2 rounded-full"
+              >
+                <LocateFixed className="w-4 h-4" /> Near me
+              </button>
+            )}
+          </div>
+          {nearOn && locStatus === 'error' && (
+            <p className="mt-2 text-sm text-white bg-red-600/80 rounded-lg px-3 py-2 inline-flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {locError}
+              <button onClick={locate} className="underline font-semibold">Try again</button>
+            </p>
+          )}
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {!nearOn && <NearYou className="mb-8" />}
+
         {/* ─── Groups & categories ──────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {LISTING_GROUPS.map((g) => (
@@ -180,7 +258,15 @@ const Stays = () => {
         {/* ─── Filters ──────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-3 mt-6">
           <p className="text-sm text-gray-600">
-            {loading ? 'Loading…' : `${pagination.total} place${pagination.total === 1 ? '' : 's'} found`}
+            {waitingForLocation
+              ? 'Finding your location…'
+              : loading
+              ? 'Loading…'
+              : `${pagination.total} place${pagination.total === 1 ? '' : 's'} found${
+                  nearOn
+                    ? ` · ${band.id === '0-1' ? 'within 1 km of you' : band.maxKm ? `${band.label} from you` : 'near you'} · nearest first`
+                    : ''
+                }`}
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -195,7 +281,7 @@ const Stays = () => {
               className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700"
               aria-label="Sort"
             >
-              <option value="">Newest first</option>
+              <option value="">{nearOn ? 'Nearest first' : 'Newest first'}</option>
               <option value="price_asc">Lowest price</option>
               <option value="price_desc">Highest price</option>
             </select>
@@ -259,9 +345,29 @@ const Stays = () => {
           <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-2">
             <AlertCircle className="w-5 h-5" /> {error}
           </div>
-        ) : loading ? (
+        ) : loading || waitingForLocation ? (
           <div className="flex justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+            {nearOn && locStatus === 'error' ? (
+              <p className="text-sm text-gray-500">Allow location to see places near you, or turn off Near me.</p>
+            ) : (
+              <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+            )}
+          </div>
+        ) : listings.length === 0 && nearOn ? (
+          <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
+            <LocateFixed className="w-10 h-10 text-gray-300 mx-auto" />
+            <p className="mt-3 font-semibold text-gray-700">
+              Nothing listed {band.maxKm ? band.label.toLowerCase() : 'near you'} yet
+            </p>
+            <p className="text-sm text-gray-500 mt-1">Try a wider distance or another category.</p>
+            {band.id !== 'any' && (
+              <button
+                onClick={() => update({ band: '' })}
+                className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
+              >
+                Show any distance
+              </button>
+            )}
           </div>
         ) : listings.length === 0 ? (
           <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
