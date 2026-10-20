@@ -258,15 +258,16 @@ exports.createBooking = async (req, res) => {
     try {
       console.log(`🔔 Attempting to notify technician for booking ${booking._id}`);
 
-      const techUser = await User.findById(technician.userId).select('email firstName lastName');
+      const techUser = await User.findById(technician.userId).select('email phone firstName lastName');
 
       if (!techUser) {
         console.warn(`⚠️ No User found for technician userId=${technician.userId}`);
-      } else if (!techUser.email) {
-        console.warn(`⚠️ Technician ${techUser._id} has no email`);
+      } else if (!techUser.email && !techUser.phone) {
+        console.warn(`⚠️ Technician ${techUser._id} has no email or phone`);
       } else {
         await notify.technicianNewBooking({
           technicianEmail: techUser.email,
+          technicianPhone: techUser.phone,
           technicianName: `${techUser.firstName} ${techUser.lastName}`.trim() || 'Technician',
           clientName: clientUser
             ? `${clientUser.firstName} ${clientUser.lastName}`.trim()
@@ -283,7 +284,7 @@ exports.createBooking = async (req, res) => {
           address: location?.address,
         });
 
-        console.log(`📧 Booking notification sent to ${techUser.email}`);
+        console.log(`📧 Booking notification sent to ${techUser.email || techUser.phone}`);
       }
     } catch (notifyErr) {
       console.error('❌ Booking notification failed:', notifyErr.message);

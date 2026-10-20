@@ -9,6 +9,7 @@
  */
 
 const sendEmail = require('../utils/sendEmail');
+const sendWhatsApp = require('../utils/sendWhatsApp');
 const templates = require('../utils/emailTemplates');
 
 // ─────────────────────────────────────────────────────────────
@@ -34,11 +35,48 @@ const dispatch = async (to, templateFn, data, eventType) => {
   }
 };
 
+// WhatsApp goes out alongside email. Skipped quietly until the WhatsApp keys are set.
+const dispatchWhatsApp = async (phone, template, params, eventType) => {
+  try {
+    if (!sendWhatsApp.isConfigured()) return { success: false, reason: 'not_configured' };
+    if (!phone) {
+      console.warn(`[notify] No phone for WhatsApp event ${eventType} — skipping`);
+      return { success: false, reason: 'no_recipient' };
+    }
+
+    await sendWhatsApp({ phone, template, params, language: process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en' });
+
+    console.log(`[notify] ${eventType} (WhatsApp) → ${phone}`);
+    return { success: true };
+  } catch (err) {
+    console.error(`[notify] ${eventType} (WhatsApp) FAILED → ${phone}:`, err.message);
+    return { success: false, error: err.message };
+  }
+};
+
 // ─────────────────────────────────────────────────────────────
 // TECHNICIAN NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────
-exports.technicianNewBooking = (data) =>
-  dispatch(data.technicianEmail, templates.technicianNewBooking, data, 'technician_new_booking');
+// Email, plus WhatsApp when the expert has a phone number. The WhatsApp template's
+// body takes, in order: expert name, client name, service, date and time, location.
+exports.technicianNewBooking = async (data) => {
+  const [email, whatsapp] = await Promise.all([
+    dispatch(data.technicianEmail, templates.technicianNewBooking, data, 'technician_new_booking'),
+    dispatchWhatsApp(
+      data.technicianPhone,
+      process.env.WHATSAPP_BOOKING_TEMPLATE || 'new_booking',
+      [
+        data.technicianName,
+        data.clientName,
+        [data.serviceCategory, data.subService].filter(Boolean).join(' - '),
+        [data.preferredDate, data.preferredTime].filter(Boolean).join(', '),
+        data.address,
+      ],
+      'technician_new_booking'
+    ),
+  ]);
+  return { ...email, whatsapp };
+};
 
 exports.technicianSubscriptionExpiring = (data) =>
   dispatch(data.technicianEmail, templates.technicianSubscriptionExpiring, data, 'technician_subscription_expiring');
