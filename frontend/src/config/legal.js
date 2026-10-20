@@ -26,14 +26,22 @@ export const LEGAL = {
   version: '1.0',
 
   // Business decisions (suggested starting points shown in the braces)
-  cancelWindow: '{{24 hours}}',
-  cancelFee: '{{KES ___ or __% of the quote}}',
   disputeDays: '{{14}}',
   liabilityFloor: '{{KES 10,000}}',
   noticeDays: '{{14 days}}',
   feeChangeNotice: '{{30 days}}',
   vatNote: '{{inclusive / exclusive}} of VAT where applicable',
-  autoRenew: '{{Subscriptions do / do not renew automatically}}',
+
+  // Technician subscriptions (match backend/utils/subscriptionPlans.js and jobs/subscriptionReminders.js)
+  trialDays: 30,
+  trialRadius: '10 km',
+  reminderDays: '7, 3 and 1 days',
+
+  // Stays & Spaces listing fees (match backend/utils/listingPlan.js)
+  listingFreeMonths: 3,
+  listingFreeCount: 5,
+  listingFee: 'KES 200',
+
   breachReportHours: '{{48 hours}}',
   mediationCity: '{{Nairobi}}',
 
@@ -42,11 +50,12 @@ export const LEGAL = {
   keepVerificationDocs: '{{12 months after the decision}}',
   keepFinancialRecords: '{{7 years}}',
   keepChats: '{{24 months}}',
-  keepLogs: '{{24 months}}',
+  keepEvidence: '{{24 months after the booking}}',  keepLogs: '{{24 months}}',
   keepConsentProof: '{{3 years}}',
 
   // Vendors to confirm
   dbHost: '{{MongoDB Atlas / your database host}}',
   emailProvider: '{{your email provider}}',
+  whatsappProvider: 'Meta (WhatsApp Business)',
   transferCountries: '{{list the countries where your providers store data, e.g. USA, EU}}',
 };
