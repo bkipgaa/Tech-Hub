@@ -1,8 +1,10 @@
 // backend/middleware/validation.js
 const { body, validationResult } = require('express-validator');
 
+// Emails are kept as typed, only trimmed and lowercased (the User model lowercases too).
+// normalizeEmail() removed Gmail dots and "+tags", so such addresses couldn't sign in.
 const validateRegistration = [
-  body('email').isEmail().normalizeEmail(),
+  body('email').trim().isEmail().toLowerCase(),
   body('password').isLength({ min: 6 }),
   body('firstName').notEmpty().trim(),
   body('lastName').notEmpty().trim(),
@@ -19,7 +21,7 @@ const validateRegistration = [
 ];
 
 const validateLogin = [
-  body('email').isEmail().normalizeEmail(),
+  body('email').trim().isEmail().toLowerCase(),
   body('password').notEmpty(),
   (req, res, next) => {
     const errors = validationResult(req);

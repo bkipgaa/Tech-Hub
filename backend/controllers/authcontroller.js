@@ -383,7 +383,7 @@ exports.updateProfile = async (req, res) => {
  */
 exports.forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
     console.log(`🔍 Forgot password requested for: ${email}`);
 
     const user = await User.findOne({ email });
