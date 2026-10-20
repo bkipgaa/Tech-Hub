@@ -93,6 +93,12 @@ const Stays = () => {
   }, [params, searchKey, waitingForLocation, nearOn, location, band.minKm, band.maxKm]);
 
   const loading = !waitingForLocation && result.key !== searchKey;
+
+  // Scroll to the results panel when a search is made or changed
+  useEffect(() => {
+    if (!searching) return;
+    document.getElementById('stays-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [searchKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const { listings, pagination, error } = result;
 
   const update = (changes) => {
@@ -120,8 +126,21 @@ const Stays = () => {
   };
   const turnNearOff = () => update({ near: '', band: '', sort: '' });
 
-  const searchPlace = ({ county, town, estate }) => update({ county, town, estate, near: '', band: '' });
-  const clearPlace = () => update({ county: '', town: '', estate: '' });
+  const searchPlace = ({ category: what, county, town, estate }) =>
+    update({ category: what, group: '', county, town, estate, near: '', band: '' });
+
+  // Any of these means the visitor is looking at search results rather than browsing
+  const searching = nearOn || !!placeText || !!category || !!group ||
+    ['minPrice', 'maxPrice', 'bedrooms'].some((k) => params.get(k));
+  const closeSearch = () => {
+    setParams(new URLSearchParams());
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const searchSummary = [
+    categoryById(category)?.name || groupById(group)?.name || 'All places',
+    placeText ? `in ${placeText}` : '',
+    nearOn ? (band.maxKm ? `${band.label.toLowerCase()} from you` : 'near you') : '',
+  ].filter(Boolean).join(' ');
 
   const groupCount = (g) => g.categories.reduce((sum, c) => sum + (counts[c.id] || 0), 0);
   const visibleGroups = activeGroup ? LISTING_GROUPS.filter((g) => g.id === activeGroup) : LISTING_GROUPS;
@@ -149,8 +168,8 @@ const Stays = () => {
           </div>
 
           <div className="mt-6">
-            <p className="text-sm text-green-50 mb-2">Choose a county and town, then an estate if you like</p>
-            <PlaceSearch key={placeText} value={place} onSearch={searchPlace} />
+            <p className="text-sm text-green-50 mb-2">Choose what you're looking for, then a county and town (and an estate if you like)</p>
+            <PlaceSearch key={`${category}|${placeText}`} value={{ ...place, category }} counts={counts} onSearch={searchPlace} />
           </div>
 
           {/* ─── Near me ──────────────────────────────────── */}
@@ -200,206 +219,386 @@ const Stays = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {!nearOn && <NearYou className="mb-8" />}
-
-        {/* ─── Groups & categories ──────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {LISTING_GROUPS.map((g) => (
-            <button
-              key={g.id}
-              onClick={() => pickGroup(g.id)}
-              className={`text-left p-4 rounded-xl border transition-all ${
-                activeGroup === g.id
-                  ? 'bg-green-50 border-green-500 ring-1 ring-green-500'
-                  : 'bg-white border-gray-200 hover:bg-green-100 hover:border-green-500'
-              }`}
-            >
-              <p className="font-semibold text-gray-800">{g.name}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{g.blurb} · {priceUnitLabel(g.priceUnit)}</p>
-              <p className="text-xs text-green-700 font-medium mt-2">{groupCount(g)} listed</p>
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap gap-2 mt-4">
-          {visibleGroups.flatMap((g) => g.categories).map((c) => (
-            <button
-              key={c.id}
-              onClick={() => pickCategory(c.id)}
-              className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                category === c.id
-                  ? 'bg-green-600 text-white border-green-600'
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-green-100 hover:border-green-500 hover:text-green-800'
-              }`}
-            >
-              {c.name}
-              <span className={category === c.id ? 'text-green-100' : 'text-gray-400'}> · {counts[c.id] || 0}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* ─── Filters ──────────────────────────────────── */}
-        {placeText && (
-          <div className="mt-6 inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 text-sm font-medium pl-3 pr-1 py-1 rounded-full">
-            Showing places in {placeText}
-            <button
-              onClick={clearPlace}
-              aria-label="Clear place"
-              className="w-6 h-6 rounded-full hover:bg-green-100 flex items-center justify-center"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-        <div className="flex flex-wrap items-center justify-between gap-3 mt-6">
-          <p className="text-sm text-gray-600">
-            {waitingForLocation
-              ? 'Finding your location…'
-              : loading
-              ? 'Loading…'
-              : `${pagination.total} place${pagination.total === 1 ? '' : 's'} found${
-                  nearOn
-                    ? ` · ${band.id === '0-1' ? 'within 1 km of you' : band.maxKm ? `${band.label} from you` : 'near you'} · nearest first`
-                    : ''
-                }`}
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowFilters((s) => !s)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50"
-            >
-              <SlidersHorizontal className="w-4 h-4" /> Filters
-            </button>
-            <select
-              value={params.get('sort') || ''}
-              onChange={(e) => update({ sort: e.target.value })}
-              className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700"
-              aria-label="Sort"
-            >
-              <option value="">{nearOn ? 'Nearest first' : 'Newest first'}</option>
-              <option value="price_asc">Lowest price</option>
-              <option value="price_desc">Highest price</option>
-            </select>
-          </div>
-        </div>
-
-        {showFilters && (
-          <div
-            key={params.toString()}
-            className="mt-3 bg-white border border-gray-200 rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3"
-          >
-            <label className="text-sm text-gray-600">
-              Min price{priceUnit ? ` / ${priceUnit}` : ''}
-              <input
-                type="number"
-                min="0"
-                defaultValue={params.get('minPrice') || ''}
-                onBlur={(e) => update({ minPrice: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg"
-                placeholder="KES"
-              />
-            </label>
-            <label className="text-sm text-gray-600">
-              Max price{priceUnit ? ` / ${priceUnit}` : ''}
-              <input
-                type="number"
-                min="0"
-                defaultValue={params.get('maxPrice') || ''}
-                onBlur={(e) => update({ maxPrice: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg"
-                placeholder="KES"
-              />
-            </label>
-            <label className="text-sm text-gray-600">
-              Bedrooms
-              <select
-                value={params.get('bedrooms') || ''}
-                onChange={(e) => update({ bedrooms: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
-              >
-                <option value="">Any</option>
-                {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}+</option>)}
-              </select>
-            </label>
-            <div className="flex items-end">
+        {searching ? (
+          /* ─── Search results, right under the search ─── */
+          <section id="stays-results" className="scroll-mt-20 bg-white border-2 border-green-600 rounded-xl p-4 sm:p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">Search results</h2>
+                <p className="text-sm text-gray-600">{searchSummary}</p>
+              </div>
               <button
-                onClick={() => {
-                  setParams(new URLSearchParams());
-                }}
-                className="w-full px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+                onClick={closeSearch}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
               >
-                Clear all filters
+                <X className="w-4 h-4" /> Close search
               </button>
             </div>
-          </div>
-        )}
-
-        {/* ─── Results ──────────────────────────────────── */}
-        {error ? (
-          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" /> {error}
-          </div>
-        ) : loading || waitingForLocation ? (
-          <div className="flex justify-center py-16">
-            {nearOn && locStatus === 'error' ? (
-              <p className="text-sm text-gray-500">Allow location to see places near you, or turn off Near me.</p>
-            ) : (
-              <Loader2 className="w-8 h-8 animate-spin text-green-600" />
-            )}
-          </div>
-        ) : listings.length === 0 && nearOn ? (
-          <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
-            <LocateFixed className="w-10 h-10 text-gray-300 mx-auto" />
-            <p className="mt-3 font-semibold text-gray-700">
-              Nothing listed {band.maxKm ? band.label.toLowerCase() : 'near you'} yet
-            </p>
-            <p className="text-sm text-gray-500 mt-1">Try a wider distance or another category.</p>
-            {band.id !== 'any' && (
-              <button
-                onClick={() => update({ band: '' })}
-                className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
-              >
-                Show any distance
-              </button>
-            )}
-          </div>
-        ) : listings.length === 0 ? (
-          <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
-            <HomeIcon className="w-10 h-10 text-gray-300 mx-auto" />
-            <p className="mt-3 font-semibold text-gray-700">No places here yet</p>
-            <p className="text-sm text-gray-500 mt-1">Try another area or category, or be the first to list one.</p>
-            <Link
-              to={user ? '/stays/new' : '/login'}
-              state={user ? undefined : { from: { pathname: '/stays/new' } }}
-              className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
-            >
-              <Plus className="w-4 h-4" /> List your property
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
-              {listings.map((l) => <ListingCard key={l._id} listing={l} />)}
+            <div className="flex flex-wrap gap-2 mt-4">
+              {visibleGroups.flatMap((g) => g.categories).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => pickCategory(c.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                    category === c.id
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-green-100 hover:border-green-500 hover:text-green-800'
+                  }`}
+                >
+                  {c.name}
+                  <span className={category === c.id ? 'text-green-100' : 'text-gray-400'}> · {counts[c.id] || 0}</span>
+                </button>
+              ))}
             </div>
-            {pagination.pages > 1 && (
-              <div className="flex justify-center items-center gap-3 mt-8">
+
+            {/* ─── Filters ──────────────────────────────────── */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+              <p className="text-sm text-gray-600">
+                {waitingForLocation
+                  ? 'Finding your location…'
+                  : loading
+                  ? 'Loading…'
+                  : `${pagination.total} place${pagination.total === 1 ? '' : 's'} found${
+                      nearOn
+                        ? ` · ${band.id === '0-1' ? 'within 1 km of you' : band.maxKm ? `${band.label} from you` : 'near you'} · nearest first`
+                        : ''
+                    }`}
+              </p>
+              <div className="flex items-center gap-2">
                 <button
-                  disabled={pagination.page <= 1}
-                  onClick={() => update({ page: pagination.page - 1 })}
-                  className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm disabled:opacity-40"
+                  onClick={() => setShowFilters((s) => !s)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  Previous
+                  <SlidersHorizontal className="w-4 h-4" /> Filters
                 </button>
-                <span className="text-sm text-gray-600">Page {pagination.page} of {pagination.pages}</span>
-                <button
-                  disabled={pagination.page >= pagination.pages}
-                  onClick={() => update({ page: pagination.page + 1 })}
-                  className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm disabled:opacity-40"
+                <select
+                  value={params.get('sort') || ''}
+                  onChange={(e) => update({ sort: e.target.value })}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700"
+                  aria-label="Sort"
                 >
-                  Next
-                </button>
+                  <option value="">{nearOn ? 'Nearest first' : 'Newest first'}</option>
+                  <option value="price_asc">Lowest price</option>
+                  <option value="price_desc">Highest price</option>
+                </select>
+              </div>
+            </div>
+
+            {showFilters && (
+              <div
+                key={params.toString()}
+                className="mt-3 bg-white border border-gray-200 rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3"
+              >
+                <label className="text-sm text-gray-600">
+                  Min price{priceUnit ? ` / ${priceUnit}` : ''}
+                  <input
+                    type="number"
+                    min="0"
+                    defaultValue={params.get('minPrice') || ''}
+                    onBlur={(e) => update({ minPrice: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg"
+                    placeholder="KES"
+                  />
+                </label>
+                <label className="text-sm text-gray-600">
+                  Max price{priceUnit ? ` / ${priceUnit}` : ''}
+                  <input
+                    type="number"
+                    min="0"
+                    defaultValue={params.get('maxPrice') || ''}
+                    onBlur={(e) => update({ maxPrice: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg"
+                    placeholder="KES"
+                  />
+                </label>
+                <label className="text-sm text-gray-600">
+                  Bedrooms
+                  <select
+                    value={params.get('bedrooms') || ''}
+                    onChange={(e) => update({ bedrooms: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
+                  >
+                    <option value="">Any</option>
+                    {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}+</option>)}
+                  </select>
+                </label>
+                <div className="flex items-end">
+                  <button
+                    onClick={() => {
+                      setParams(new URLSearchParams());
+                    }}
+                    className="w-full px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
               </div>
             )}
+
+            {/* ─── Results ──────────────────────────────────── */}
+            {error ? (
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" /> {error}
+              </div>
+            ) : loading || waitingForLocation ? (
+              <div className="flex justify-center py-16">
+                {nearOn && locStatus === 'error' ? (
+                  <p className="text-sm text-gray-500">Allow location to see places near you, or turn off Near me.</p>
+                ) : (
+                  <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+                )}
+              </div>
+            ) : listings.length === 0 && nearOn ? (
+              <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
+                <LocateFixed className="w-10 h-10 text-gray-300 mx-auto" />
+                <p className="mt-3 font-semibold text-gray-700">
+                  Nothing listed {band.maxKm ? band.label.toLowerCase() : 'near you'} yet
+                </p>
+                <p className="text-sm text-gray-500 mt-1">Try a wider distance or another category.</p>
+                {band.id !== 'any' && (
+                  <button
+                    onClick={() => update({ band: '' })}
+                    className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
+                  >
+                    Show any distance
+                  </button>
+                )}
+              </div>
+            ) : listings.length === 0 ? (
+              <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
+                <HomeIcon className="w-10 h-10 text-gray-300 mx-auto" />
+                <p className="mt-3 font-semibold text-gray-700">No places here yet</p>
+                <p className="text-sm text-gray-500 mt-1">Try another area or category, or be the first to list one.</p>
+                <Link
+                  to={user ? '/stays/new' : '/login'}
+                  state={user ? undefined : { from: { pathname: '/stays/new' } }}
+                  className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
+                >
+                  <Plus className="w-4 h-4" /> List your property
+                </Link>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
+                  {listings.map((l) => <ListingCard key={l._id} listing={l} />)}
+                </div>
+                {pagination.pages > 1 && (
+                  <div className="flex justify-center items-center gap-3 mt-8">
+                    <button
+                      disabled={pagination.page <= 1}
+                      onClick={() => update({ page: pagination.page - 1 })}
+                      className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-gray-600">Page {pagination.page} of {pagination.pages}</span>
+                    <button
+                      disabled={pagination.page >= pagination.pages}
+                      onClick={() => update({ page: pagination.page + 1 })}
+                      className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+          </section>
+        ) : (
+          <>
+            <NearYou className="mb-8" />
+            {/* ─── Groups & categories ──────────────────────── */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {LISTING_GROUPS.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => pickGroup(g.id)}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    activeGroup === g.id
+                      ? 'bg-green-50 border-green-500 ring-1 ring-green-500'
+                      : 'bg-white border-gray-200 hover:bg-green-100 hover:border-green-500'
+                  }`}
+                >
+                  <p className="font-semibold text-gray-800">{g.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{g.blurb} · {priceUnitLabel(g.priceUnit)}</p>
+                  <p className="text-xs text-green-700 font-medium mt-2">{groupCount(g)} listed</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-2 mt-4">
+              {visibleGroups.flatMap((g) => g.categories).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => pickCategory(c.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                    category === c.id
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-green-100 hover:border-green-500 hover:text-green-800'
+                  }`}
+                >
+                  {c.name}
+                  <span className={category === c.id ? 'text-green-100' : 'text-gray-400'}> · {counts[c.id] || 0}</span>
+                </button>
+              ))}
+            </div>
+
+
+            <h2 className="mt-10 text-xl font-bold text-gray-800">Latest places</h2>
+            {/* ─── Filters ──────────────────────────────────── */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+              <p className="text-sm text-gray-600">
+                {waitingForLocation
+                  ? 'Finding your location…'
+                  : loading
+                  ? 'Loading…'
+                  : `${pagination.total} place${pagination.total === 1 ? '' : 's'} found${
+                      nearOn
+                        ? ` · ${band.id === '0-1' ? 'within 1 km of you' : band.maxKm ? `${band.label} from you` : 'near you'} · nearest first`
+                        : ''
+                    }`}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowFilters((s) => !s)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <SlidersHorizontal className="w-4 h-4" /> Filters
+                </button>
+                <select
+                  value={params.get('sort') || ''}
+                  onChange={(e) => update({ sort: e.target.value })}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700"
+                  aria-label="Sort"
+                >
+                  <option value="">{nearOn ? 'Nearest first' : 'Newest first'}</option>
+                  <option value="price_asc">Lowest price</option>
+                  <option value="price_desc">Highest price</option>
+                </select>
+              </div>
+            </div>
+
+            {showFilters && (
+              <div
+                key={params.toString()}
+                className="mt-3 bg-white border border-gray-200 rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3"
+              >
+                <label className="text-sm text-gray-600">
+                  Min price{priceUnit ? ` / ${priceUnit}` : ''}
+                  <input
+                    type="number"
+                    min="0"
+                    defaultValue={params.get('minPrice') || ''}
+                    onBlur={(e) => update({ minPrice: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg"
+                    placeholder="KES"
+                  />
+                </label>
+                <label className="text-sm text-gray-600">
+                  Max price{priceUnit ? ` / ${priceUnit}` : ''}
+                  <input
+                    type="number"
+                    min="0"
+                    defaultValue={params.get('maxPrice') || ''}
+                    onBlur={(e) => update({ maxPrice: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg"
+                    placeholder="KES"
+                  />
+                </label>
+                <label className="text-sm text-gray-600">
+                  Bedrooms
+                  <select
+                    value={params.get('bedrooms') || ''}
+                    onChange={(e) => update({ bedrooms: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
+                  >
+                    <option value="">Any</option>
+                    {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}+</option>)}
+                  </select>
+                </label>
+                <div className="flex items-end">
+                  <button
+                    onClick={() => {
+                      setParams(new URLSearchParams());
+                    }}
+                    className="w-full px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ─── Results ──────────────────────────────────── */}
+            {error ? (
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" /> {error}
+              </div>
+            ) : loading || waitingForLocation ? (
+              <div className="flex justify-center py-16">
+                {nearOn && locStatus === 'error' ? (
+                  <p className="text-sm text-gray-500">Allow location to see places near you, or turn off Near me.</p>
+                ) : (
+                  <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+                )}
+              </div>
+            ) : listings.length === 0 && nearOn ? (
+              <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
+                <LocateFixed className="w-10 h-10 text-gray-300 mx-auto" />
+                <p className="mt-3 font-semibold text-gray-700">
+                  Nothing listed {band.maxKm ? band.label.toLowerCase() : 'near you'} yet
+                </p>
+                <p className="text-sm text-gray-500 mt-1">Try a wider distance or another category.</p>
+                {band.id !== 'any' && (
+                  <button
+                    onClick={() => update({ band: '' })}
+                    className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
+                  >
+                    Show any distance
+                  </button>
+                )}
+              </div>
+            ) : listings.length === 0 ? (
+              <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
+                <HomeIcon className="w-10 h-10 text-gray-300 mx-auto" />
+                <p className="mt-3 font-semibold text-gray-700">No places here yet</p>
+                <p className="text-sm text-gray-500 mt-1">Try another area or category, or be the first to list one.</p>
+                <Link
+                  to={user ? '/stays/new' : '/login'}
+                  state={user ? undefined : { from: { pathname: '/stays/new' } }}
+                  className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
+                >
+                  <Plus className="w-4 h-4" /> List your property
+                </Link>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
+                  {listings.map((l) => <ListingCard key={l._id} listing={l} />)}
+                </div>
+                {pagination.pages > 1 && (
+                  <div className="flex justify-center items-center gap-3 mt-8">
+                    <button
+                      disabled={pagination.page <= 1}
+                      onClick={() => update({ page: pagination.page - 1 })}
+                      className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-gray-600">Page {pagination.page} of {pagination.pages}</span>
+                    <button
+                      disabled={pagination.page >= pagination.pages}
+                      onClick={() => update({ page: pagination.page + 1 })}
+                      className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
           </>
         )}
 

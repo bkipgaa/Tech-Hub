@@ -442,21 +442,51 @@ exports.getPopularServices = async (req, res) => {
       bookingStats.map((b) => [bookingKey(b._id.serviceCategory, b._id.subService), b])
     );
 
-    const ranked = popular
-      .map((item) => {
-        const stats = statsByKey.get(bookingKey(item.serviceCategory, item.subService));
-        return {
-          ...item,
-          completedBookings: stats?.completedBookings || 0,
-          totalBookings: stats?.totalBookings || 0
-        };
-      })
+    const withStats = popular.map((item) => {
+      const stats = statsByKey.get(bookingKey(item.serviceCategory, item.subService));
+      return {
+        ...item,
+        completedBookings: stats?.completedBookings || 0,
+        totalBookings: stats?.totalBookings || 0
+      };
+    });
+
+    // Services with real activity, best first
+    const active = withStats
+      .filter((s) => s.completedBookings || s.totalBookings || s.searchCount)
       .sort((a, b) =>
         b.completedBookings - a.completedBookings ||
         b.totalBookings - a.totalBookings ||
         b.searchCount - a.searchCount
-      )
-      .slice(0, limit);
+      );
+
+    // Fill any remaining slots with a mix: one service from each main category in
+    // turn (categories with the most experts first), instead of the catalog's order,
+    // which with no bookings yet would fill the list from the first category only
+    let ranked = active.slice(0, limit);
+    if (ranked.length < limit) {
+      const expertCounts = new Map(
+        (await Technician.aggregate([
+          { $match: { isActive: true } },
+          { $group: { _id: '$mainCategory', n: { $sum: 1 } } },
+        ])).map((r) => [r._id, r.n])
+      );
+      const taken = new Set(ranked.map((s) => bookingKey(s.serviceCategory, s.subService)));
+      const queues = new Map();
+      withStats.forEach((s) => {
+        if (taken.has(bookingKey(s.serviceCategory, s.subService))) return;
+        if (!queues.has(s.mainCategory)) queues.set(s.mainCategory, []);
+        queues.get(s.mainCategory).push(s);
+      });
+      const order = [...queues.keys()].sort((a, b) => (expertCounts.get(b) || 0) - (expertCounts.get(a) || 0));
+      while (ranked.length < limit && order.some((m) => queues.get(m).length)) {
+        for (const m of order) {
+          const next = queues.get(m).shift();
+          if (next) ranked.push(next);
+          if (ranked.length >= limit) break;
+        }
+      }
+    }
 
     const payload = {
       success: true,
