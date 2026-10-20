@@ -33,11 +33,41 @@ const fail = (res, status, message, error) => {
 
 const OWNER_FIELDS = 'firstName lastName profileImage';
 
-/** Shape a listing for the browser; contact details only for signed-in users. */
+// Distance search: the furthest a "near me" search reaches, in km
+const MAX_SEARCH_KM = 500;
+// Pins must fall inside Kenya (with a small margin), which also catches swapped lat/lng
+const KENYA_BOUNDS = { minLat: -5, maxLat: 5.5, minLng: 33.5, maxLng: 42.5 };
+
+const readPoint = (lat, lng) => {
+  const la = toNumber(lat);
+  const ln = toNumber(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
+  if (la < -90 || la > 90 || ln < -180 || ln > 180) return null;
+  return { lat: la, lng: ln };
+};
+
+// About 1 km of precision: enough to show the area, not the door
+const approximate = (coords) =>
+  coords?.length === 2 ? { lat: Math.round(coords[1] * 100) / 100, lng: Math.round(coords[0] * 100) / 100 } : null;
+
+const roundKm = (meters) => Math.round(meters / 100) / 10;
+
+/**
+ * Shape a listing for the browser. Contact details only for signed-in users;
+ * the exact pin only for the owner (everyone else gets an approximate area).
+ */
 const present = (listing, viewer) => {
   const l = listing.toObject ? listing.toObject() : { ...listing };
   if (!viewer) delete l.contactPhone;
   l.isOwner = !!viewer && String(l.owner?._id || l.owner) === viewer.userId;
+  const coords = l.location?.coordinates;
+  if (l.isOwner && coords?.length === 2) {
+    l.lat = coords[1];
+    l.lng = coords[0];
+  } else {
+    l.approxLocation = approximate(coords);
+  }
+  delete l.location;
   return l;
 };
 
@@ -113,6 +143,18 @@ const readListingInput = (body, existing = null) => {
     if (photos.length > MAX_PHOTOS) return { error: `You can add up to ${MAX_PHOTOS} photos.` };
     data.photos = photos;
   }
+  if (body.lat !== undefined || body.lng !== undefined) {
+    const point = readPoint(body.lat, body.lng);
+    if (!point) return { error: 'Please set the location on the map.' };
+    const b = KENYA_BOUNDS;
+    if (point.lat < b.minLat || point.lat > b.maxLat || point.lng < b.minLng || point.lng > b.maxLng) {
+      return { error: 'The map pin must be in Kenya. Please move it to the property.' };
+    }
+    data.location = { type: 'Point', coordinates: [point.lng, point.lat] };
+  } else if (!existing?.location?.coordinates?.length) {
+    return { error: 'Please set the location on the map so clients nearby can find you.' };
+  }
+
   if (body.whatsapp !== undefined) data.whatsapp = !!body.whatsapp;
   if (body.availableFrom !== undefined) {
     const d = body.availableFrom ? new Date(body.availableFrom) : null;
@@ -167,16 +209,53 @@ exports.getMeta = async (req, res) => {
   }
 };
 
+// Fields never sent in result lists
+const LIST_HIDDEN = { contactPhone: 0, description: 0, location: 0 };
+
+/**
+ * Nearest-first search with $geoNear. Each item gets `distanceKm`;
+ * minKm/maxKm make a distance band (e.g. 1–10 km).
+ */
+const searchNear = async ({ point, filter, minKm, maxKm, sort, page, limit }) => {
+  const geoNear = {
+    near: { type: 'Point', coordinates: [point.lng, point.lat] },
+    distanceField: 'distanceMeters',
+    spherical: true,
+    query: filter,
+    maxDistance: maxKm * 1000,
+  };
+  if (minKm > 0) geoNear.minDistance = minKm * 1000;
+
+  const sortStage = {
+    price_asc: { price: 1, distanceMeters: 1 },
+    price_desc: { price: -1, distanceMeters: 1 },
+  }[sort] || { distanceMeters: 1 };
+
+  const [result] = await Listing.aggregate([
+    { $geoNear: geoNear },
+    {
+      $facet: {
+        items: [{ $sort: sortStage }, { $skip: (page - 1) * limit }, { $limit: limit }, { $project: LIST_HIDDEN }],
+        total: [{ $count: 'n' }],
+      },
+    },
+  ]);
+  const items = (result?.items || []).map(({ distanceMeters, ...l }) => ({ ...l, distanceKm: roundKm(distanceMeters) }));
+  return { items, total: result?.total?.[0]?.n || 0 };
+};
+
 /**
  * GET /api/listings
  * Query: group, category, county, area, q, minPrice, maxPrice, bedrooms (min),
- *        sort (newest | price_asc | price_desc), page, limit
+ *        sort (newest | price_asc | price_desc | nearest), page, limit,
+ *        lat, lng, minKm, maxKm (with lat/lng: nearest first, within the band)
  */
 exports.searchListings = async (req, res) => {
   try {
     const { group, category, county, area, q, minPrice, maxPrice, bedrooms, sort } = req.query;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(48, Math.max(1, parseInt(req.query.limit, 10) || 12));
+    const point = readPoint(req.query.lat, req.query.lng);
 
     const filter = { status: 'active' };
     if (typeof category === 'string' && CATEGORY_IDS.includes(category)) filter.category = category;
@@ -197,6 +276,20 @@ exports.searchListings = async (req, res) => {
     const beds = toNumber(bedrooms);
     if (Number.isFinite(beds) && beds > 0) filter.bedrooms = { $gte: beds };
 
+    if (point) {
+      const minKm = Math.max(0, toNumber(req.query.minKm) || 0);
+      const maxKmRaw = toNumber(req.query.maxKm);
+      const maxKm = Math.min(MAX_SEARCH_KM, Number.isFinite(maxKmRaw) && maxKmRaw > 0 ? maxKmRaw : MAX_SEARCH_KM);
+      if (minKm >= maxKm) return fail(res, 400, 'The distance range is not valid.');
+      const { items, total } = await searchNear({ point, filter, minKm, maxKm, sort, page, limit });
+      return res.json({
+        success: true,
+        data: items,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
+        near: { minKm, maxKm },
+      });
+    }
+
     const sortBy = {
       price_asc: { price: 1, createdAt: -1 },
       price_desc: { price: -1, createdAt: -1 },
@@ -207,7 +300,7 @@ exports.searchListings = async (req, res) => {
         .sort(sortBy)
         .skip((page - 1) * limit)
         .limit(limit)
-        .select('-contactPhone -description')
+        .select(LIST_HIDDEN)
         .lean(),
       Listing.countDocuments(filter),
     ]);
@@ -240,6 +333,36 @@ exports.getListing = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/listings/:id/nearby?limit=8&group=
+ * Other live places near this one, nearest first (within 50 km).
+ */
+exports.getNearbyListings = async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 404, 'Listing not found.');
+    const listing = await Listing.findById(req.params.id).select('location').lean();
+    const coords = listing?.location?.coordinates;
+    if (!coords?.length) return res.json({ success: true, data: [] });
+
+    const filter = { status: 'active', _id: { $ne: listing._id } };
+    const { group } = req.query;
+    if (typeof group === 'string' && LISTING_GROUPS.some((g) => g.id === group)) filter.group = group;
+    const limit = Math.min(12, Math.max(1, parseInt(req.query.limit, 10) || 8));
+
+    const { items } = await searchNear({
+      point: { lng: coords[0], lat: coords[1] },
+      filter,
+      minKm: 0,
+      maxKm: 50,
+      page: 1,
+      limit,
+    });
+    res.json({ success: true, data: items });
+  } catch (error) {
+    fail(res, 500, 'Failed to load nearby places.', error);
+  }
+};
+
 // ─────────────────────────────────────────────────────────────
 // LISTER
 // ─────────────────────────────────────────────────────────────
@@ -248,7 +371,7 @@ exports.getListing = async (req, res) => {
 exports.getMyListings = async (req, res) => {
   try {
     const items = await Listing.find({ owner: req.user.userId }).sort({ updatedAt: -1 }).lean();
-    res.json({ success: true, data: items });
+    res.json({ success: true, data: items.map((l) => present(l, req.user)) });
   } catch (error) {
     fail(res, 500, 'Failed to load your listings.', error);
   }
@@ -260,7 +383,7 @@ exports.createListing = async (req, res) => {
     const { data, error } = readListingInput(req.body);
     if (error) return fail(res, 400, error);
     const listing = await Listing.create({ ...data, owner: req.user.userId, status: 'active' });
-    res.status(201).json({ success: true, data: listing, message: 'Your listing is live.' });
+    res.status(201).json({ success: true, data: present(listing, req.user), message: 'Your listing is live.' });
   } catch (error) {
     if (error.name === 'ValidationError') return fail(res, 400, Object.values(error.errors)[0]?.message || 'Invalid listing.');
     fail(res, 500, 'Failed to create listing.', error);
@@ -276,7 +399,7 @@ exports.updateListing = async (req, res) => {
     if (error) return fail(res, 400, error);
     Object.assign(listing, data);
     await listing.save();
-    res.json({ success: true, data: listing, message: 'Listing updated.' });
+    res.json({ success: true, data: present(listing, req.user), message: 'Listing updated.' });
   } catch (error) {
     if (error.name === 'ValidationError') return fail(res, 400, Object.values(error.errors)[0]?.message || 'Invalid listing.');
     fail(res, 500, 'Failed to update listing.', error);
@@ -293,7 +416,7 @@ exports.setListingStatus = async (req, res) => {
     if (listing.status === 'hidden') return fail(res, 403, 'Our team has hidden this listing. Please contact support.');
     listing.status = status;
     await listing.save();
-    res.json({ success: true, data: listing, message: status === 'active' ? 'Listing is live again.' : 'Listing paused.' });
+    res.json({ success: true, data: present(listing, req.user), message: status === 'active' ? 'Listing is live again.' : 'Listing paused.' });
   } catch (error) {
     fail(res, 500, 'Failed to update listing.', error);
   }

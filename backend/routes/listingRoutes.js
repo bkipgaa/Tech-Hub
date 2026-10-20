@@ -14,6 +14,7 @@ router.get('/', ctrl.searchListings);
 router.post('/', auth, ctrl.createListing);
 
 router.get('/:id', optionalAuth, ctrl.getListing);
+router.get('/:id/nearby', ctrl.getNearbyListings);
 router.put('/:id', auth, ctrl.updateListing);
 router.patch('/:id/status', auth, ctrl.setListingStatus);
 router.delete('/:id', auth, ctrl.deleteListing);

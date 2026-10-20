@@ -118,3 +118,23 @@ export const toInternationalPhone = (phone = '') => {
   if (digits.length === 9) return `254${digits}`;
   return digits;
 };
+
+// "Near me" distance bands (km). The first is the default: everything, nearest first.
+export const DISTANCE_BANDS = [
+  { id: 'any', label: 'Any distance', minKm: 0, maxKm: null },
+  { id: '0-1', label: 'Within 1 km', minKm: 0, maxKm: 1 },
+  { id: '1-10', label: '1 – 10 km', minKm: 1, maxKm: 10 },
+  { id: '10-20', label: '10 – 20 km', minKm: 10, maxKm: 20 },
+  { id: '20-50', label: '20 – 50 km', minKm: 20, maxKm: 50 },
+  { id: '50-100', label: '50 – 100 km', minKm: 50, maxKm: 100 },
+];
+
+export const bandById = (id) => DISTANCE_BANDS.find((b) => b.id === id) || DISTANCE_BANDS[0];
+
+/** 0.35 → "350 m away", 12.4 → "12.4 km away" */
+export const formatDistance = (km) => {
+  if (km == null || !Number.isFinite(Number(km))) return '';
+  const n = Number(km);
+  if (n < 1) return `${Math.max(100, Math.round(n * 10) * 100)} m away`;
+  return `${n < 10 ? n.toFixed(1) : Math.round(n)} km away`;
+};

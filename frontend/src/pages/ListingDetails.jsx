@@ -15,6 +15,8 @@ import {
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { cldImage } from '../utils/media';
+import ListingCard from '../components/stays/ListingCard';
+import { AreaMap } from '../components/stays/ListingMap';
 import {
   categoryById, formatPrice, propertyTypeLabel, amenityLabel, listerTypeLabel, toInternationalPhone,
 } from '../utils/listingCategories';
@@ -36,6 +38,18 @@ const ListingDetails = () => {
   // { id, listing, error } for the last finished request; loading until it matches the URL
   const [result, setResult] = useState({ id: null, listing: null, error: '' });
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [nearbyResult, setNearbyResult] = useState({ id: null, items: [] });
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get(`/listings/${id}/nearby`, { params: { limit: 4 } })
+      .then((r) => !cancelled && setNearbyResult({ id, items: r.data?.data || [] }))
+      .catch(() => !cancelled && setNearbyResult({ id, items: [] }));
+    return () => { cancelled = true; };
+  }, [id]);
+
+  const nearby = nearbyResult.id === id ? nearbyResult.items : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -202,6 +216,17 @@ const ListingDetails = () => {
                 </div>
               )}
             </div>
+
+            {/* Area map: approximate for visitors, exact pin only on the edit page */}
+            {(listing.approxLocation || (listing.isOwner && listing.lat != null)) && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 className="font-semibold text-gray-800 mb-1">Where it is</h2>
+                <p className="text-sm text-gray-500 mb-3">
+                  {listing.area}, {listing.county}. The {listing.isOwner ? 'circle shows what clients see' : 'exact address is shared by the lister'}.
+                </p>
+                <AreaMap center={listing.approxLocation || { lat: listing.lat, lng: listing.lng }} />
+              </div>
+            )}
           </div>
 
           {/* ─── Contact column ──────────────────────────── */}
@@ -264,6 +289,16 @@ const ListingDetails = () => {
             </div>
           </div>
         </div>
+
+        {nearby.length > 0 && (
+          <div className="mt-10">
+            <h2 className="text-xl font-bold text-gray-800">More places nearby</h2>
+            <p className="text-sm text-gray-500 mb-4">Closest to this {category ? category.name.toLowerCase() : 'place'} first</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {nearby.map((l) => <ListingCard key={l._id} listing={l} />)}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

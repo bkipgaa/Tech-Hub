@@ -40,7 +40,7 @@ const Placeholder = ({ children }) => (
   </div>
 );
 
-const ExpertCard = ({ tech, rank, onClick }) => {
+export const ExpertCard = ({ tech, rank, onClick }) => {
   const name = [tech.user?.firstName, tech.user?.lastName].filter(Boolean).join(' ') || tech.businessName || 'Expert';
   const initials = `${tech.user?.firstName?.[0] || ''}${tech.user?.lastName?.[0] || ''}` || 'E';
   const rating = tech.rating?.average || 0;

@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import BookingBenefits from '../components/technician/BookingBenefits';
 import TechnicianHome from '../components/technician/TechnicianHome';
 import { LISTING_GROUPS } from '../utils/listingCategories';
+import NearYou from '../components/stays/NearYou';
 
 const CLIENT_STEPS = [
   { title: 'Search for a Service', text: 'Browse categories or search for specific services you need' },
@@ -273,6 +274,11 @@ const Home = () => {
             {user ? 'List your property for free' : 'Browse all places'} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      {/* Near You Section */}
+      <div className="max-w-7xl mx-auto px-4 pt-10">
+        <NearYou />
       </div>
 
       {/* How It Works Section */}
