@@ -12,7 +12,6 @@ tech-hub
 │  │  ├─ authcontroller.js
 │  │  ├─ bookingratingController.js
 │  │  ├─ chatController.js
-│  │  ├─ commissionPaymentController.js
 │  │  ├─ jobApplicationController.js
 │  │  ├─ jobController.js
 │  │  ├─ searchController.js
@@ -66,7 +65,6 @@ tech-hub
 │  │  ├─ authRoutes.js
 │  │  ├─ bookingRoutes.js
 │  │  ├─ chatRoutes.js
-│  │  ├─ commissionPaymentRoutes.js
 │  │  ├─ jobApplicationRoutes.js
 │  │  ├─ jobRoutes.js
 │  │  ├─ searchRoutes.js
@@ -187,7 +185,6 @@ tech-hub
    │  │  ├─ Services.jsx
    │  │  ├─ SignUp.jsx
    │  │  ├─ TechnicianBookings.jsx
-   │  │  ├─ TechnicianCommission.jsx
    │  │  ├─ TechnicianProfile.jsx
    │  │  ├─ Technicians.jsx
    │  │  └─ TechnicianSearchResults.jsx

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Wallet, CreditCard, TrendingUp, RefreshCw, Download, Search, Clock } from 'lucide-react';
+import { Wallet, CreditCard, TrendingUp, RefreshCw, Download, Search } from 'lucide-react';
 import { adminPaymentService } from '../../services/adminRevenueService';
 
 const KES = (n) => (n == null || isNaN(n) ? 'KES 0' : `KES ${Number(n).toLocaleString()}`);
@@ -97,7 +97,7 @@ export default function Payments() {
             <Wallet className="w-6 h-6 text-indigo-600" /> Payments
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            All platform transactions — subscription payments and commission collections.
+            All platform transactions — subscription payments.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -124,13 +124,13 @@ export default function Payments() {
       )}
 
       {stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <StatCard
             icon={TrendingUp}
             label="Total Volume"
             value={KES(stats.totalVolume)}
             tint="bg-indigo-50 text-indigo-600"
-            sub={`${(stats.subscriptions.count + stats.commission.count).toLocaleString()} transactions`}
+            sub={`${stats.subscriptions.count.toLocaleString()} transactions`}
           />
           <StatCard
             icon={CreditCard}
@@ -138,20 +138,6 @@ export default function Payments() {
             value={KES(stats.subscriptions.total)}
             tint="bg-blue-50 text-blue-600"
             sub={`${stats.subscriptions.count} payments`}
-          />
-          <StatCard
-            icon={Wallet}
-            label="Commission Paid"
-            value={KES(stats.commission.paid)}
-            tint="bg-green-50 text-green-600"
-            sub={`${stats.commission.count} total bookings`}
-          />
-          <StatCard
-            icon={Clock}
-            label="Commission Pending"
-            value={KES(stats.commission.pending)}
-            tint="bg-yellow-50 text-yellow-600"
-            sub={`${KES(stats.thisMonthCommission)} collected this month`}
           />
         </div>
       )}
@@ -175,7 +161,6 @@ export default function Payments() {
         >
           <option value="all">All types</option>
           <option value="subscription">Subscriptions</option>
-          <option value="commission">Commissions</option>
         </select>
         <select
           value={statusFilter}

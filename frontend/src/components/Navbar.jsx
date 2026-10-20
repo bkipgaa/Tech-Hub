@@ -16,7 +16,7 @@
  * - Public links: Home, Services, Available Jobs, My Bookings
  *   (Search is reached from the Services page)
  * - Authenticated users: Profile, Messages, Logout
- * - Technicians: Dashboard, Subscription, Commissions
+ * - Technicians: Dashboard, Subscription
  * 
  * NOTE: Admin panel access has been moved to a separate
  * isolated system at /admin/* with its own auth context.
@@ -30,7 +30,7 @@ import { Wordmark } from "./Wordmark";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Menu, X, User, ChevronDown, LogOut, UserCircle, Wrench,
-  LayoutDashboard, CreditCard, MessageSquare
+  LayoutDashboard, MessageSquare
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { userRoleLabel } from "../utils/roleHelpers";
@@ -227,16 +227,6 @@ const Navbar = () => {
                     Subscription
                   </Link>
 
-                  <Link
-                    to="/technician-dashboard/commissions"
-                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      isActive('/technician-dashboard/commissions')
-                        ? "bg-green-50 text-green-700"
-                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                    }`}
-                  >
-                    Commissions
-                  </Link>
                 </>
               )}
 
@@ -342,14 +332,6 @@ const Navbar = () => {
                             >
                               <LayoutDashboard className="w-4 h-4 text-gray-500" />
                               <span>Expert Dashboard</span>
-                            </Link>
-                            <Link
-                              to="/technician-dashboard/commissions"
-                              onClick={() => setIsProfileMenuOpen(false)}
-                              className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                              <CreditCard className="w-4 h-4 text-gray-500" />
-                              <span>Commissions</span>
                             </Link>
                           </>
                         )}
@@ -477,17 +459,6 @@ const Navbar = () => {
                       <span className="font-medium">Subscription</span>
                     </Link>
 
-                    <Link
-                      to="/technician-dashboard/commissions"
-                      onClick={closeMobileMenu}
-                      className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
-                        isActive('/technician-dashboard/commissions')
-                          ? "bg-green-50 text-green-700"
-                          : "text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      <span className="font-medium">Commissions</span>
-                    </Link>
                   </>
                 )}
 
@@ -556,14 +527,6 @@ const Navbar = () => {
                         >
                           <LayoutDashboard className="w-5 h-5 text-gray-500" />
                           <span>Dashboard</span>
-                        </Link>
-                        <Link
-                          to="/technician-dashboard/commissions"
-                          onClick={closeMobileMenu}
-                          className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
-                        >
-                          <CreditCard className="w-5 h-5 text-gray-500" />
-                          <span>Commissions</span>
                         </Link>
                       </>
                     )}

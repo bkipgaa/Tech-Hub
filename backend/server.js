@@ -21,7 +21,6 @@ const http = require('http');
 
 const cron = require('node-cron');
 const { sendExpiryReminders } = require('./jobs/subscriptionReminders');
-const { sendCommissionReminders } = require('./jobs/commissionReminders');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -33,7 +32,6 @@ const technicianRoutes = require('./routes/technicianRoutes');
 const uploads = require('./routes/upload');
 const chatRoutes = require('./routes/chatRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
-const commissionPaymentRoutes = require('./routes/commissionPaymentRoutes');
 const adminRoutes = require('./routes/admin/index');
 const chatSocket = require('./socket/chatSocket');
 const jobRoutes = require('./routes/jobRoutes');
@@ -159,7 +157,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/technician', technicianProfileRoutes);
-app.use('/api/payments', commissionPaymentRoutes);
 app.use('/api/service-catalog', serviceCatalogRoutes);
 app.use('/api/technician-public', technicianRoutes);
 app.use('/api/chat', chatRoutes);
@@ -312,13 +309,6 @@ const startServer = async () => {
   cron.schedule('0 6 * * *', () => {
     console.log('⏰ Running daily subscription reminders...');
     sendExpiryReminders();
-  }, {
-    timezone: 'Africa/Nairobi'
-  });
-
-  cron.schedule('15 6 * * *', () => {
-    console.log('⏰ Running daily commission reminders...');
-    sendCommissionReminders();
   }, {
     timezone: 'Africa/Nairobi'
   });

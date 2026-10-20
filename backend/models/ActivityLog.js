@@ -4,7 +4,7 @@
  * Immutable audit trail of every mutating action an admin performs.
  * 
  * Every important operation (approving a job, deleting a technician,
- * marking a commission paid, etc.) creates an entry here.
+ * marking a subscription paid, etc.) creates an entry here.
  * 
  * Used for:
  *   - Compliance / audit

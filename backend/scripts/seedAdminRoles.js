@@ -70,13 +70,6 @@ const PERMISSIONS = [
   { section: 'Revenue', key: 'revenue.view_transactions',  label: 'View Transactions',        order: 2 },
   { section: 'Revenue', key: 'revenue.export',             label: 'Export Revenue Reports',   order: 3 },
 
-  // ── 9. Commissions ──────────────────────────────────────
-  { section: 'Commissions', key: 'commission.view',        label: 'View Commissions',        order: 1 },
-  { section: 'Commissions', key: 'commission.manage',      label: 'Manage Commissions',      order: 2 },
-  { section: 'Commissions', key: 'commission.mark_paid',   label: 'Mark Commissions Paid',   order: 3 },
-  { section: 'Commissions', key: 'commission.waive',       label: 'Waive Commissions',       order: 4 },
-  { section: 'Commissions', key: 'commission.export',      label: 'Export Commissions',      order: 5 },
-
   // ── 10. Payments ────────────────────────────────────────
   { section: 'Payments', key: 'payments.view',     label: 'View Payments',           order: 1 },
   { section: 'Payments', key: 'payments.refund',   label: 'Issue Refunds',           order: 2 },
@@ -211,13 +204,12 @@ const ROLES = [
   {
     name: 'finance',
     label: 'Finance',
-    description: 'Manage revenue, subscriptions, commissions',
+    description: 'Manage revenue and subscriptions',
     isSystem: true,
     permissions: [
       'dashboard.view', 'dashboard.export',
       'subscriptions.view', 'subscriptions.view_details', 'subscriptions.manage', 'subscriptions.refund', 'subscriptions.export',
       'revenue.view', 'revenue.view_transactions', 'revenue.export',
-      'commission.view', 'commission.manage', 'commission.mark_paid', 'commission.waive', 'commission.export',
       'payments.view', 'payments.refund', 'payments.retry', 'payments.export',
       'reports.view', 'reports.create', 'reports.export',
     ],

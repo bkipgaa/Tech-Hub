@@ -159,8 +159,6 @@ exports.getStats = async (req, res) => {
       completed,
       cancelled,
       totalRevenue,
-      pendingCommission,
-      invoicedCommission,
     ] = await Promise.all([
       Booking.countDocuments(),
       Booking.countDocuments({ createdAt: { $gte: startOfMonth } }),
@@ -171,14 +169,6 @@ exports.getStats = async (req, res) => {
       Booking.aggregate([
         { $match: { status: 'completed' } },
         { $group: { _id: null, total: { $sum: '$laborPayment.amount' } } },
-      ]),
-      Booking.aggregate([
-        { $match: { 'commission.status': 'pending' } },
-        { $group: { _id: null, total: { $sum: '$commission.amount' } } },
-      ]),
-      Booking.aggregate([
-        { $match: { 'commission.status': 'invoiced' } },
-        { $group: { _id: null, total: { $sum: '$commission.amount' } } },
       ]),
     ]);
 
@@ -192,10 +182,6 @@ exports.getStats = async (req, res) => {
         completed,
         cancelled,
         totalLaborPaid: totalRevenue[0]?.total || 0,
-        commission: {
-          pending: pendingCommission[0]?.total || 0,
-          invoiced: invoicedCommission[0]?.total || 0,
-        },
       },
     });
   } catch (error) {
@@ -480,8 +466,6 @@ exports.exportBookings = async (req, res) => {
       'Materials Cost',
       'Total Quotation',
       'Labor Paid',
-      'Commission',
-      'Commission Status',
       'Client Rating',
     ];
 
@@ -506,8 +490,6 @@ exports.exportBookings = async (req, res) => {
         b.quotation?.materialsCost || 0,
         b.quotation?.totalCost || 0,
         b.laborPayment?.amount || 0,
-        b.commission?.amount || 0,
-        b.commission?.status || '',
         b.clientRating || '',
       ];
     });

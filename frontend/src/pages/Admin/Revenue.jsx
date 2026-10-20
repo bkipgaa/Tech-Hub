@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { TrendingUp, DollarSign, Percent, Wallet, RefreshCw, Download } from 'lucide-react';
+import { TrendingUp, DollarSign, Percent, RefreshCw, Download } from 'lucide-react';
 import { adminRevenueService } from '../../services/adminRevenueService';
 
 const KES = (n) =>
@@ -95,7 +95,7 @@ export default function Revenue() {
             <TrendingUp className="w-6 h-6 text-emerald-600" /> Revenue
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Subscriptions + commission performance — {periodLabel.toLowerCase()}.
+            Subscription performance — {periodLabel.toLowerCase()}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -139,7 +139,7 @@ export default function Revenue() {
       )}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <StatCard
           icon={DollarSign}
           label={`Revenue ${periodLabel}`}
@@ -155,18 +155,11 @@ export default function Revenue() {
           sub={`${overview?.activeSubscriptions || 0} active plans`}
         />
         <StatCard
-          icon={Wallet}
-          label="Commission"
-          value={KES(overview?.thisMonth.commission)}
-          tint="bg-purple-50 text-purple-600"
-          sub={`${KES(overview?.pendingCommission)} pending overall`}
-        />
-        <StatCard
           icon={TrendingUp}
           label="All-Time Revenue"
           value={KES(overview?.allTime.total)}
           tint="bg-amber-50 text-amber-600"
-          sub={`${KES(overview?.allTime.subscriptions)} subs + ${KES(overview?.allTime.commission)} comm`}
+          sub="From subscriptions"
         />
       </div>
 
@@ -176,7 +169,7 @@ export default function Revenue() {
           <h2 className="text-base font-semibold text-gray-800">
             Revenue — {periodLabel}
           </h2>
-          <span className="text-xs text-gray-500">Subscriptions + Commission</span>
+          <span className="text-xs text-gray-500">Subscriptions</span>
         </div>
         {timeline.length === 0 ? (
           <p className="text-center py-8 text-sm text-gray-400">No data yet.</p>
@@ -184,7 +177,6 @@ export default function Revenue() {
           <div className="space-y-2">
             {timeline.map((t, i) => {
               const subW = (t.subscriptions / maxTotal) * 100;
-              const commW = (t.commission / maxTotal) * 100;
               const empty = t.total === 0;
               return (
                 <div key={i} className="flex items-center gap-3">
@@ -194,11 +186,6 @@ export default function Revenue() {
                       className="bg-blue-500 h-full transition-all"
                       style={{ width: `${subW}%` }}
                       title={`Subscriptions: ${KES(t.subscriptions)}`}
-                    />
-                    <div
-                      className="bg-green-500 h-full transition-all"
-                      style={{ width: `${commW}%` }}
-                      title={`Commission: ${KES(t.commission)}`}
                     />
                   </div>
                   <span
@@ -211,16 +198,6 @@ export default function Revenue() {
                 </div>
               );
             })}
-            <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-sm" />
-                <span className="text-xs text-gray-600">Subscriptions</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-sm" />
-                <span className="text-xs text-gray-600">Commission</span>
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -231,9 +208,6 @@ export default function Revenue() {
           <h2 className="text-base font-semibold text-gray-800">
             Subscriptions by Plan — {periodLabel}
           </h2>
-          <span className="text-xs text-gray-500">
-            Commission collected: {KES(breakdown?.commissionTotal)}
-          </span>
         </div>
         {!breakdown?.byPlan?.length ? (
           <p className="text-center py-4 text-sm text-gray-400">No plan revenue yet.</p>

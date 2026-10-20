@@ -500,7 +500,7 @@ const BookingDetail = () => {
           )}
 
           {/* Payment */}
-          <Card title="Payment & Commission" icon={DollarSign}>
+          <Card title="Payment" icon={DollarSign}>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <Detail
                 label={booking.quotation?.sentAt ? 'Total Amount (quotation)' : 'Total Amount (estimate)'}
@@ -511,12 +511,6 @@ const BookingDetail = () => {
                 <>
                   <Detail label="Labor Paid" value={formatCurrency(booking.laborPayment.amount)} />
                   <Detail label="Labor Confirmed" value={formatDateTime(booking.laborPayment.confirmedAt)} />
-                </>
-              )}
-              {booking.commission?.amount > 0 && (
-                <>
-                  <Detail label="Commission (5%)" value={formatCurrency(booking.commission.amount)} />
-                  <Detail label="Commission Status" value={booking.commission.status} />
                 </>
               )}
             </div>

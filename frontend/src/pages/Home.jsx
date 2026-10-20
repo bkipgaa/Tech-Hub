@@ -17,8 +17,8 @@ const CLIENT_STEPS = [
 const TECHNICIAN_STEPS = [
   { title: 'Get a Booking', text: 'Clients near you find you in search and send a request' },
   { title: 'Quote & Do the Work', text: 'Send your quotation, agree with the client, and complete the job' },
-  { title: 'Get Rated', text: 'The client confirms the labor amount and rates you — ratings move you up in search' },
-  { title: 'Pay 5% Commission', text: 'Pay by M-Pesa or card within 30 days of finishing the job' },
+  { title: 'Get Rated', text: 'The client rates you after the job — ratings move you up in search' },
+  { title: 'Keep What You Earn', text: 'No commission on your jobs — just a simple monthly plan' },
 ];
 
 const Home = () => {

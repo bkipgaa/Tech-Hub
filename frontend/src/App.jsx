@@ -41,7 +41,6 @@ import Profile from './pages/Profile';
 import BecomeTechnician from './pages/BecomeTechnician';
 import CreateTechnicianProfile from './pages/CreateTechnicianProfile';
 import TechnicianDashboard from './components/technician/TechnicianDashboard';
-import TechnicianCommission from './pages/TechnicianCommission';
 import SubscriptionManager from './components/technician/subscriptionManager';
 import PrivateRoute from './components/PrivateRoute';
 import TechnicianRoute from './components/TechnicianRoute';
@@ -176,14 +175,6 @@ function App() {
               <PrivateRoute requiredRole="technician">
                 <TechnicianBookings />
               </PrivateRoute>
-            }
-          />
-          <Route
-            path="technician-dashboard/commissions"
-            element={
-              <TechnicianRoute>
-                <TechnicianCommission />
-              </TechnicianRoute>
             }
           />
           <Route

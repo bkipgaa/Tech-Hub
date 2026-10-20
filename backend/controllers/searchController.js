@@ -10,7 +10,6 @@
 const mongoose = require('mongoose');
 const Technician = require('../models/Technician');
 const ServiceCatalog = require('../models/ServiceCatalog');
-const { hiddenTechnicianIds, overdueTechnicianIds } = require('../utils/commissionDue');
 const { getEffectivePlan } = require('../utils/subscriptionPlans');
 
 // ===========================================
@@ -68,18 +67,6 @@ function recommendedScore(tech) {
     score -= 0.3 * Math.min(tech.distance / DISTANCE_FOR_FULL_PENALTY_KM, 1);
   }
   return score;
-}
-
-/**
- * Commission standing for search: technicians overdue for longer than the
- * grace period are hidden; any overdue technician shows as not accepting bookings.
- */
-async function getCommissionStanding() {
-  const [hidden, blocked] = await Promise.all([hiddenTechnicianIds(), overdueTechnicianIds()]);
-  return {
-    hidden: new Set(hidden.map(String)),
-    blocked: new Set(blocked.map(String)),
-  };
 }
 
 /**
@@ -298,13 +285,10 @@ if (mainCategory) {
     const longitude = lng ? parseFloat(lng) : null;
     const visibleTechnicians = [];
 
-    const standing = await getCommissionStanding();
 
     for (const tech of technicians) {
       try {
-        // 7·. Unpaid commission long overdue → hidden from search
-        if (standing.hidden.has(String(tech._id))) continue;
-        tech.acceptingBookings = !standing.blocked.has(String(tech._id));
+        tech.acceptingBookings = true;
 
         // 7a. No subscription check: lapsed plans fall back to Free (10 km) via getVisibilityRadius
 
@@ -484,11 +468,9 @@ exports.getTechniciansBySubService = async (req, res) => {
     const longitude = lng ? parseFloat(lng) : null;
     const visible = [];
 
-    const standing = await getCommissionStanding();
 
     for (const tech of technicians) {
-      if (standing.hidden.has(String(tech._id))) continue;
-      tech.acceptingBookings = !standing.blocked.has(String(tech._id));
+      tech.acceptingBookings = true;
 
       if (latitude && longitude && tech.location?.coordinates) {
         const [techLng, techLat] = tech.location.coordinates;
@@ -610,11 +592,9 @@ exports.getNearbyTechnicians = async (req, res) => {
 
     const visible = [];
 
-    const standing = await getCommissionStanding();
 
     for (const tech of technicians) {
-      if (standing.hidden.has(String(tech._id))) continue;
-      tech.acceptingBookings = !standing.blocked.has(String(tech._id));
+      tech.acceptingBookings = true;
       if (tech.location?.coordinates) {
         const [techLng, techLat] = tech.location.coordinates;
         if (techLat !== 0 || techLng !== 0) {
@@ -688,18 +668,15 @@ exports.getNearbyTechnicians = async (req, res) => {
 
 /**
  * Get the highest-ranked technicians: best average rating first, then most
- * completed jobs, then most reviews. Technicians hidden for unpaid
- * commission are left out.
+ * completed jobs, then most reviews.
  * Route: GET /api/search/top-technicians
  * Query: limit (default 10, max 20)
  */
 exports.getTopTechnicians = async (req, res) => {
   try {
     const limitNum = Math.min(parseInt(req.query.limit) || 10, 20);
-    const standing = await getCommissionStanding();
 
     const technicians = await Technician.find({
-      _id: { $nin: Array.from(standing.hidden) },
       isActive: true,
       verificationStatus: { $in: ['verified', 'pending'] }
     })
@@ -716,7 +693,7 @@ exports.getTopTechnicians = async (req, res) => {
       rating: tech.rating,
       completedJobs: tech.statistics?.completedJobs || 0,
       verificationStatus: tech.verificationStatus,
-      acceptingBookings: !standing.blocked.has(String(tech._id)),
+      acceptingBookings: true,
       user: tech.userId ? {
         _id: tech.userId._id,
         firstName: tech.userId.firstName,

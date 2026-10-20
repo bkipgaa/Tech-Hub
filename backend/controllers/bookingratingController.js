@@ -4,12 +4,11 @@
  * Handles the full booking lifecycle:
  * - Create, read, cancel (basic CRUD)
  * - 12‑step advanced flow: quotation → materials → work → labor payment → rating
- * - Commission (5%) calculation and storage
  * - Technician statistics (completed jobs count)
  * - Email notifications for key events
- * 
+ *
  * @author Weba-Hub Team
- * @version 3.1.0 – Fixed notification bugs, added full commission flow
+ * @version 4.0.0
  */
 
 const Booking = require('../models/Booking');
@@ -17,14 +16,6 @@ const Technician = require('../models/Technician');
 const User = require('../models/User');
 const notify = require('../services/notificationService');
 const mongoose = require('mongoose');
-const {
-  DAY_MS,
-  COMMISSION_DUE_DAYS,
-  HIDE_AFTER_OVERDUE_DAYS,
-  UNPAID_STATUSES,
-  dueDateFor,
-  hasOverdueCommission,
-} = require('../utils/commissionDue');
 const jobEvidence = require('../utils/jobEvidence');
 const { checkNewRating, applyRatingToTechnician } = require('../utils/ratingChecks');
 const { uploadQuotationToCloudinary } = require('../config/cloudinary');
@@ -36,9 +27,7 @@ const TECHNICIAN_WITH_NAME = {
   populate: { path: 'userId', select: 'firstName lastName' },
 };
 
-const COMMISSION_RATE = 0.05;
-// Reported labor below this share of the quoted labor is flagged for review
-const LOW_LABOR_RATIO = 0.7;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ============================================================
 // HELPERS
@@ -219,17 +208,6 @@ exports.createBooking = async (req, res) => {
         new Error('Self booking'),
         'You cannot book yourself.',
         400,
-        'createBooking'
-      );
-    }
-
-    // Technicians with an overdue commission can't receive new bookings
-    if (await hasOverdueCommission(technician._id)) {
-      return handleControllerError(
-        res,
-        new Error('Technician has overdue commission'),
-        'This technician is not accepting new bookings right now. Please choose another technician.',
-        403,
         'createBooking'
       );
     }
@@ -942,7 +920,7 @@ exports.completeWork = async (req, res) => {
 };
 
 /**
- * 10. Technician confirms labor payment received – calculates 5% commission.
+ * 10. Technician confirms labor payment received.
  * POST /api/bookings/:bookingId/confirm-labor-payment
  */
 exports.confirmLaborPayment = async (req, res) => {
@@ -997,27 +975,10 @@ exports.confirmLaborPayment = async (req, res) => {
       }
     }
 
-    // Commission is based on what the technician actually received
-    const reportedLabor = Number(amount);
-    const quotedLabor = booking.quotation?.laborCost || 0;
-    const commissionAmount = Math.round(reportedLabor * COMMISSION_RATE * 100) / 100;
-    const belowQuote = quotedLabor > 0 && reportedLabor < quotedLabor * LOW_LABOR_RATIO;
-
-    const confirmedAt = new Date();
     booking.laborPayment = {
-      confirmedAt,
-      amount: reportedLabor,
+      confirmedAt: new Date(),
+      amount: Number(amount),
       notes: note || '',
-    };
-    booking.commission = {
-      amount: commissionAmount,
-      status: 'pending',
-      createdAt: confirmedAt,
-      dueAt: new Date(confirmedAt.getTime() + COMMISSION_DUE_DAYS * DAY_MS),
-      reportedLabor,
-      quotedLabor,
-      flagged: belowQuote,
-      flagReasons: belowQuote ? ['below_quote'] : [],
     };
     booking.status = 'labor_paid';
 
@@ -1028,7 +989,7 @@ exports.confirmLaborPayment = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Labor payment confirmed. Commission of 5% (KES ${commissionAmount.toFixed(2)}) recorded.`,
+      message: 'Labor payment confirmed.',
       data: jobEvidence.participantView(booking),
     });
   } catch (error) {
@@ -1069,19 +1030,6 @@ exports.rateTechnician = async (req, res) => {
       return handleControllerError(res, new Error('Already rated'), 'You have already rated this booking.', 400, 'rateTechnician');
     }
 
-    // Client confirms (or corrects) the labor amount the technician reported.
-    // Optional so older clients can still rate; a correction flags the commission.
-    const { laborAmountConfirmed, clientLaborAmount } = req.body;
-    let clientCorrection = null;
-    if (laborAmountConfirmed === false) {
-      clientCorrection = Number(clientLaborAmount);
-      if (!Number.isFinite(clientCorrection) || clientCorrection <= 0) {
-        return handleControllerError(res, new Error('Invalid amount'), 'Please enter the labor amount you paid.', 400, 'rateTechnician');
-      }
-    } else if (laborAmountConfirmed !== undefined && laborAmountConfirmed !== true) {
-      return handleControllerError(res, new Error('Invalid confirmation'), 'laborAmountConfirmed must be true or false.', 400, 'rateTechnician');
-    }
-
     if (booking.completionEvidence?.reviewStatus === 'admin_rejected') {
       return handleControllerError(res, new Error('Evidence rejected'), 'This job cannot be rated because its proof of work was rejected.', 400, 'rateTechnician');
     }
@@ -1104,16 +1052,6 @@ exports.rateTechnician = async (req, res) => {
       ratingCheck,
     };
     if (review) update.clientReview = review.trim();
-    if (laborAmountConfirmed === true) {
-      update['commission.clientConfirmedLabor'] = true;
-    } else if (clientCorrection !== null) {
-      update['commission.clientConfirmedLabor'] = false;
-      update['commission.clientReportedLabor'] = clientCorrection;
-      if (clientCorrection !== booking.laborPayment?.amount) {
-        update['commission.flagged'] = true;
-        update['commission.flagReasons'] = [...new Set([...(booking.commission.flagReasons || []), 'client_disputes_amount'])];
-      }
-    }
     const claimed = await Booking.findOneAndUpdate(
       { _id: booking._id, status: 'labor_paid', clientRating: null },
       { $set: update },
@@ -1171,242 +1109,5 @@ exports.rateTechnician = async (req, res) => {
     });
   } catch (error) {
     handleControllerError(res, error, 'Failed to submit rating.', 500, 'rateTechnician');
-  }
-};
-
-// ============================================================
-// COMMISSIONS
-// ============================================================
-
-/**
- * Get pending commissions (optionally filtered by month).
- * GET /api/bookings/commissions?month=YYYY-MM
- */
-exports.getTechnicianCommissions = async (req, res) => {
-  try {
-    const userId = req.user.userId || req.user.id || req.user._id;
-    if (!userId) {
-      return handleControllerError(res, new Error('Authentication required'), 'You must be logged in.', 401, 'getTechnicianCommissions');
-    }
-
-    if (req.user.role !== 'technician') {
-      return handleControllerError(res, new Error('Forbidden'), 'Only technicians can view commissions.', 403, 'getTechnicianCommissions');
-    }
-
-    const { month } = req.query;
-    const technicianId = await getTechnicianId(userId);
-
-    // ✅ Include BOTH pending and invoiced (both are still owed).
-    // Every booking starts with a zero "pending" commission, so skip those.
-    let filter = {
-      technicianId: technicianId,
-      'commission.status': { $in: UNPAID_STATUSES },
-      'commission.amount': { $gt: 0 },
-    };
-
-    if (month) {
-      const start = new Date(month + '-01T00:00:00.000Z');
-      const end = new Date(month + '-01T23:59:59.999Z');
-      end.setMonth(end.getMonth() + 1);
-      filter.createdAt = { $gte: start, $lt: end };
-    }
-
-    const bookings = await Booking.find(filter)
-      .select('_id serviceCategory subService quotation.laborCost laborPayment commission createdAt')
-      .lean();
-
-    // Due dates: overdue blocks new bookings, and after the grace period
-    // the technician is hidden from search
-    const now = new Date();
-    const dueDates = bookings.map(dueDateFor).filter(Boolean);
-    const earliestDue = dueDates.length ? new Date(Math.min(...dueDates)) : null;
-    const isOverdue = !!earliestDue && earliestDue < now;
-    const hiddenFromSearchAt = earliestDue
-      ? new Date(earliestDue.getTime() + HIDE_AFTER_OVERDUE_DAYS * DAY_MS)
-      : null;
-
-    const totalDue = bookings.reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
-
-    // Split totals by status for transparency
-    const totalPending = bookings
-      .filter(b => b.commission?.status === 'pending')
-      .reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
-
-    const totalInvoiced = bookings
-      .filter(b => b.commission?.status === 'invoiced')
-      .reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
-
-    const byMonth = {};
-    bookings.forEach(b => {
-      const m = new Date(b.createdAt).toISOString().slice(0, 7);
-      if (!byMonth[m]) byMonth[m] = { count: 0, total: 0 };
-      byMonth[m].count += 1;
-      byMonth[m].total += b.commission?.amount || 0;
-    });
-
-    res.json({
-      success: true,
-      data: {
-        summary: {
-          totalDue,          // ← the amount that will be charged
-          totalPending,      // breakdown
-          totalInvoiced,     // breakdown
-          count: bookings.length,
-          byMonth,
-          earliestDue,
-          isOverdue,                         // → no new bookings
-          hiddenFromSearchAt,                // if still unpaid by then
-          hiddenFromSearch: !!hiddenFromSearchAt && hiddenFromSearchAt < now,
-        },
-        commissions: bookings.map(b => ({
-          bookingId: b._id,
-          service: b.serviceCategory,
-          subService: b.subService,
-          laborCost: b.laborPayment?.amount || b.quotation?.laborCost || 0,
-          commissionAmount: b.commission?.amount || 0,
-          status: b.commission?.status,   // ← now visible per row
-          dueAt: dueDateFor(b),
-          isOverdue: !!dueDateFor(b) && dueDateFor(b) < now,
-          createdAt: b.createdAt,
-        })),
-      },
-    });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to fetch commissions.', 500, 'getTechnicianCommissions');
-  }
-};
-/**
- * Submit pending commissions for invoicing (technician).
- * POST /api/bookings/commissions/submit
- * Body: { month: 'YYYY-MM' } optional – if omitted, all pending are submitted.
- */
-exports.submitCommissionInvoices = async (req, res) => {
-  try {
-    const userId = req.user.userId || req.user.id || req.user._id;
-    if (!userId) {
-      return handleControllerError(res, new Error('Authentication required'), 'You must be logged in.', 401, 'submitCommissionInvoices');
-    }
-
-    if (req.user.role !== 'technician') {
-      return handleControllerError(res, new Error('Forbidden'), 'Only technicians can submit commissions.', 403, 'submitCommissionInvoices');
-    }
-
-    const { month } = req.body || {};
-
-    const technicianId = await getTechnicianId(userId);
-
-    let filter = {
-      technicianId: technicianId,
-      'commission.status': 'pending',
-    };
-
-    if (month) {
-      const start = new Date(month + '-01T00:00:00.000Z');
-      const end = new Date(month + '-01T23:59:59.999Z');
-      end.setMonth(end.getMonth() + 1);
-      filter.createdAt = { $gte: start, $lt: end };
-    }
-
-    const count = await Booking.countDocuments(filter);
-    if (count === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No pending commissions to submit.',
-      });
-    }
-
-    const result = await Booking.updateMany(
-      filter,
-      {
-        $set: {
-          'commission.status': 'invoiced',
-          'commission.invoicedAt': new Date(),
-        },
-      }
-    );
-
-    res.json({
-      success: true,
-      message: `${result.modifiedCount} commission(s) submitted for invoicing.`,
-      data: {
-        submittedCount: result.modifiedCount,
-      },
-    });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to submit commissions.', 500, 'submitCommissionInvoices');
-  }
-};
-
-/**
- * Get commission history (invoiced & paid) with pagination.
- * GET /api/bookings/commissions/history?status=invoiced,paid&page=1&limit=20
- */
-exports.getCommissionHistory = async (req, res) => {
-  try {
-    const userId = req.user.userId || req.user.id || req.user._id;
-    if (!userId) {
-      return handleControllerError(res, new Error('Authentication required'), 'You must be logged in.', 401, 'getCommissionHistory');
-    }
-
-    if (req.user.role !== 'technician') {
-      return handleControllerError(res, new Error('Forbidden'), 'Only technicians can view their commission history.', 403, 'getCommissionHistory');
-    }
-
-    const { status, page = 1, limit = 20 } = req.query;
-    const technicianId = await getTechnicianId(userId);
-
-    let filter = { technicianId };
-    const statuses = status ? status.split(',') : ['invoiced', 'paid'];
-    filter['commission.status'] = { $in: statuses };
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const limitNum = parseInt(limit) || 20;
-
-    const [bookings, total] = await Promise.all([
-      Booking.find(filter)
-        .select('_id serviceCategory subService quotation.laborCost commission.amount commission.status commission.invoicedAt commission.paidAt createdAt')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Booking.countDocuments(filter),
-    ]);
-
-    const summary = bookings.reduce(
-      (acc, b) => {
-        const status = b.commission?.status;
-        if (status === 'invoiced') acc.invoicedCount += 1;
-        if (status === 'paid') acc.paidCount += 1;
-        acc.totalAmount += b.commission?.amount || 0;
-        return acc;
-      },
-      { invoicedCount: 0, paidCount: 0, totalAmount: 0 }
-    );
-
-    res.json({
-      success: true,
-      data: {
-        history: bookings.map(b => ({
-          bookingId: b._id,
-          service: b.serviceCategory,
-          subService: b.subService,
-          laborCost: b.quotation?.laborCost || 0,
-          commissionAmount: b.commission?.amount || 0,
-          status: b.commission?.status,
-          invoicedAt: b.commission?.invoicedAt,
-          paidAt: b.commission?.paidAt,
-          createdAt: b.createdAt,
-        })),
-        pagination: {
-          page: parseInt(page),
-          limit: limitNum,
-          total,
-          pages: Math.ceil(total / limitNum),
-        },
-        summary,
-      },
-    });
-  } catch (error) {
-    handleControllerError(res, error, 'Failed to fetch commission history.', 500, 'getCommissionHistory');
   }
 };
