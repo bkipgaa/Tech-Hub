@@ -76,6 +76,19 @@ const applyPayment = async (user, { amount, months = 1, method, reference, check
   plan.pending = undefined;
   await user.save({ validateModifiedOnly: true });
   await syncOwnerListings(user);
+
+  // Receipt email; never blocks or fails the payment
+  const listings = await Listing.countDocuments({ owner: user._id });
+  require('../services/notificationService')
+    .listingPlanPaid({
+      email: user.email,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'there',
+      amount,
+      method,
+      paidUntil: new Date(plan.paidUntil).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' }),
+      listings,
+    })
+    .catch(() => {});
   return true;
 };
 

@@ -228,6 +228,70 @@ exports.technicianClientRated = (data) => ({
 });
 
 // ─────────────────────────────────────────────────────────────
+// STAYS & SPACES LISTING PLAN
+// ─────────────────────────────────────────────────────────────
+
+// Reminder 7/3/1 days before the free months or a paid month end, and a
+// notice the day listings are hidden. data: { name, phase: 'free'|'paid'|'ended',
+// daysLeft, endDate, listings, price }
+exports.listingPlanReminder = (data) => {
+  const places = `${data.listings} listing${data.listings === 1 ? '' : 's'}`;
+  const when = data.daysLeft === 1 ? 'tomorrow' : `in ${data.daysLeft} days`;
+  const price = `KES ${Number(data.price).toLocaleString('en-KE')}`;
+  const copy = {
+    free: {
+      subject: `⏰ Your free listing period ends ${when}`,
+      title: `Your free months end ${when}`,
+      body: `<p>Your free period on Stays &amp; Spaces ends on <strong>${data.endDate}</strong>.</p>
+             <p>To keep your ${places} showing in search after that, pay <strong>${price} a month</strong>
+             by M-Pesa or card. One payment covers all your listings.</p>`,
+      cta: 'Keep my listings live',
+    },
+    paid: {
+      subject: `⏰ Your listing plan ends ${when}`,
+      title: `Your listing plan ends ${when}`,
+      body: `<p>Your Stays &amp; Spaces plan is paid until <strong>${data.endDate}</strong>.</p>
+             <p>Renew for <strong>${price}</strong> to keep your ${places} in search. Paying early adds a month
+             on top of the time you have left, so you don't lose any days.</p>`,
+      cta: 'Renew now',
+    },
+    ended: {
+      subject: `⚠️ Your listings are now hidden from search`,
+      title: 'Your listings are hidden from search',
+      body: `<p>Your Stays &amp; Spaces plan ended on <strong>${data.endDate}</strong>, so clients can no longer find
+             your ${places}.</p>
+             <p>Nothing has been deleted. Pay <strong>${price}</strong> and they show again straight away.</p>`,
+      cta: `Pay ${price}`,
+    },
+  }[data.phase];
+
+  return {
+    subject: copy.subject,
+    html: layout(copy.title, `<p>Hi <strong>${data.name}</strong>,</p>${copy.body}`, `${BRAND.url}/my-listings`, copy.cta),
+  };
+};
+
+// Receipt after a listing plan payment. data: { name, amount, method, paidUntil, listings }
+exports.listingPlanPaid = (data) => ({
+  subject: `✅ Payment received: listings live until ${data.paidUntil}`,
+  html: layout(
+    'Payment received',
+    `
+      <p>Hi <strong>${data.name}</strong>,</p>
+      <p>Thanks! We received your Stays &amp; Spaces payment.</p>
+      <div style="background:#f9fafb;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid ${BRAND.color};">
+        <p style="margin:4px 0;"><strong>Amount:</strong> KES ${Number(data.amount).toLocaleString('en-KE')}</p>
+        <p style="margin:4px 0;"><strong>Paid by:</strong> ${data.method === 'mpesa' ? 'M-Pesa' : 'Card'}</p>
+        <p style="margin:4px 0;"><strong>Listings live until:</strong> ${data.paidUntil}</p>
+      </div>
+      <p>All your ${data.listings} listing${data.listings === 1 ? ' is' : 's are'} showing in search.</p>
+    `,
+    `${BRAND.url}/my-listings`,
+    'View my listings'
+  ),
+});
+
+// ─────────────────────────────────────────────────────────────
 // CLIENT NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────
 exports.clientBookingConfirmed = (data) => ({

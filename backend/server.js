@@ -21,6 +21,7 @@ const http = require('http');
 
 const cron = require('node-cron');
 const { sendExpiryReminders } = require('./jobs/subscriptionReminders');
+const { sendListingPlanReminders } = require('./jobs/listingPlanReminders');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -316,6 +317,13 @@ const startServer = async () => {
   cron.schedule('0 6 * * *', () => {
     console.log('⏰ Running daily subscription reminders...');
     sendExpiryReminders();
+  }, {
+    timezone: 'Africa/Nairobi'
+  });
+
+  cron.schedule('30 6 * * *', () => {
+    console.log('⏰ Running daily listing plan reminders...');
+    sendListingPlanReminders();
   }, {
     timezone: 'Africa/Nairobi'
   });

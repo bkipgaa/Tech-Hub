@@ -73,6 +73,11 @@ const userSchema = new mongoose.Schema({
       amount: Number,
       initiatedAt: Date,
     },
+    // Reminder emails already sent for the current end date (jobs/listingPlanReminders.js)
+    reminders: {
+      until: Date,
+      sent: [String], // 'd7' | 'd3' | 'd1' | 'ended'
+    },
   },
 }, {
   timestamps: true
