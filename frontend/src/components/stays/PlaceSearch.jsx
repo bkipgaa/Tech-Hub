@@ -1,21 +1,23 @@
 /**
  * PlaceSearch.jsx
  * ===============
- * County → Town → Estate search. County and town are required; the estate is
- * optional. Towns and estates are the ones listers have added.
+ * What → County → Town → Estate search. County and town are required; the
+ * type of place and the estate are optional. Towns and estates are the ones
+ * listers have added.
  *
- *   <PlaceSearch value={{county, town, estate}} onSearch={fn} />
+ *   <PlaceSearch value={{category, county, town, estate}} counts={{airbnb: 3, …}} onSearch={fn} />
  */
 
 import React, { useState } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import usePlaces from '../../hooks/usePlaces';
-import { COUNTIES } from '../../utils/listingCategories';
+import { COUNTIES, LISTING_GROUPS } from '../../utils/listingCategories';
 
 const selectClass =
   'w-full px-3 py-3 rounded-lg text-gray-800 bg-white outline-none focus:ring-2 focus:ring-green-300 disabled:bg-gray-100 disabled:text-gray-400';
 
-const PlaceSearch = ({ value = {}, onSearch }) => {
+const PlaceSearch = ({ value = {}, counts = {}, onSearch }) => {
+  const [category, setCategory] = useState(value.category || '');
   const [county, setCounty] = useState(value.county || '');
   const [town, setTown] = useState(value.town || '');
   const [estate, setEstate] = useState(value.estate || '');
@@ -27,11 +29,25 @@ const PlaceSearch = ({ value = {}, onSearch }) => {
 
   const submit = (e) => {
     e.preventDefault();
-    if (ready) onSearch({ county, town, estate });
+    if (ready) onSearch({ category, county, town, estate });
   };
 
   return (
-    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2">
+    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr_auto] gap-2">
+      <label className="sr-only" htmlFor="ps-category">What are you looking for?</label>
+      <select id="ps-category" value={category} onChange={(e) => setCategory(e.target.value)} className={selectClass}>
+        <option value="">Any type of place</option>
+        {LISTING_GROUPS.map((g) => (
+          <optgroup key={g.id} label={g.name}>
+            {g.categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}{counts[c.id] != null ? ` (${counts[c.id]})` : ''}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+
       <label className="sr-only" htmlFor="ps-county">County</label>
       <select
         id="ps-county"
