@@ -31,7 +31,17 @@ export const LEGAL = {
   noticeDays: '{{14 days}}',
   feeChangeNotice: '{{30 days}}',
   vatNote: '{{inclusive / exclusive}} of VAT where applicable',
-  autoRenew: '{{Subscriptions do / do not renew automatically}}',
+
+  // Technician subscriptions (match backend/utils/subscriptionPlans.js and jobs/subscriptionReminders.js)
+  trialDays: 30,
+  trialRadius: '10 km',
+  reminderDays: '7, 3 and 1 days',
+
+  // Stays & Spaces listing fees (match backend/utils/listingPlan.js)
+  listingFreeMonths: 3,
+  listingFreeCount: 5,
+  listingFee: 'KES 200',
+
   breachReportHours: '{{48 hours}}',
   mediationCity: '{{Nairobi}}',
 
@@ -41,6 +51,7 @@ export const LEGAL = {
   keepFinancialRecords: '{{7 years}}',
   keepChats: '{{24 months}}',
   keepEvidence: '{{24 months after the booking}}',
+  keepListingPhotosAfterDelete: '{{30 days}}',
   keepLogs: '{{24 months}}',
   keepConsentProof: '{{3 years}}',
 
