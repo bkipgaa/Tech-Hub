@@ -1,19 +1,37 @@
 // src/components/Layout.jsx
 import React from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import { useAuth } from '../context/AuthContext';
 
+// Pages guests can open. Everything else sends them to log in or sign up
+// (and back to the page they wanted afterwards).
+const GUEST_PATHS = ['/', '/login', '/signup', '/forgot-password', '/terms', '/privacy', '/payment-callback'];
+const isGuestPath = (pathname) =>
+  GUEST_PATHS.includes(pathname.replace(/\/+$/, '') || '/') || pathname.startsWith('/reset-password/');
+
 const Layout = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
+  const guestPage = isGuestPath(location.pathname);
+
+  let page = <Outlet />;
+  if (!user && !guestPage) {
+    page = loading ? (
+      <div className="flex justify-center py-24">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800"></div>
+      </div>
+    ) : (
+      <Navigate to="/login" replace state={{ from: location, needsAccount: true }} />
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-green-50 to-red-50">
       <Navbar />
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 w-full">
-        <Outlet />
+        {page}
       </main>
       <Footer />
       

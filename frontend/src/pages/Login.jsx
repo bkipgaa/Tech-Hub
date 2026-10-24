@@ -19,7 +19,10 @@ const Login = () => {
   const location = useLocation();
 
   // Get redirect path from location state or default to home
-  const from = location.state?.from?.pathname || '/';
+  const fromLocation = location.state?.from;
+  const from = fromLocation ? `${fromLocation.pathname}${fromLocation.search || ''}` : '/';
+  // Set when a guest tried to open a page that needs an account
+  const needsAccount = location.state?.needsAccount;
 
   // If user is already logged in, redirect based on role
   useEffect(() => {
@@ -30,7 +33,7 @@ const Login = () => {
 
   const redirectBasedOnRole = (role) => {
     // If there's a specific redirect path in state, use it
-    if (from && from !== '/login' && from !== '/signup') {
+    if (from && !from.startsWith('/login') && !from.startsWith('/signup')) {
       navigate(from);
       return;
     }
@@ -121,6 +124,17 @@ const Login = () => {
         <div>
           <h2 className="text-3xl font-bold text-center text-red-600">Welcome Back</h2>
           <p className="mt-2 text-center text-gray-600">Sign in to your account</p>
+          {needsAccount && (
+            <div className="mt-4 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 text-sm text-center">
+              <p>Log in or create a free account to continue.</p>
+              <Link
+                to="/signup"
+                className="mt-3 inline-block bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700"
+              >
+                Create an account
+              </Link>
+            </div>
+          )}
         </div>
         
         {error && (
