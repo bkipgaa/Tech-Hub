@@ -42,6 +42,7 @@ import BecomeTechnician from './pages/BecomeTechnician';
 import CreateTechnicianProfile from './pages/CreateTechnicianProfile';
 import TechnicianDashboard from './components/technician/TechnicianDashboard';
 import SubscriptionManager from './components/technician/subscriptionManager';
+import Commissions from './pages/Commissions';
 import PrivateRoute from './components/PrivateRoute';
 import TechnicianRoute from './components/TechnicianRoute';
 import ChatPage from './components/chat/ChatPage';
@@ -214,6 +215,14 @@ function App() {
             element={
               <TechnicianRoute>
                 <SubscriptionManager />
+              </TechnicianRoute>
+            }
+          />
+          <Route
+            path="commissions"
+            element={
+              <TechnicianRoute>
+                <Commissions />
               </TechnicianRoute>
             }
           />

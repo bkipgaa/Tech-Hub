@@ -26,5 +26,6 @@ router.patch('/:id/notes',  requirePermission('bookings.manage'), ctrl.updateAdm
 router.patch('/:id/status', requirePermission('bookings.manage'), ctrl.forceStatus);
 router.patch('/:id/evidence-review', requirePermission('bookings.manage'), ctrl.reviewEvidence);
 router.patch('/:id/rating-review', requirePermission('bookings.manage'), ctrl.reviewRating);
+router.patch('/:id/commission', requirePermission('bookings.manage'), ctrl.setCommission);
 
 module.exports = router;

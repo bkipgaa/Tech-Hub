@@ -193,9 +193,9 @@ const TechnicianSchema = new Schema({
 
   serviceRadius: {
     type: Number,
-    default: 10,
+    default: 50,
     min: 1,
-    max: 1000
+    max: 5000   // Platinum plan
   },
 
   languages: [{
@@ -324,7 +324,7 @@ const TechnicianSchema = new Schema({
   // Once-only offers. Kept outside `subscription`, which is replaced on every
   // plan change, so they survive upgrades, downgrades and admin edits.
   trialHistory: {
-    freeTrialUsedAt: Date,           // 30-day Free Trial (10 km)
+    freeTrialUsedAt: Date,           // old 30-day Free Trial (10 km), now retired
     paidPlanTrialUsedAt: Date,       // free first month on a paid plan
     paidPlanTrialPlan: String,
   },
@@ -337,7 +337,7 @@ const TechnicianSchema = new Schema({
     },
     planDetails: {
       name: String,
-      visibilityRadius: { type: Number, default: 10 },
+      visibilityRadius: { type: Number, default: 50 },
       price: { type: Number, default: 0 },
       features: [String]
     },

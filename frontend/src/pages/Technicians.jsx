@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import RadiusPicker from '../components/RadiusPicker';
+import { PLAN_TIERS } from '../utils/plans';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
 
 /**
@@ -468,14 +469,12 @@ const Technicians = () => {
               <div className="text-xs text-gray-600">
                 <p className="font-medium mb-1">How expert visibility works:</p>
                 <ul className="space-y-0.5">
-                  <li>• <span className="font-medium">Free plan</span> experts: Visible within <span className="font-bold">10km</span></li>
-                  <li>• <span className="font-medium">Test plan</span> experts: Visible within <span className="font-bold">20km</span></li>  {/* <-- ADDED */}
-                  <li>• <span className="font-medium">Basic plan</span> experts: Visible within <span className="font-bold">10km</span></li>
-                  <li>• <span className="font-medium">Basic-Plus plan</span> experts: Visible within <span className="font-bold">50km</span></li>
-                  <li>• <span className="font-medium">Premium plan</span> experts: Visible within <span className="font-bold">100km</span></li>
-                  <li>• <span className="font-medium">Business plan</span> experts: Visible within <span className="font-bold">300km</span></li>
-                  <li>• <span className="font-medium">Enterprise plan</span> experts: Visible within <span className="font-bold">600km</span></li>
-                  <li>• <span className="font-medium">Unlimited plan</span> experts: Visible within <span className="font-bold">1000km</span></li>
+                  {PLAN_TIERS.map((tier) => (
+                    <li key={tier.id}>
+                      • <span className="font-medium">{tier.name} plan</span> experts: Visible within{' '}
+                      <span className="font-bold">{tier.radius.toLocaleString()}km</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>

@@ -21,7 +21,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
@@ -920,6 +920,19 @@ const BookingDetails = () => {
           </div>
         )}
 
+        {/* ─── COMMISSION (Free-plan job) ─── */}
+        {isTechnician && booking.commission?.due && ['work_completed', 'completed'].includes(booking.status) && (
+          <div className="mb-6 p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-sm flex flex-wrap items-center gap-3">
+            <p className="flex-1 min-w-[200px]">
+              This job came while you were on the Free plan, so a <strong>KES {Number(booking.commission.amount).toLocaleString()} commission</strong> is due.
+              The client's rating and this completed job show on your profile once it's paid.
+            </p>
+            <Link to="/commissions" className="px-4 py-2 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-700">
+              Pay commission
+            </Link>
+          </div>
+        )}
+
         {/* ─── ACTIONS (right under the next step, so they are easy to find on a phone) ─── */}
         {((isClient && (clientCanCancel || clientCanAcceptReject || clientCanRate)) ||
           (isTechnician && (techCanSendQuotation || techCanConfirmLaborPayment || techCanCancel))) && (
@@ -1132,7 +1145,11 @@ const BookingDetails = () => {
                 </p>
                 {booking.ratingCheck?.pending && (
                   <p className="text-xs text-yellow-700 mt-1">
-                    This rating will show on {technicianName}'s profile after a quick check by our team.
+                    {booking.commission?.due
+                      ? isTechnician
+                        ? 'This rating shows on your profile once the commission for this job is paid.'
+                        : `This rating will show on ${technicianName}'s profile once the job is finalised.`
+                      : `This rating will show on ${technicianName}'s profile after a quick check by our team.`}
                   </p>
                 )}
               </div>

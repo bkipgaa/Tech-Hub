@@ -8,6 +8,7 @@ router.get('/stats',       ctrl.stats);        // any admin can read
 router.get('/',            ctrl.list);
 router.get('/:id',         ctrl.getOne);
 router.put('/:id',         requireRole('super_admin', 'admin'), ctrl.update);
+router.post('/:id/technician', requireRole('super_admin', 'admin'), ctrl.makeExpert);
 router.put('/:id/status',  requireRole('super_admin', 'admin'), ctrl.setStatus);
 router.delete('/:id',      requireRole('super_admin'),          ctrl.remove);
 

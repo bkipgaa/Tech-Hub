@@ -22,7 +22,7 @@ const Technician = require('../../models/Technician');
 const User = require('../../models/User');
 const EvidenceHash = require('../../models/EvidenceHash');
 const jobEvidence = require('../../utils/jobEvidence');
-const { applyRatingToTechnician } = require('../../utils/ratingChecks');
+const { countRatingIfReady } = require('../../utils/ratingChecks');
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -358,14 +358,41 @@ exports.reviewRating = async (req, res) => {
       return res.status(400).json({ success: false, code: 'NOT_HELD', message: 'This booking has no rating waiting for review.' });
     }
 
-    if (decision === 'approved') {
-      const technician = await Technician.findById(booking.technicianId);
-      if (technician) await applyRatingToTechnician(technician, booking);
-    }
+    // Counts now unless the expert still owes this job's commission
+    if (decision === 'approved') await countRatingIfReady(booking._id);
 
     res.json({ success: true, message: decision === 'approved' ? 'Rating approved and counted.' : 'Rating rejected; it will not count.', data: booking.ratingCheck });
   } catch (error) {
     handleError(res, error, 'Failed to save the rating review.');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// COMMISSION (Free-plan job): record a payment made outside the app, or waive it
+// ─────────────────────────────────────────────────────────────
+exports.setCommission = async (req, res) => {
+  try {
+    const { status, note } = req.body;
+    if (!['paid', 'waived'].includes(status)) {
+      return res.status(400).json({ success: false, code: 'INVALID_STATUS', message: 'status must be paid or waived.' });
+    }
+    const booking = await Booking.findOneAndUpdate(
+      { _id: req.params.id, 'commission.amount': { $gt: 0 }, 'commission.status': { $nin: ['paid', 'waived'] } },
+      { $set: {
+        'commission.status': status,
+        'commission.paidAt': new Date(),
+        'commission.method': 'admin',
+        'commission.reference': String(note || '').trim().slice(0, 200) || `admin:${req.admin?._id || ''}`,
+      }, $unset: { 'commission.pendingRef': '', 'commission.pendingAt': '' } },
+      { returnDocument: 'after' }
+    );
+    if (!booking) {
+      return res.status(400).json({ success: false, code: 'NO_COMMISSION', message: 'This booking has no commission owed.' });
+    }
+    await countRatingIfReady(booking._id);
+    res.json({ success: true, message: status === 'paid' ? 'Commission marked as paid.' : 'Commission waived.', data: booking.commission });
+  } catch (error) {
+    handleError(res, error, 'Failed to update the commission.');
   }
 };
 

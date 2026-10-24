@@ -11,6 +11,44 @@
 const User = require('../../models/User');
 const Technician = require('../../models/Technician');
 const Booking = require('../../models/Booking');
+const { normalizeServiceSelection } = require('../../utils/serviceSelection');
+const { updateCompletionStats, newExpertSubscriptionFields } = require('../technician/profile/helpers');
+
+const ROLES = ['client', 'technician'];
+const SIGNUP_INTENTS = ['expert', 'client', 'lister', 'stay_seeker'];
+
+/** { lat, lng } from the request, or an error message. null when not given. */
+const parseCoordinates = (raw) => {
+  if (!raw || (raw.lat === undefined && raw.lng === undefined)) return null;
+  const lat = Number(raw.lat);
+  const lng = Number(raw.lng);
+  if (raw.lat === '' || raw.lng === '' || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { error: 'Enter both latitude and longitude as numbers.' };
+  }
+  if (lat < -90 || lat > 90) return { error: 'Latitude must be between -90 and 90.' };
+  if (lng < -180 || lng > 180) return { error: 'Longitude must be between -180 and 180.' };
+  return { lat, lng };
+};
+
+/** Copy the user's location and town/county onto their expert profile. */
+const syncTechnicianLocation = (tech, user) => {
+  if (user.location?.lat !== undefined && user.location?.lng !== undefined) {
+    tech.location = {
+      type: 'Point',
+      coordinates: [user.location.lng, user.location.lat],
+      formattedAddress: user.location.formattedAddress || tech.location?.formattedAddress,
+    };
+    tech.locationUpdatedAt = new Date();
+  }
+  const address = user.address || {};
+  const current = tech.toObject().address || {};
+  tech.address = {
+    ...current,
+    city: address.city || current.city,
+    state: address.state || current.state,
+    country: address.country || current.country || 'Kenya',
+  };
+};
 
 // ═══════════════════════════════════════════════════════════
 // LIST
@@ -58,10 +96,8 @@ exports.getOne = async (req, res) => {
     const user = await User.findById(req.params.id).select('-password');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    let technicianProfile = null;
-    if (user.role === 'technician' || user.role === 'admin') {
-      technicianProfile = await Technician.findOne({ userId: user._id });
-    }
+    // Former experts keep a hidden profile, so look it up whatever the role
+    const technicianProfile = await Technician.findOne({ userId: user._id });
 
     const stats = {
       bookingsAsClient: await Booking.countDocuments({ clientId: user._id }),
@@ -142,13 +178,58 @@ exports.update = async (req, res) => {
       user.email = email;
     }
 
+    let locationChanged = false;
     if (req.body.address) {
       const current = user.toObject().address || {};
       const next = { ...current };
-      for (const k of ['city', 'state']) {
+      for (const k of ['city', 'state', 'country']) {
         if (req.body.address[k] !== undefined) next[k] = String(req.body.address[k]).trim();
       }
       user.address = next;
+      locationChanged = true;
+    }
+
+    if (req.body.location) {
+      const coords = parseCoordinates(req.body.location);
+      if (coords?.error) return res.status(400).json({ success: false, message: coords.error });
+      const formattedAddress = req.body.location.formattedAddress !== undefined
+        ? String(req.body.location.formattedAddress).trim()
+        : user.location?.formattedAddress;
+      if (coords) {
+        user.location = { lat: coords.lat, lng: coords.lng, formattedAddress, updatedAt: new Date() };
+        locationChanged = true;
+      } else if (formattedAddress !== user.location?.formattedAddress && user.location?.lat !== undefined) {
+        user.location = { ...user.toObject().location, formattedAddress };
+        locationChanged = true;
+      }
+    }
+
+    if (req.body.signupIntent !== undefined) {
+      if (req.body.signupIntent && !SIGNUP_INTENTS.includes(req.body.signupIntent)) {
+        return res.status(400).json({ success: false, message: 'Invalid signup type' });
+      }
+      user.signupIntent = req.body.signupIntent || undefined;
+    }
+    if (req.body.preferences) {
+      const prefs = { ...(user.toObject().preferences || {}) };
+      for (const k of ['mainCategory', 'listingCategory']) {
+        if (req.body.preferences[k] !== undefined) prefs[k] = String(req.body.preferences[k]).trim() || undefined;
+      }
+      user.preferences = prefs;
+    }
+
+    // Role: an expert needs an expert profile (create it with POST /:id/technician)
+    const tech = await Technician.findOne({ userId: user._id });
+    if (req.body.role !== undefined && req.body.role !== user.role) {
+      if (!ROLES.includes(req.body.role)) {
+        return res.status(400).json({ success: false, message: 'Role must be client or technician' });
+      }
+      if (req.body.role === 'technician' && !tech) {
+        return res.status(400).json({ success: false, message: 'Create their expert profile first — that makes them an expert.' });
+      }
+      user.role = req.body.role;
+      // A former expert's profile is kept but hidden from clients
+      if (tech) tech.isActive = req.body.role === 'technician';
     }
 
     if (typeof req.body.status === 'string' &&
@@ -159,10 +240,77 @@ exports.update = async (req, res) => {
     }
 
     await user.save();
-    res.json({ success: true, data: user });
+    if (tech) {
+      if (locationChanged) syncTechnicianLocation(tech, user);
+      if (tech.isModified()) await tech.save();
+    }
+    const out = user.toObject();
+    delete out.password;
+    res.json({ success: true, data: out });
   } catch (err) {
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: Object.values(err.errors).map((e) => e.message).join(', ') });
+    }
     console.error('updateUser error:', err);
     res.status(500).json({ success: false, message: 'Failed to update user' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+// MAKE EXPERT — create their expert profile and switch them to technician
+// ═══════════════════════════════════════════════════════════
+// Body: { services: [{ mainCategory, serviceCategories: [{ categoryName, subServices }] }],
+//         businessName?, profileHeadline?, aboutMe?, yearsOfExperience? }
+// Uses the user's saved location and town/county. Created by an admin, so the
+// expert is approved and visible straight away, on the Free plan.
+exports.makeExpert = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (await Technician.exists({ userId: user._id })) {
+      return res.status(400).json({ success: false, message: 'This user already has an expert profile.' });
+    }
+    if (!user.address?.city || !user.address?.state) {
+      return res.status(400).json({ success: false, message: "Save the user's town and county first." });
+    }
+
+    let services;
+    try {
+      services = await normalizeServiceSelection(req.body.services);
+    } catch (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+
+    const text = (v, max) => String(v || '').trim().slice(0, max);
+    const tech = new Technician({
+      userId: user._id,
+      ...services,
+      businessName: text(req.body.businessName, 120),
+      profileHeadline: text(req.body.profileHeadline, 200),
+      aboutMe: text(req.body.aboutMe, 2000),
+      yearsOfExperience: Math.max(0, Number(req.body.yearsOfExperience) || 0),
+      address: { city: user.address.city, state: user.address.state, country: user.address.country || 'Kenya' },
+      languages: [{ name: 'English', proficiency: 'Fluent' }],
+      pricing: { paymentMethods: ['Cash', 'M-Pesa'] },
+      verificationStatus: 'verified',
+      awaitingApproval: false,
+      ...newExpertSubscriptionFields(),
+    });
+    syncTechnicianLocation(tech, user);
+    await tech.save();
+    await updateCompletionStats(tech);
+
+    user.role = 'technician';
+    user.signupIntent = user.signupIntent || 'expert';
+    await user.save();
+
+    res.status(201).json({ success: true, message: 'Expert profile created. They are now an expert on the Free plan.', data: tech });
+  } catch (err) {
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: Object.values(err.errors).map((e) => e.message).join(', ') });
+    }
+    console.error('makeExpert error:', err);
+    res.status(500).json({ success: false, message: 'Failed to create the expert profile' });
   }
 };
 

@@ -197,7 +197,7 @@ const Home = () => {
           <div className="mt-4 flex justify-center animate-fadeInUp">
             <button
               onClick={() => setShowBenefits(true)}
-              className="bg-white/15 hover:bg-white/25 border border-white/50 text-white px-4 py-2 rounded-full font-semibold text-xs sm:text-sm transition-colors"
+              className="bg-red-600 hover:bg-red-700 border border-red-400 text-white px-4 py-2 rounded-full font-semibold text-xs sm:text-sm shadow-md transition-colors"
             >
               {isTechnician ? 'Why complete jobs through bookings?' : 'Why request services through our booking system?'}
             </button>

@@ -24,5 +24,6 @@ router.get('/:id',            requirePermission('subscriptions.view_details'), c
 // Actions
 router.patch('/:id/extend',   requirePermission('subscriptions.manage'), ctrl.extendSubscription);
 router.patch('/:id/cancel',   requirePermission('subscriptions.manage'), ctrl.cancelSubscription);
+router.patch('/:id/plan',     requirePermission('subscriptions.manage'), ctrl.setPlan);
 
 module.exports = router;

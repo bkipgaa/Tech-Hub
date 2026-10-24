@@ -180,7 +180,7 @@ exports.searchTechnicians = async (req, res) => {
     // 4. Sanitise numeric inputs
     let searchRadius = parseFloat(radius);
     if (isNaN(searchRadius)) searchRadius = 1000;
-    searchRadius = Math.min(Math.max(searchRadius, 1), 1000);
+    searchRadius = Math.min(Math.max(searchRadius, 1), 5000); // largest plan reaches 5000km
 
     const pageNum = Math.max(parseInt(page) || 1, 1);
     const limitNum = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
@@ -565,7 +565,7 @@ exports.getNearbyTechnicians = async (req, res) => {
 
     let searchRadius = parseFloat(radius);
     if (isNaN(searchRadius)) searchRadius = 10;
-    searchRadius = Math.min(Math.max(searchRadius, 1), 1000);
+    searchRadius = Math.min(Math.max(searchRadius, 1), 5000); // largest plan reaches 5000km
 
     const latitude = parseFloat(lat);
     const longitude = parseFloat(lng);

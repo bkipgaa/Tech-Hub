@@ -33,8 +33,8 @@ export const LEGAL = {
   vatNote: '{{inclusive / exclusive}} of VAT where applicable',
 
   // Technician subscriptions (match backend/utils/subscriptionPlans.js and jobs/subscriptionReminders.js)
-  trialDays: 30,
-  trialRadius: '10 km',
+  freeRadius: '50 km',
+  commissionPerJob: 'KES 500',
   reminderDays: '7, 3 and 1 days',
 
   // Stays & Spaces listing fees (match backend/utils/listingPlan.js)

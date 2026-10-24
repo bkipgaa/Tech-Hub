@@ -41,9 +41,10 @@ exports.getCurrentSubscription = async (req, res) => {
 
     const subscription = technician.subscription || {
       plan: 'free',
-      isActive: true,
-      visibilityRadius: 10
+      planDetails: subscriptionPlans.free,
+      isActive: true
     };
+    const effective = getEffectivePlan(technician.subscription);
 
     const isActive = isPlanActive(
       technician.subscription?.plan,
@@ -66,9 +67,12 @@ exports.getCurrentSubscription = async (req, res) => {
         ...subscription,
         isActive,
         daysRemaining,
-        visibilityRadius: getVisibilityRadius(technician),
+        visibilityRadius: effective.visibilityRadius,
+        // KES owed per job while on Free (0 on a paid plan or free month)
+        commissionPerJob: effective.commissionPerJob,
         canUpgrade: true,
-        canActivateTrial: !technician.subscription?.isTrial && !technician.subscription?.endDate,
+        // The old 10 km trial is gone: Free is 50 km forever
+        canActivateTrial: false,
         // Free first month on a paid plan — once per expert, ever
         freeMonthAvailable: !technician.trialHistory?.paidPlanTrialUsedAt,
         freeMonthUsedOn: technician.trialHistory?.paidPlanTrialPlan || null,
@@ -79,61 +83,14 @@ exports.getCurrentSubscription = async (req, res) => {
   }
 };
 
-// ─── ACTIVATE TRIAL ──────────────────────────────────────────────────────────
+// ─── ACTIVATE TRIAL (retired) ───────────────────────────────────────────────
+// The 10 km Free Trial was replaced by the Free plan (50 km, forever). The
+// one-month trial now means the free first month on a paid plan (/free-month).
 exports.activateTrial = async (req, res) => {
-  try {
-    const technician = await Technician.findOne({ userId: req.user.userId });
-    if (!technician) {
-      return res.status(404).json({ success: false, message: 'Technician profile not found' });
-    }
-
-    // One free trial per expert, ever
-    if (technician.trialHistory?.freeTrialUsedAt && technician.subscription?.plan !== 'trial') {
-      return res.status(400).json({ success: false, message: 'You have already used your free trial' });
-    }
-    if (technician.subscription?.trialEndDate) {
-      const trialEnd = new Date(technician.subscription.trialEndDate);
-      if (trialEnd > new Date()) {
-        return res.status(400).json({ success: false, message: 'Trial already active' });
-      }
-      if (trialEnd <= new Date()) {
-        return res.status(400).json({ success: false, message: 'Trial already expired' });
-      }
-    }
-
-    if (technician.subscription?.plan !== 'free' && technician.subscription?.endDate > new Date()) {
-      return res.status(400).json({ success: false, message: 'Already on a paid subscription' });
-    }
-
-    const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 30);
-
-    technician.subscription = {
-      plan: 'trial',
-      planDetails: subscriptionPlans.trial,
-      startDate: new Date(),
-      trialEndDate: trialEndDate,
-      isTrial: true,
-      autoRenew: false
-    };
-
-    technician.serviceRadius = subscriptionPlans.trial.visibilityRadius;
-    technician.set('trialHistory.freeTrialUsedAt', new Date());
-    await technician.save();
-
-    res.json({
-      success: true,
-      message: 'Free trial activated for 30 days',
-      data: {
-        trialEndDate,
-        visibilityRadius: subscriptionPlans.trial.visibilityRadius,
-        daysRemaining: 30
-      }
-    });
-  } catch (error) {
-    console.error('Error activating trial:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
+  res.status(400).json({
+    success: false,
+    message: 'Every expert is already on the Free plan (50 km, forever). To try a paid plan, start your free month on it.',
+  });
 };
 
 // ─── UPGRADE SUBSCRIPTION ────────────────────────────────────────────────────
@@ -293,6 +250,18 @@ exports.paystackWebhook = async (req, res) => {
   if (event.event === 'charge.success') {
     const transaction = event.data;
     const metadata = transaction.metadata || {};
+
+    // ── Commission on a Free-plan job ──────────────────────
+    if (metadata.type === 'commission') {
+      try {
+        const { applyPaystackTransaction } = require('./commissionController');
+        await applyPaystackTransaction(transaction);
+      } catch (err) {
+        console.error('❌ Commission webhook error:', err);
+        return res.status(500).send('Internal Server Error');
+      }
+      return res.sendStatus(200);
+    }
 
     // ── Stays & Spaces listing plan ────────────────────────
     if (metadata.type === 'listing_plan') {
@@ -803,7 +772,7 @@ exports.getSubscriptionHistory = async (req, res) => {
 // ─── FREE FIRST MONTH ON A PAID PLAN ────────────────────────────────────────
 /**
  * Give an expert one month of a paid plan for free. No payment details:
- * when the month ends they return to Free (10 km) unless they subscribe.
+ * when the month ends they return to Free (50 km) unless they subscribe.
  * Only once per expert, whichever plan they choose.
  */
 exports.startFreeMonth = async (req, res) => {
@@ -870,10 +839,6 @@ exports.startFreeMonth = async (req, res) => {
 };
 
 // ─── HELPER ──────────────────────────────────────────────────────────────────
-function getVisibilityRadius(technician) {
-  return getEffectivePlan(technician.subscription).visibilityRadius;
-}
-
 /**
  * End of a newly paid plan: the plan's length (30 days) added to whatever time
  * the technician still has (paid plan, free month or free trial), so paying
@@ -898,7 +863,7 @@ const downgradeExpiredSubscription = async (technician) => {
 
   const { plan } = technician.subscription;
 
-  // Lapsed paid plan or ended trial → Free (10 km), which never expires
+  // Lapsed paid plan or ended trial → Free (50 km), which never expires
   if (plan !== 'free' && getEffectivePlan(technician.subscription).plan === 'free') {
     console.log(`🔄 Downgrading technician ${technician._id} from ${plan} to free plan due to expiry.`);
 

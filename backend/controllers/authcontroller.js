@@ -20,7 +20,7 @@ const crypto = require('crypto');
 const sendEmail = require('../utils/emailService');
 const { normalizeServiceSelection } = require('../utils/serviceSelection');
 const { CATEGORY_IDS } = require('../utils/listingCategories');
-const { updateCompletionStats, trialSubscriptionFields } = require('./technician/profile/helpers');
+const { updateCompletionStats, newExpertSubscriptionFields } = require('./technician/profile/helpers');
 const { setAuthCookie, clearAuthCookie } = require('../utils/authCookie');
 
 // ─────────────────────────────────────────────────────────────
@@ -202,7 +202,7 @@ exports.register = async (req, res) => {
           pricing: { paymentMethods: ['Cash', 'M-Pesa'] },
           verificationStatus: 'pending',
           awaitingApproval: true,
-          ...trialSubscriptionFields(),
+          ...newExpertSubscriptionFields(),
         });
         await technician.save();
         await updateCompletionStats(technician);

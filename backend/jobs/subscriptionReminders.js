@@ -1,9 +1,9 @@
 /**
  * subscriptionReminders.js
  * ========================
- * Daily scan for plans that are about to end — paid plans (endDate) and the
- * free trial (trialEndDate). Sends a reminder 7, 3 and 1 day(s) before.
- * When a plan ends the expert stays visible on the Free plan (10 km).
+ * Daily scan for paid plans (and free months of them) that are about to end.
+ * Sends a reminder 7, 3 and 1 day(s) before. When a plan ends the expert stays
+ * visible on the Free plan (50 km, KES 500 commission per job).
  *
  * Run via node-cron in server.js.
  */
@@ -27,10 +27,8 @@ const sendExpiryReminders = async () => {
 
     const technicians = await Technician.find({
       $or: [
-        // Paid plans
+        // Paid plans and free months (the old trial is now the Free plan, which never ends)
         { 'subscription.plan': { $nin: ['free', 'trial'] }, 'subscription.endDate': { $gt: now, $lte: windowEnd } },
-        // Free trial
-        { 'subscription.plan': 'trial', 'subscription.trialEndDate': { $gt: now, $lte: windowEnd } },
       ],
     }).populate('userId', 'email firstName lastName');
 
@@ -53,7 +51,7 @@ const sendExpiryReminders = async () => {
         daysLeft,
         isTrial,
         isFreeMonth: !!tech.subscription.isFreeMonth,
-        currentRadius: plan?.visibilityRadius || 10,
+        currentRadius: plan?.visibilityRadius || subscriptionPlans.free.visibilityRadius,
       });
       sent++;
     }

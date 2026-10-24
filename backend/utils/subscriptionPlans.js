@@ -4,52 +4,69 @@
  * Subscription Plans Configuration for Technician Visibility
  *
  * VISIBILITY RULES:
- * - Test:         20km  radius  (KES 10/month)   – for testing payment flow
- * - Trial / Free: 10km  radius  (FREE for 30 days)
- * - Basic:        20km  radius  (KES 1,000/month)
- * - Basic Plus:   50km  radius  (KES 2,000/month)
- * - Premium:      100km radius  (KES 3,000/month)
- * - Business:     250km radius  (KES 4,000/month)
- * - Enterprise:   500km radius  (KES 5,000/month)
- * - Platinum:     1000km radius (KES 8,000/month)
+ * - Free:        50km   radius  (KES 0, forever)  – KES 500 commission per job
+ * - Basic:       100km  radius  (KES 1,000/month) – no commission
+ * - Basic Plus:  250km  radius  (KES 2,000/month) – no commission
+ * - Business:    500km  radius  (KES 4,000/month) – no commission
+ * - Enterprise:  1000km radius  (KES 5,000/month) – no commission
+ * - Platinum:    5000km radius  (KES 8,000/month) – no commission
+ * - Test:        100km  radius  (KES 10/month)    – for testing payment flow
  *
- * IMPORTANT: Technicians with expired subscriptions are NOT visible in search.
+ * Every expert is always visible. A paid plan that is not renewed falls back
+ * to Free (50km). The first month on any paid plan can be taken free, once.
  *
- * @version 2.0.0 – Repriced tiers + Platinum rename
+ * Commission: a booking made while the expert is on Free owes KES 500 once the
+ * work is done. Until it is paid, the client's rating and the completed job
+ * are saved but don't show on the expert's profile.
+ *
+ * Legacy ids: 'trial' (the old 10km free trial) now means Free; 'premium'
+ * is no longer sold but kept so existing subscribers keep it until it ends.
+ *
+ * @version 3.0.0 – Free 50km with commission; paid plans 100km–5000km
  */
+
+/** KES owed on each job an expert gets while on the Free plan */
+const COMMISSION_PER_JOB = 500;
+
+const FREE_FEATURES = [
+  'Free forever — no monthly fee',
+  'Clients within 50km can find you',
+  `KES ${COMMISSION_PER_JOB} commission on each job you get through a booking`,
+  'Ratings and completed jobs show on your profile once the commission is paid',
+];
+
+/** Features every paid plan shares, after its own radius line */
+const paidFeatures = (radiusLine) => [
+  radiusLine,
+  'No commission on jobs',
+  'Ratings and completed jobs show on your profile immediately',
+  'Pay monthly by M-Pesa or card — never charged automatically',
+  'First month free (once per expert)',
+];
 
 const subscriptionPlans = {
   // ─────────────────────────────────────────────────────────
-  // TRIAL
-  // ─────────────────────────────────────────────────────────
-  trial: {
-    name: 'Free Trial',
-    visibilityRadius: 10,
-    price: 0,
-    durationDays: 30,
-    features: [
-      '30-day free trial',
-      '10km visibility radius',
-      'Basic profile listing',
-      'Service listing (up to 3 services)',
-      'Email support',
-    ],
-  },
-
-  // ─────────────────────────────────────────────────────────
-  // FREE (legacy — kept for backward compatibility)
+  // FREE — 50km, forever, KES 500 commission per job
   // ─────────────────────────────────────────────────────────
   free: {
     name: 'Free',
-    visibilityRadius: 10,
+    visibilityRadius: 50,
     price: 0,
-    durationDays: 30,
-    features: [
-      '10km visibility radius',
-      'Basic profile listing',
-      'Service listing (up to 5 services)',
-      'Basic support',
-    ],
+    durationDays: null,
+    commissionPerJob: COMMISSION_PER_JOB,
+    features: FREE_FEATURES,
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // TRIAL (legacy — the old 10km trial; now the same as Free)
+  // ─────────────────────────────────────────────────────────
+  trial: {
+    name: 'Free',
+    visibilityRadius: 50,
+    price: 0,
+    durationDays: null,
+    commissionPerJob: COMMISSION_PER_JOB,
+    features: FREE_FEATURES,
   },
 
   // ─────────────────────────────────────────────────────────
@@ -57,151 +74,84 @@ const subscriptionPlans = {
   // ─────────────────────────────────────────────────────────
   test: {
     name: 'Test Plan',
-    visibilityRadius: 20,
+    visibilityRadius: 100,
     price: 10,
     durationDays: 30,
-    features: [
-      '20km visibility radius',
-      'Test payment gateway',
-      'Ideal for testing the system',
-      'All basic features included',
-      'Email support',
-    ],
+    commissionPerJob: 0,
+    features: paidFeatures('100km visibility radius (test payments only)'),
   },
 
   // ─────────────────────────────────────────────────────────
-  // BASIC — KES 1,000 / 20km
+  // BASIC — KES 1,000 / 100km
   // ─────────────────────────────────────────────────────────
   basic: {
     name: 'Basic',
-    visibilityRadius: 20,
+    visibilityRadius: 100,
     price: 1000,
     durationDays: 30,
-    features: [
-      '20km visibility radius',
-      'Standard profile listing',
-      'Priority email support',
-      'Basic analytics dashboard',
-      'Service listing (up to 10 services)',
-      'Email & SMS notifications',
-    ],
+    commissionPerJob: 0,
+    features: paidFeatures('Clients within 100km can find you (your town and nearby towns)'),
   },
 
   // ─────────────────────────────────────────────────────────
-  // BASIC PLUS — KES 2,000 / 50km
+  // BASIC PLUS — KES 2,000 / 250km
   // ─────────────────────────────────────────────────────────
   basicPlus: {
     name: 'Basic Plus',
-    visibilityRadius: 50,
+    visibilityRadius: 250,
     price: 2000,
     durationDays: 30,
-    features: [
-      '50km visibility radius',
-      'Enhanced profile listing with badge',
-      'Priority support (24hr response)',
-      'Advanced analytics with insights',
-      '10% search visibility boost',
-      'Service listing (up to 20 services)',
-      'Email, SMS & push notifications',
-      'Basic SEO optimization',
-    ],
+    commissionPerJob: 0,
+    features: paidFeatures('Clients within 250km can find you (several counties)'),
   },
 
   // ─────────────────────────────────────────────────────────
-  // PREMIUM — KES 3,000 / 100km
+  // PREMIUM (legacy — no longer sold)
   // ─────────────────────────────────────────────────────────
   premium: {
     name: 'Premium',
-    visibilityRadius: 100,
+    visibilityRadius: 250,
     price: 3000,
     durationDays: 30,
-    features: [
-      '100km visibility radius (regional coverage)',
-      'Premium profile with priority placement',
-      'Priority support (12hr response)',
-      'Advanced analytics with competitor insights',
-      '25% search visibility boost',
-      'Verified badge for increased trust',
-      'Unlimited service listings',
-      'All notification channels',
-      'Full SEO optimization',
-      'Customer review insights',
-    ],
+    commissionPerJob: 0,
+    legacy: true,
+    features: paidFeatures('Clients within 250km can find you (several counties)'),
   },
 
   // ─────────────────────────────────────────────────────────
-  // BUSINESS — KES 4,000 / 250km
+  // BUSINESS — KES 4,000 / 500km
   // ─────────────────────────────────────────────────────────
   business: {
     name: 'Business',
-    visibilityRadius: 250,
+    visibilityRadius: 500,
     price: 4000,
     durationDays: 30,
-    features: [
-      '250km visibility radius (provincial coverage)',
-      'Business profile with premium placement',
-      '24/7 priority support (6hr response)',
-      'Enterprise analytics with forecasting',
-      '40% search visibility boost',
-      'Verified badge with business verification',
-      'Homepage marketing exposure',
-      'Unlimited service listings',
-      'All notification channels with priority',
-      'Full SEO optimization with keywords',
-      'Customer review management',
-      'Booking management system',
-      'Calendar integration',
-    ],
+    commissionPerJob: 0,
+    features: paidFeatures('Clients within 500km can find you (most of Kenya)'),
   },
 
   // ─────────────────────────────────────────────────────────
-  // ENTERPRISE — KES 5,000 / 500km
+  // ENTERPRISE — KES 5,000 / 1000km
   // ─────────────────────────────────────────────────────────
   enterprise: {
     name: 'Enterprise',
-    visibilityRadius: 500,
+    visibilityRadius: 1000,
     price: 5000,
     durationDays: 30,
-    features: [
-      '500km visibility radius (national coverage)',
-      'Enterprise profile with maximum placement',
-      '24/7 dedicated support (2hr response)',
-      'Enterprise analytics with custom reports',
-      '60% search visibility boost',
-      'Enhanced verification badge',
-      'Premium marketing exposure on all pages',
-      'API access for integration',
-      'Multiple staff accounts (up to 5)',
-      'Advanced booking management',
-      'CRM integration',
-      'Custom reporting dashboard',
-    ],
+    commissionPerJob: 0,
+    features: paidFeatures('Clients within 1,000km can find you (all of Kenya)'),
   },
 
   // ─────────────────────────────────────────────────────────
-  // PLATINUM — KES 8,000 / 1000km  (internal id: 'unlimited')
+  // PLATINUM — KES 8,000 / 5000km  (internal id: 'unlimited')
   // ─────────────────────────────────────────────────────────
   unlimited: {
     name: 'Platinum',
-    visibilityRadius: 1000,
+    visibilityRadius: 5000,
     price: 8000,
     durationDays: 30,
-    features: [
-      '1000km visibility radius (nationwide coverage)',
-      'Top placement on every listing',
-      '24/7 VIP support (1hr response)',
-      'Unlimited analytics with AI insights',
-      '80% search visibility boost',
-      'Premium verification badge',
-      'Premium marketing + social media promotion',
-      'Full API access with webhooks',
-      'Unlimited staff accounts',
-      'Automated booking management',
-      'Full CRM integration',
-      'Custom branded reports',
-      'Early access to new features',
-      'Dedicated account manager',
-    ],
+    commissionPerJob: 0,
+    features: paidFeatures('Clients within 5,000km can find you (Kenya and East Africa)'),
   },
 };
 
@@ -209,15 +159,13 @@ const subscriptionPlans = {
 // Plans List — used in dropdowns and API responses
 // ═══════════════════════════════════════════════════════════
 const plansList = [
-  { id: 'trial',      name: 'Free Trial',  visibilityRadius: 10,   price: 0,    duration: '30 days', description: 'Perfect for getting started' },
-  { id: 'free',       name: 'Free',        visibilityRadius: 10,   price: 0,    duration: '30 days', description: 'Basic visibility' },
-  { id: 'test',       name: 'Test Plan',   visibilityRadius: 20,   price: 10,   duration: '30 days', description: 'Test payment flow (KES 10)' },
-  { id: 'basic',      name: 'Basic',       visibilityRadius: 20,   price: 1000, duration: '30 days', description: 'Local coverage (20km)' },
-  { id: 'basicPlus',  name: 'Basic Plus',  visibilityRadius: 50,   price: 2000, duration: '30 days', description: 'Extended local coverage (50km)' },
-  { id: 'premium',    name: 'Premium',     visibilityRadius: 100,  price: 3000, duration: '30 days', description: 'Regional coverage (100km)' },
-  { id: 'business',   name: 'Business',    visibilityRadius: 250,  price: 4000, duration: '30 days', description: 'Provincial coverage (250km)' },
-  { id: 'enterprise', name: 'Enterprise',  visibilityRadius: 500,  price: 5000, duration: '30 days', description: 'National coverage (500km)' },
-  { id: 'unlimited',  name: 'Platinum',    visibilityRadius: 1000, price: 8000, duration: '30 days', description: 'Nationwide coverage (1000km)' },
+  { id: 'free',       name: 'Free',        visibilityRadius: 50,   price: 0,    commissionPerJob: COMMISSION_PER_JOB, duration: 'Forever', description: `Local coverage (50km) — KES ${COMMISSION_PER_JOB} commission per job` },
+  { id: 'test',       name: 'Test Plan',   visibilityRadius: 100,  price: 10,   commissionPerJob: 0, duration: '30 days', description: 'Test payment flow (KES 10)' },
+  { id: 'basic',      name: 'Basic',       visibilityRadius: 100,  price: 1000, commissionPerJob: 0, duration: '30 days', description: 'Town and nearby towns (100km)' },
+  { id: 'basicPlus',  name: 'Basic Plus',  visibilityRadius: 250,  price: 2000, commissionPerJob: 0, duration: '30 days', description: 'Several counties (250km)' },
+  { id: 'business',   name: 'Business',    visibilityRadius: 500,  price: 4000, commissionPerJob: 0, duration: '30 days', description: 'Most of Kenya (500km)' },
+  { id: 'enterprise', name: 'Enterprise',  visibilityRadius: 1000, price: 5000, commissionPerJob: 0, duration: '30 days', description: 'All of Kenya (1,000km)' },
+  { id: 'unlimited',  name: 'Platinum',    visibilityRadius: 5000, price: 8000, commissionPerJob: 0, duration: '30 days', description: 'Kenya and East Africa (5,000km)' },
 ];
 
 // ═══════════════════════════════════════════════════════════
@@ -229,13 +177,12 @@ const plansList = [
  */
 function getPlanByRadius(radius) {
   const radiusThresholds = [
-    { maxRadius: 10,   plan: 'trial' },
-    { maxRadius: 20,   plan: 'basic' },
-    { maxRadius: 50,   plan: 'basicPlus' },
-    { maxRadius: 100,  plan: 'premium' },
-    { maxRadius: 250,  plan: 'business' },
-    { maxRadius: 500,  plan: 'enterprise' },
-    { maxRadius: 1000, plan: 'unlimited' },
+    { maxRadius: 50,   plan: 'free' },
+    { maxRadius: 100,  plan: 'basic' },
+    { maxRadius: 250,  plan: 'basicPlus' },
+    { maxRadius: 500,  plan: 'business' },
+    { maxRadius: 1000, plan: 'enterprise' },
+    { maxRadius: 5000, plan: 'unlimited' },
   ];
   for (const threshold of radiusThresholds) {
     if (radius <= threshold.maxRadius) {
@@ -246,18 +193,16 @@ function getPlanByRadius(radius) {
 }
 
 function getVisibilityDescription(planId) {
-  const plan = subscriptionPlans[planId];
-  if (!plan) return '10km visibility radius (Default)';
+  const plan = subscriptionPlans[planId] || subscriptionPlans.free;
 
   const r = plan.visibilityRadius;
   let context = '';
-  if (r <= 10)        context = ' (Local)';
-  else if (r <= 20)   context = ' (Extended Local)';
-  else if (r <= 50)   context = ' (Extended Local Plus)';
-  else if (r <= 100)  context = ' (Regional)';
-  else if (r <= 250)  context = ' (Provincial)';
-  else if (r <= 500)  context = ' (National)';
-  else                context = ' (Nationwide)';
+  if (r <= 50)        context = ' (Local)';
+  else if (r <= 100)  context = ' (Town and nearby towns)';
+  else if (r <= 250)  context = ' (Several counties)';
+  else if (r <= 500)  context = ' (Most of Kenya)';
+  else if (r <= 1000) context = ' (All of Kenya)';
+  else                context = ' (Kenya and East Africa)';
 
   return `${r}km visibility radius${context}`;
 }
@@ -283,17 +228,15 @@ function isPlanActive(plan, endDate, trialEndDate) {
 
 function getUpgradePath(currentPlanId) {
   const upgradeOrder = [
-    'trial',
     'free',
     'test',
     'basic',
     'basicPlus',
-    'premium',
     'business',
     'enterprise',
     'unlimited',
   ];
-  const currentIndex = upgradeOrder.indexOf(currentPlanId);
+  const currentIndex = upgradeOrder.indexOf(currentPlanId === 'trial' ? 'free' : currentPlanId);
   if (currentIndex === -1) return upgradeOrder;
   return upgradeOrder.slice(currentIndex + 1);
 }
@@ -325,7 +268,7 @@ function calculatePlanSavings(planId, months = 1) {
 
 function validatePlanCompatibility(planId, serviceRadius) {
   const plan = subscriptionPlans[planId];
-  if (!plan) return { valid: false, message: 'Invalid subscription plan', maxAllowedRadius: 10 };
+  if (!plan) return { valid: false, message: 'Invalid subscription plan', maxAllowedRadius: subscriptionPlans.free.visibilityRadius };
 
   const maxAllowedRadius = plan.visibilityRadius;
   if (serviceRadius > maxAllowedRadius) {
@@ -363,30 +306,30 @@ function getFeaturesComparison() {
 // ═══════════════════════════════════════════════════════════
 // EFFECTIVE PLAN — what an expert actually gets right now
 // ═══════════════════════════════════════════════════════════
-// Every expert stays visible: a paid plan counts until its endDate; an ended
-// trial, a lapsed paid plan or the Free plan all mean Free (10 km), forever.
+// Every expert stays visible: a paid plan (or free month) counts until its
+// endDate; the old trial, a lapsed paid plan or the Free plan all mean Free
+// (50 km, commission per job), forever.
 const FREE_PLANS = ['free', 'trial'];
 
 function getEffectivePlan(subscription, now = new Date()) {
   const plan = subscription?.plan || 'free';
-  const free = { plan: 'free', visibilityRadius: subscriptionPlans.free.visibilityRadius, paid: false };
+  const free = {
+    plan: 'free',
+    visibilityRadius: subscriptionPlans.free.visibilityRadius,
+    commissionPerJob: COMMISSION_PER_JOB,
+    paid: false,
+  };
 
-  if (plan === 'trial' || subscription?.isTrial) {
-    const trialEnd = subscription?.trialEndDate ? new Date(subscription.trialEndDate) : null;
-    return trialEnd && now < trialEnd
-      ? { plan: 'trial', visibilityRadius: subscriptionPlans.trial.visibilityRadius, paid: false }
-      : free;
-  }
-
-  if (FREE_PLANS.includes(plan) || !subscriptionPlans[plan]) return free;
+  if (FREE_PLANS.includes(plan) || subscription?.isTrial || !subscriptionPlans[plan]) return free;
 
   const endDate = subscription?.endDate ? new Date(subscription.endDate) : null;
   if (!endDate || endDate <= now) return free;
 
-  return { plan, visibilityRadius: subscriptionPlans[plan].visibilityRadius, paid: true };
+  return { plan, visibilityRadius: subscriptionPlans[plan].visibilityRadius, commissionPerJob: 0, paid: true };
 }
 
 module.exports = {
+  COMMISSION_PER_JOB,
   subscriptionPlans,
   plansList,
   getEffectivePlan,

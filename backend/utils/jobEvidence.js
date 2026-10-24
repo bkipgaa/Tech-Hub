@@ -247,10 +247,21 @@ const participantView = (booking) => {
   }
   // Rating timing checks are for the admin; people only see when it was rated
   // and whether it is still waiting for a check
+  // Commission on a Free-plan job: owed once the work is done; the rating
+  // waits for it before showing on the expert's profile
+  const commissionDue = (obj.commission?.amount || 0) > 0 && !['paid', 'waived'].includes(obj.commission.status);
   if (obj.ratingCheck) {
     obj.ratingCheck = {
       ratedAt: obj.ratingCheck.ratedAt,
-      pending: obj.ratingCheck.status === 'held',
+      pending: obj.ratingCheck.status === 'held' || (commissionDue && !obj.ratingCountedAt),
+    };
+  }
+  if (obj.commission) {
+    obj.commission = {
+      amount: obj.commission.amount || 0,
+      status: obj.commission.status,
+      paidAt: obj.commission.paidAt,
+      due: commissionDue,
     };
   }
   return obj;

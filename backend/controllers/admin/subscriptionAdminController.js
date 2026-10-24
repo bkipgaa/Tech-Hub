@@ -17,7 +17,7 @@
 
 const Technician = require('../../models/Technician');
 const User = require('../../models/User');
-const { subscriptionPlans, isPlanActive } = require('../../utils/subscriptionPlans');
+const { subscriptionPlans, isPlanActive, getEffectivePlan } = require('../../utils/subscriptionPlans');
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -62,7 +62,7 @@ const decorateSubscription = (tech, nowMs = Date.now()) => {
     isPaid,
     isActive,
     price: tech.subscription?.planDetails?.price || subscriptionPlans[plan]?.price || 0,
-    visibilityRadius: tech.subscription?.planDetails?.visibilityRadius || 10,
+    visibilityRadius: getEffectivePlan(tech.subscription).visibilityRadius,
     startDate,
     endDate,
     trialEndDate,
@@ -503,6 +503,60 @@ exports.extendSubscription = async (req, res) => {
     });
   } catch (error) {
     handleError(res, error, 'Failed to extend subscription.');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// SET PLAN (admin puts an expert on any plan)
+// ─────────────────────────────────────────────────────────────
+// Body: { planId, days? }  — 'free' needs no days; paid plans run for `days`
+// (default 30) from today. Recorded as a free admin grant, not a payment.
+exports.setPlan = async (req, res) => {
+  try {
+    const { planId } = req.body;
+    const plan = subscriptionPlans[planId];
+    if (!plan || planId === 'trial' || plan.legacy) {
+      return res.status(400).json({ success: false, code: 'INVALID_PLAN', message: 'Choose a valid plan.' });
+    }
+    const daysNum = req.body.days === undefined ? 30 : parseInt(req.body.days, 10);
+    if (plan.price > 0 && (!daysNum || daysNum < 1 || daysNum > 365)) {
+      return res.status(400).json({ success: false, code: 'INVALID_DAYS', message: 'Days must be between 1 and 365.' });
+    }
+
+    const tech = await Technician.findById(req.params.id);
+    if (!tech) {
+      return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Technician not found.' });
+    }
+
+    const startDate = new Date();
+    const endDate = plan.price > 0 ? new Date(startDate.getTime() + daysNum * 24 * 60 * 60 * 1000) : null;
+    tech.subscription = {
+      plan: planId,
+      planDetails: {
+        name: plan.name,
+        visibilityRadius: plan.visibilityRadius,
+        price: plan.price,
+        features: plan.features,
+      },
+      startDate,
+      endDate,
+      trialEndDate: tech.subscription?.trialEndDate || undefined,
+      isTrial: false,
+      autoRenew: false,
+      paymentHistory: tech.subscription?.paymentHistory || [],
+    };
+    tech.serviceRadius = plan.visibilityRadius;
+    await tech.save();
+
+    res.json({
+      success: true,
+      message: endDate
+        ? `${plan.name} set until ${endDate.toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}.`
+        : `Moved to the ${plan.name} plan.`,
+      data: { plan: planId, endDate },
+    });
+  } catch (error) {
+    handleError(res, error, 'Failed to set the plan.');
   }
 };
 

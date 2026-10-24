@@ -45,6 +45,7 @@ import AdminUsers from '../pages/Admin/AdminUsers';
 import Revenue from '../pages/Admin/Revenue';
 import Payments from '../pages/Admin/Payments';
 import Users from '../pages/Admin/Users';
+import UserDetail from '../pages/Admin/UserDetail';
 // ─── Placeholders for pages not yet built ────────────────────
 // Replace each placeholder as you build the real page.
 const Placeholder = ({ title }) => (
@@ -147,7 +148,6 @@ const ServiceCatalogPage  = () => <Placeholder title="Service Catalog" />;
 const RevenuePage         = () => <Placeholder title="Revenue" />;
 const PaymentsPage        = () => <Placeholder title="Payments" />;
 const UsersPage           = () => <Placeholder title="Users" />;
-const UserDetailPage      = () => <Placeholder title="User Detail" />;
 const AdminUsersPage      = () => <Placeholder title="Admin Users" />;
 const ActivityLogsPage    = () => <Placeholder title="Activity Logs" />;
 const NotificationsPage   = () => <Placeholder title="Notifications" />;
@@ -308,7 +308,7 @@ const AdminRoutes = () => {
           path="users/:id"
           element={
             <ProtectedAdminRoute permission="users.view_details">
-              <UserDetailPage />
+              <UserDetail />
             </ProtectedAdminRoute>
           }
         />

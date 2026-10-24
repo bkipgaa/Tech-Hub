@@ -164,12 +164,12 @@ const sections = [
   ]},
   { id: 't-fees', title: 'Subscriptions', body: [
     { ul: [
-      `**Free trial.** New Technicians get a **${L.trialDays}-day free trial** with a ${L.trialRadius} visibility radius.`,
-      `**Free plan.** After a trial or plan ends you stay on the **Free plan** at no cost, visible to clients within ${L.trialRadius}.`,
-      `**Paid plans** let clients further away find you. Plans differ by **visibility radius**, price (in KES) and features. The plan details and prices shown in the app when you pay are the ones that apply. Your first month on a paid plan can be taken free, **once**, whichever plan you choose.`,
-      `**Paying and plan length.** You pay by card (Paystack) or M-Pesa. Each payment adds **30 days**. If you pay before your plan or free trial ends, the 30 days are added to the time you have left, so you never lose days. If you pay after it has ended, the 30 days start on the day the payment is confirmed. The plan you pay for applies from the day you pay.`,
+      `**Free plan.** Every Technician can stay on the **Free plan** at no monthly cost, visible to clients within ${L.freeRadius}.`,
+      `**Commission on the Free plan.** For each booking you receive while on the Free plan, you owe a commission of **${L.commissionPerJob}** once the work is marked completed. The client's rating and the completed job are recorded but do not appear on your profile until the commission is paid. The commission is non-refundable once the job is completed.`,
+      `**Paid plans** let clients further away find you. Plans differ by **visibility radius** and price (in KES). Paid plans charge **no commission**, and ratings and completed jobs show on your profile immediately. The plan details and prices shown in the app when you pay are the ones that apply. Your first month on a paid plan can be taken free, **once**, whichever plan you choose.`,
+      `**Paying and plan length.** You pay by card (Paystack) or M-Pesa. Each payment adds **30 days**. If you pay before your plan or free month ends, the 30 days are added to the time you have left, so you never lose days. If you pay after it has ended, the 30 days start on the day the payment is confirmed. The plan you pay for applies from the day you pay.`,
       `**No automatic renewal.** Plans do not renew or charge you automatically. We send reminders ${L.reminderDays} before your plan ends.`,
-      `**Expiry.** When a paid plan, free month or free trial ends, you move to the Free plan and clients further than ${L.trialRadius} away stop seeing you until you pay again. Bookings already made continue.`,
+      `**Expiry.** When a paid plan or free month ends, you move to the Free plan: clients further than ${L.freeRadius} away stop seeing you until you pay again, and new bookings owe the Free plan commission. Bookings already made continue.`,
       `**Refunds.** Subscription fees are non-refundable, except where the law requires a refund or we end the service for our own reasons.`,
       `**Tax.** Fees are ${L.vatNote}.`,
       `**Changes.** We may change fees with ${L.feeChangeNotice} notice. Changes do not affect bookings already accepted.`,

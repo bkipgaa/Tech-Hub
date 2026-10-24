@@ -95,19 +95,20 @@ class LocationService {
   /**
    * Get visibility description based on technician's plan
    */
-  getVisibilityDescription(plan, isTrial = false) {
-    if (isTrial) return 'Trial: Visible up to 50km';
-    
+  getVisibilityDescription(plan) {
+    // Matches backend/utils/subscriptionPlans.js (the old trial is now Free)
     const visibilityRadii = {
-      free: 'Visible up to 10km',
-      basic: 'Visible up to 30km',
-      premium: 'Visible up to 50km',
-      business: 'Visible up to 200km',
-      enterprise: 'Visible up to 500km',
-      unlimited: 'Visible up to 1000km'
+      free: 'Visible up to 50km',
+      trial: 'Visible up to 50km',
+      basic: 'Visible up to 100km',
+      basicPlus: 'Visible up to 250km',
+      premium: 'Visible up to 250km',
+      business: 'Visible up to 500km',
+      enterprise: 'Visible up to 1000km',
+      unlimited: 'Visible up to 5000km'
     };
-    
-    return visibilityRadii[plan] || 'Free: Visible up to 10km';
+
+    return visibilityRadii[plan] || 'Free: Visible up to 50km';
   }
 
   getCachedLocation() {

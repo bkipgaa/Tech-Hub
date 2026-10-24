@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users as UsersIcon,
   UserCheck,
@@ -16,7 +17,6 @@ import { adminUserServiceFull } from '../../services/adminRevenueService';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { userRoleLabel } from '../../utils/roleHelpers';
 import { cldImage, AVATAR_WIDTH } from '../../utils/media';
-import EditUserModal from '../../components/admin/EditUserModal';
 
 // ─── Role & Status styling ────────────────────────────────
 const ROLE_BADGE = {
@@ -81,7 +81,7 @@ export default function Users() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [openMenuId, setOpenMenuId] = useState(null);
-  const [editingUserId, setEditingUserId] = useState(null);
+  const navigate = useNavigate();
 
   // ── Load ───────────────────────────────────────────────
   const load = useCallback(
@@ -164,7 +164,7 @@ export default function Users() {
 
   const openEdit = (user) => {
     setOpenMenuId(null);
-    setEditingUserId(user._id);
+    navigate(`/admin/users/${user._id}`);
   };
 
   // ── Render ─────────────────────────────────────────────
@@ -435,18 +435,6 @@ export default function Users() {
           </div>
         )}
       </div>
-
-      {editingUserId && (
-        <EditUserModal
-          userId={editingUserId}
-          onClose={() => setEditingUserId(null)}
-          onSaved={() => {
-            setEditingUserId(null);
-            showToast('User updated');
-            load(true);
-          }}
-        />
-      )}
     </div>
   );
 }
