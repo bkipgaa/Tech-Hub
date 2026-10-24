@@ -9,6 +9,7 @@
  */
 
 const Technician = require('../../../models/Technician');
+const { subscriptionPlans } = require('../../../utils/subscriptionPlans');
 
 /**
  * Calculate profile completion percentage
@@ -147,8 +148,31 @@ const getProfileCompletionBreakdown = (technician) => {
   return breakdown;
 };
 
-module.exports = { 
-  calculateProfileCompletion, 
+/**
+ * Fields that start a new expert on the automatic 30-day free trial
+ *
+ * @returns {Object} subscription, trialHistory and serviceRadius
+ */
+const trialSubscriptionFields = () => {
+  const trialEndDate = new Date();
+  trialEndDate.setDate(trialEndDate.getDate() + 30);
+  return {
+    subscription: {
+      plan: 'trial',
+      planDetails: subscriptionPlans.trial,
+      startDate: new Date(),
+      trialEndDate,
+      isTrial: true,
+      autoRenew: false
+    },
+    trialHistory: { freeTrialUsedAt: new Date() },
+    serviceRadius: subscriptionPlans.trial.visibilityRadius
+  };
+};
+
+module.exports = {
+  calculateProfileCompletion,
   updateCompletionStats,
-  getProfileCompletionBreakdown 
+  getProfileCompletionBreakdown,
+  trialSubscriptionFields
 };

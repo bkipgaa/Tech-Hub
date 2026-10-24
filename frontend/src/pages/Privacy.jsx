@@ -116,6 +116,7 @@ const sections = [
   { id: 'cookies', title: 'Cookies and browser storage', body: [
     `The platform does not currently use advertising or analytics cookies. It stores the following in your browser so the site works:`,
     { table: { head: ['Item', 'Purpose', 'Lasts'], rows: [
+      ['auth_token (secure cookie, not readable by page scripts)', 'Keeps you signed in', '30 days, or until you log out'],
       ['token (local storage)', 'Keeps you signed in', 'Until you log out or clear browser data'],
       ['user (local storage)', 'Shows your name and role in the app', 'Until you log out or clear browser data'],
       ['catalogData (session storage)', 'Caches the service list for speed', 'Until you close the tab'],

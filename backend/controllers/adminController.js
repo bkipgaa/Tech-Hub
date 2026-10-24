@@ -191,6 +191,7 @@ exports.verifyTechnician = async (req, res) => {
 
     // Update technician verification fields
     technician.verificationStatus = 'verified';  // Set status to verified
+    technician.awaitingApproval = false;  // Clients can find them from now on
     technician.verifiedAt = new Date();  // Set current timestamp for verification
     technician.verifiedBy = req.user.userId;  // Store ID of admin who verified
     technician.verificationRemarks = remarks || 'Technician verified by admin';  // Add remarks or default

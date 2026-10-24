@@ -7,7 +7,7 @@
  *   GET    /api/admin/technicians                  → paginated list with filters
  *   GET    /api/admin/technicians/stats            → aggregate stats for header
  *   GET    /api/admin/technicians/:id              → single technician (full profile)
- *   PATCH  /api/admin/technicians/:id              → update basic fields
+ *   PATCH  /api/admin/technicians/:id              → edit the expert's profile
  *   PATCH  /api/admin/technicians/:id/verify       → mark as verified
  *   PATCH  /api/admin/technicians/:id/reject       → reject verification
  *   PATCH  /api/admin/technicians/:id/suspend      → suspend (isActive = false)
@@ -21,6 +21,8 @@ const Technician = require('../../models/Technician');
 const User = require('../../models/User');
 const Booking = require('../../models/Booking');
 const { isPlanActive } = require('../../utils/subscriptionPlans');
+const { normalizeServiceSelection } = require('../../utils/serviceSelection');
+const { updateCompletionStats } = require('../technician/profile/helpers');
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -267,21 +269,80 @@ exports.getTechnician = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// UPDATE (limited safe fields)
+// UPDATE
 // ─────────────────────────────────────────────────────────────
+// Admins tidy up what experts entered at signup so public profiles read
+// professionally: name and phone on the account, and the profile text,
+// experience, skills, location and services.
 exports.updateTechnician = async (req, res) => {
   try {
     const ALLOWED = [
-      'businessName', 'aboutMe', 'profileHeadline', 'mainCategory',
+      'businessName', 'aboutMe', 'profileHeadline', 'yearsOfExperience',
       'serviceRadius', 'isFeatured', 'isAvailable',
     ];
+    const USER_ALLOWED = ['firstName', 'lastName', 'phone'];
 
-    const updates = {};
-    for (const key of ALLOWED) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    const tech = await Technician.findById(req.params.id);
+    if (!tech) {
+      return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Technician not found.' });
     }
 
-    if (Object.keys(updates).length === 0) {
+    let changed = false;
+    for (const key of ALLOWED) {
+      if (req.body[key] !== undefined) {
+        tech[key] = typeof req.body[key] === 'string' ? req.body[key].trim() : req.body[key];
+        changed = true;
+      }
+    }
+
+    if (req.body.address) {
+      const current = tech.toObject().address || {};
+      const next = { ...current };
+      for (const key of ['street', 'city', 'state', 'zipCode', 'country']) {
+        if (req.body.address[key] !== undefined) next[key] = String(req.body.address[key]).trim();
+      }
+      tech.address = next;
+      changed = true;
+    }
+
+    if (Array.isArray(req.body.skills)) {
+      const existing = new Map((tech.skills || []).map((s) => [s.name.toLowerCase(), s]));
+      tech.skills = [...new Set(req.body.skills.map((s) => String(s).trim()).filter(Boolean))]
+        .map((name) => {
+          const prev = existing.get(name.toLowerCase());
+          return prev ? { name, level: prev.level, yearsOfExperience: prev.yearsOfExperience } : { name };
+        });
+      changed = true;
+    }
+
+    if (req.body.services !== undefined) {
+      // Not strict: older experts may offer services that have since left the catalog
+      let services;
+      try {
+        services = await normalizeServiceSelection(req.body.services, { strict: false });
+      } catch (err) {
+        return res.status(400).json({ success: false, code: 'VALIDATION_ERROR', message: err.message });
+      }
+      // Keep prices and descriptions on service categories that stay
+      const previous = new Map(
+        (tech.toObject().serviceCategories || []).map((sc) => [`${sc.mainCategory}||${sc.categoryName}`, sc])
+      );
+      tech.mainCategory = services.mainCategory;
+      tech.mainCategories = services.mainCategories;
+      tech.serviceCategories = services.serviceCategories.map((sc) => {
+        const prev = previous.get(`${sc.mainCategory}||${sc.categoryName}`);
+        return prev ? { ...prev, subServices: sc.subServices } : sc;
+      });
+      changed = true;
+    }
+
+    const userUpdates = {};
+    for (const key of USER_ALLOWED) {
+      const value = typeof req.body[key] === 'string' ? req.body[key].trim() : '';
+      if (value) userUpdates[key] = value;
+    }
+
+    if (!changed && Object.keys(userUpdates).length === 0) {
       return res.status(400).json({
         success: false,
         code: 'NO_UPDATES',
@@ -289,15 +350,11 @@ exports.updateTechnician = async (req, res) => {
       });
     }
 
-    const tech = await Technician.findByIdAndUpdate(
-      req.params.id,
-      { $set: updates },
-      { new: true, runValidators: true }
-    ).populate('userId', 'firstName lastName email phone profileImage');
-
-    if (!tech) {
-      return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Technician not found.' });
+    if (Object.keys(userUpdates).length > 0) {
+      await User.updateOne({ _id: tech.userId }, { $set: userUpdates }, { runValidators: true });
     }
+    if (changed) await updateCompletionStats(tech);
+    await tech.populate('userId', 'firstName lastName email phone profileImage');
 
     res.json({
       success: true,
@@ -335,6 +392,7 @@ exports.verifyTechnician = async (req, res) => {
     }
 
     tech.verificationStatus = 'verified';
+    tech.awaitingApproval = false; // clients can find them from now on
     // Mark all pending documents as verified
     if (tech.verifiedDocuments?.length) {
       tech.verifiedDocuments.forEach(doc => {

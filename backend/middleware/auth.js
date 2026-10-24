@@ -14,46 +14,69 @@
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { readAuthCookie } = require('../utils/authCookie');
 
 /**
  * Load the current user for a decoded token.
  * The token's role/email are never trusted — they come from the DB.
- * Returns null if the user no longer exists.
+ * Returns null if the user no longer exists or the token was revoked
+ * (its tokenVersion is behind the user's; tokens without one count as 0).
  */
-const loadUser = (decoded) => {
+const loadUser = async (decoded) => {
   if (!decoded.userId) return null;
-  return User.findById(decoded.userId).select('email role status');
+  const user = await User.findById(decoded.userId).select('email role status tokenVersion');
+  if (!user || (decoded.tv || 0) !== (user.tokenVersion || 0)) return null;
+  return user;
 };
+
+const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
 
 /**
  * Main authentication middleware
  * Verifies JWT token and attaches user to req.user
+ *
+ * The token comes from the Authorization header, or else the httpOnly
+ * auth cookie. Cookie-authenticated writes must carry X-Requested-With
+ * (the app's axios client sends it); a cross-site form can't set that
+ * header, and CORS blocks other sites' scripts from setting it.
  */
 const auth = async (req, res, next) => {
   try {
     // Get token from Authorization header
     const authHeader = req.header('Authorization');
+    let token;
 
-    // Check if Authorization header exists
-    if (!authHeader) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided. Please login first.',
-        code: 'NO_TOKEN'
-      });
+    if (authHeader) {
+      // Check if header has Bearer prefix
+      if (!authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid token format. Use: Bearer <token>',
+          code: 'INVALID_FORMAT'
+        });
+      }
+
+      // Extract token (remove 'Bearer ' prefix)
+      token = authHeader.substring(7);
+    } else {
+      token = readAuthCookie(req.headers.cookie);
+
+      if (!token) {
+        return res.status(401).json({
+          success: false,
+          message: 'No token provided. Please login first.',
+          code: 'NO_TOKEN'
+        });
+      }
+
+      if (!SAFE_METHODS.includes(req.method) && !req.header('X-Requested-With')) {
+        return res.status(403).json({
+          success: false,
+          message: 'Request blocked. Please reload the page and try again.',
+          code: 'CSRF_CHECK_FAILED'
+        });
+      }
     }
-
-    // Check if header has Bearer prefix
-    if (!authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token format. Use: Bearer <token>',
-        code: 'INVALID_FORMAT'
-      });
-    }
-
-    // Extract token (remove 'Bearer ' prefix)
-    const token = authHeader.substring(7);
 
     // Validate token length
     if (!token || token.length < 10) {
@@ -91,8 +114,8 @@ const auth = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Account no longer exists. Please login again.',
-        code: 'USER_NOT_FOUND'
+        message: 'Your session has ended. Please login again.',
+        code: 'SESSION_INVALID'
       });
     }
 
@@ -239,24 +262,23 @@ const authorize = (...roles) => {
 const optionalAuth = async (req, res, next) => {
   try {
     const authHeader = req.header('Authorization');
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : readAuthCookie(req.headers.cookie);
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-
-      if (token && process.env.JWT_SECRET) {
-        try {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          const user = await loadUser(decoded);
-          if (user && user.status === 'active') {
-            req.user = {
-              userId: user._id.toString(),
-              email: user.email,
-              role: user.role
-            };
-          }
-        } catch (error) {
-          // Token is invalid but we don't care - just proceed without user
+    if (token && process.env.JWT_SECRET) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await loadUser(decoded);
+        if (user && user.status === 'active') {
+          req.user = {
+            userId: user._id.toString(),
+            email: user.email,
+            role: user.role
+          };
         }
+      } catch (error) {
+        // Token is invalid but we don't care - just proceed without user
       }
     }
 
@@ -289,6 +311,7 @@ const requireClientOrAdmin = (req, res, next) => {
 // Export all middleware functions
 module.exports = {
   auth,           // Main authentication middleware
+  loadUser,       // Decoded token -> user, or null if revoked/deleted
   authorize,      // Role-based authorization factory
   optionalAuth,   // Optional authentication (doesn't block unauthenticated)
   requireAdmin,   // Shortcut for admin-only routes

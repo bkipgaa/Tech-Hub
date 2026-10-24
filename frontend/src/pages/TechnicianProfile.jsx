@@ -151,8 +151,8 @@ const TechnicianProfile = () => {
    */
   const checkCompletedBookings = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+      const signedIn = localStorage.getItem('user');
+      if (!signedIn) return;
 
       const response = await api.get('/bookings/my-bookings?as=client&status=completed&limit=50');
       if (response.data.success) {
@@ -491,8 +491,8 @@ const TechnicianProfile = () => {
 
   // ─── DERIVED DATA ──────────────────────────────────────────
   const initials = `${technician.userId?.firstName?.[0] || ''}${technician.userId?.lastName?.[0] || ''}`;
-  const token = localStorage.getItem('token');
-  const isLoggedIn = !!token;
+  // Set at login (the token itself may live only in an httpOnly cookie)
+  const isLoggedIn = !!localStorage.getItem('user');
 
   // ─── MAIN RENDER ───────────────────────────────────────────
   return (

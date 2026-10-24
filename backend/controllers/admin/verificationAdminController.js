@@ -201,6 +201,7 @@ exports.approveVerification = async (req, res) => {
     }
 
     tech.verificationStatus = 'verified';
+    tech.awaitingApproval = false; // clients can find them from now on
 
     if (tech.verifiedDocuments?.length) {
       tech.verifiedDocuments.forEach((doc) => {

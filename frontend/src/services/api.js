@@ -25,7 +25,11 @@ const API_URL =
 const api = axios.create({
   baseURL: API_URL,
   // ✅ No default 'Content-Type' — Axios detects it per request.
+  // Send the httpOnly auth cookie the API sets at login.
+  withCredentials: true,
 });
+
+const SAFE_METHODS = ['get', 'head', 'options'];
 
 // ─────────────────────────────────────────────────────────────
 // REQUEST INTERCEPTOR
@@ -34,10 +38,16 @@ const api = axios.create({
 // ─────────────────────────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
-    // Attach auth token
+    // Attach auth token (absent in cookie-only mode; the cookie is used)
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // The API requires this on cookie-authenticated writes (CSRF guard).
+    // Only on writes, so public GETs don't need a CORS preflight.
+    if (!SAFE_METHODS.includes((config.method || 'get').toLowerCase())) {
+      config.headers['X-Requested-With'] = 'XMLHttpRequest';
     }
 
     // Extra safety: when the body is FormData, remove any

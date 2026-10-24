@@ -6,9 +6,11 @@ let currentToken = null;
 /**
  * initSocket(token)
  * -----------------
- * Creates or returns the singleton socket.
+ * Creates or returns the singleton socket. Call it only when signed in;
+ * with no token (cookie-only mode) the server reads the httpOnly auth
+ * cookie sent in the handshake.
  */
-export const initSocket = (token) => {
+export const initSocket = (token = null) => {
   currentToken = token;
 
   if (!socket) {
@@ -20,6 +22,7 @@ export const initSocket = (token) => {
     socket = io(baseURL, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
+      withCredentials: true, // send the auth cookie in the handshake
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
@@ -27,16 +30,12 @@ export const initSocket = (token) => {
 
     socket.on('connect', () => {
       console.log('🔌 Socket connected:', socket.id);
-      if (currentToken) {
-        socket.emit('authenticate', currentToken);
-      }
+      socket.emit('authenticate', currentToken);
     });
 
     socket.on('reconnect', () => {
       console.log('🔄 Socket reconnected');
-      if (currentToken) {
-        socket.emit('authenticate', currentToken);
-      }
+      socket.emit('authenticate', currentToken);
     });
 
     socket.on('disconnect', (reason) => {

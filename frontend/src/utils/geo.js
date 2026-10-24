@@ -27,3 +27,25 @@ export const getLivePosition = (options = {}) =>
   });
 
 export const mapsLink = ({ lat, lng }) => `https://www.google.com/maps?q=${lat},${lng}`;
+
+/**
+ * Town, county and a readable address for a point (OpenStreetMap Nominatim).
+ * Resolves to empty strings when the lookup fails; the coordinates are what matter.
+ */
+export const reverseGeocode = async ({ lat, lng }) => {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`
+    );
+    const data = await res.json();
+    const a = data.address || {};
+    return {
+      city: a.city || a.town || a.village || a.suburb || '',
+      // In Kenya OSM puts the county in `state` and the sub-county in `county`
+      state: (a.state || a.county || '').replace(/ County$/, ''),
+      formattedAddress: data.display_name || '',
+    };
+  } catch {
+    return { city: '', state: '', formattedAddress: '' };
+  }
+};

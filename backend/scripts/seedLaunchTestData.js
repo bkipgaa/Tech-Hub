@@ -29,6 +29,10 @@
  *   node scripts/seedLaunchTestData.js --email=you@gmail.com --confirm-db=tech-hub --apply --backup-dir=../../tech-hub-backups
  *        → writes a backup (EJSON) of everything it deletes, then resets and seeds,
  *          and saves the test logins to <backup-dir>/<stamp>/test-accounts.txt
+ *   node scripts/seedLaunchTestData.js --delete-only --confirm-db=tech-hub [--apply --backup-dir=...]
+ *        → only deletes (with the same backup) and creates nothing: clears the test
+ *          data before real users join. The dry run lists accounts that don't look
+ *          like test accounts, so a real sign-up isn't deleted by mistake.
  *
  * MONGODB_URI comes from .env (or the environment). --confirm-db must match
  * the connected database's name, so it can't run against the wrong one.
@@ -59,13 +63,14 @@ const APPLY = process.argv.includes('--apply');
 const EMAIL = arg('email');
 const CONFIRM_DB = arg('confirm-db');
 const BACKUP_DIR = arg('backup-dir');
+const DELETE_ONLY = process.argv.includes('--delete-only');
 
 const die = (msg) => { console.error(`\n❌ ${msg}\n`); process.exit(1); };
-if (!EMAIL || !/^[^@\s+]+@[^@\s]+\.[^@\s]+$/.test(EMAIL)) die('Pass --email=you@example.com (no "+" in it): test accounts use aliases of it.');
+if (!DELETE_ONLY && (!EMAIL ||!/^[^@\s+]+@[^@\s]+\.[^@\s]+$/.test(EMAIL))) die('Pass --email=you@example.com (no "+" in it): test accounts use aliases of it.');
 if (!CONFIRM_DB) die('Pass --confirm-db=<database name> to confirm which database to reset.');
 if (APPLY && !BACKUP_DIR) die('Pass --backup-dir=<folder> with --apply: a backup is written before anything is deleted.');
 
-const [LOCAL, DOMAIN] = EMAIL.split('@');
+const [LOCAL, DOMAIN] = (EMAIL || '@').split('@');
 const alias = (tag) => `${LOCAL}+${tag}@${DOMAIN}`;
 
 // ─── The 13 locations ─────────────────────────────────────────
@@ -194,26 +199,63 @@ const main = async () => {
   if (db.databaseName !== CONFIRM_DB) die(`Connected to "${db.databaseName}", but --confirm-db says "${CONFIRM_DB}". Nothing changed.`);
 
   // ── What will be deleted ───────────────────────────────────
+  // A reseed clears every client and expert. --delete-only removes just the test
+  // accounts (a "+tag" email alias or a 0700 000 xxx phone) and what belongs to
+  // them, so people who already signed up for real are kept.
   const userFilter = { role: { $in: DELETE_USER_ROLES } };
-  const counts = {
-    users: await db.collection('users').countDocuments(userFilter),
-    technicians: await db.collection('technicians').countDocuments(),
-    listings: await db.collection('listings').countDocuments(),
+  const filters = {
+    users: userFilter, technicians: {}, listings: {},
+    ...Object.fromEntries(RELATED.map((c) => [c, {}])),
   };
-  for (const c of RELATED) counts[c] = await db.collection(c).countDocuments().catch(() => 0);
+  if (DELETE_ONLY) {
+    const testUserFilter = { ...userFilter, $or: [{ email: /\+/ }, { phone: /^0700 000 / }] };
+    const ids = async (name, filter) => (await db.collection(name).find(filter).project({ _id: 1 }).toArray()).map((d) => d._id);
+    const testUsers = await ids('users', testUserFilter);
+    const testTechs = await ids('technicians', { userId: { $in: testUsers } });
+    const bookingFilter = { $or: [{ clientId: { $in: testUsers } }, { technicianId: { $in: testTechs } }] };
+    const testBookings = await ids('bookings', bookingFilter);
+    const testJobs = await ids('jobs', { clientId: { $in: testUsers } });
+    const conversationFilter = { $or: [{ client: { $in: testUsers } }, { technician: { $in: testUsers } }] };
+    Object.assign(filters, {
+      users: testUserFilter,
+      technicians: { userId: { $in: testUsers } },
+      listings: { owner: { $in: testUsers } },
+      bookings: bookingFilter,
+      jobs: { clientId: { $in: testUsers } },
+      jobapplications: { $or: [{ jobId: { $in: testJobs } }, { technicianId: { $in: testUsers } }] },
+      conversations: conversationFilter,
+      messages: { $or: [{ sender: { $in: testUsers } }, { receiver: { $in: testUsers } }] },
+      evidencehashes: { $or: [{ bookingId: { $in: testBookings } }, { technicianId: { $in: testTechs } }] },
+    });
+  }
+  const counts = {};
+  for (const [c, filter] of Object.entries(filters)) counts[c] = await db.collection(c).countDocuments(filter).catch(() => 0);
   console.log(`\nDatabase: ${db.databaseName}  (${APPLY ? 'APPLYING' : 'DRY RUN, add --apply to change anything'})`);
   console.log('Will delete:', counts);
 
-  // ── Catalog lookups (categories must exist) ────────────────
-  const catalog = await ServiceCatalog.find({ isActive: true }).lean();
-  const byMain = Object.fromEntries(catalog.map((c) => [c.mainCategory, c]));
-  const missing = EXPERTS.map((e) => e[3]).filter((m) => !byMain[m]);
-  if (missing.length) die(`These categories aren't in the catalog: ${missing.join(', ')}`);
+  if (DELETE_ONLY) {
+    const kept = await db.collection('users')
+      .find({ ...userFilter, $nor: [{ email: /\+/ }, { phone: /^0700 000 / }] })
+      .project({ firstName: 1, lastName: 1, email: 1, role: 1, createdAt: 1 })
+      .toArray();
+    console.log(`\nKept (not test accounts): ${kept.length}`);
+    kept.forEach((u) => console.log(`  - ${u.firstName || ''} ${u.lastName || ''} (${u.role}) ${u.email || ''}, joined ${u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : '?'}`));
+    console.log('Will create: nothing (--delete-only)');
+    if (!APPLY) { await mongoose.disconnect(); return; }
+  }
 
-  const nListings = LOCATIONS.reduce((n, l) => n + COMMON(l).length + (EXTRAS[l.key] || []).length, 0)
-    + Object.values(TEST_STATES).flat().length;
-  console.log(`Will create: ${EXPERTS.length} experts, ${CLIENTS.length} clients, ${nListings} listings, ${JOBS.length} jobs`);
-  if (!APPLY) { await mongoose.disconnect(); return; }
+  // ── Catalog lookups (categories must exist) ────────────────
+  const catalog = DELETE_ONLY ? [] : await ServiceCatalog.find({ isActive: true }).lean();
+  const byMain = Object.fromEntries(catalog.map((c) => [c.mainCategory, c]));
+  if (!DELETE_ONLY) {
+    const missing = EXPERTS.map((e) => e[3]).filter((m) => !byMain[m]);
+    if (missing.length) die(`These categories aren't in the catalog: ${missing.join(', ')}`);
+
+    const nListings = LOCATIONS.reduce((n, l) => n + COMMON(l).length + (EXTRAS[l.key] || []).length, 0)
+      + Object.values(TEST_STATES).flat().length;
+    console.log(`Will create: ${EXPERTS.length} experts, ${CLIENTS.length} clients, ${nListings} listings, ${JOBS.length} jobs`);
+    if (!APPLY) { await mongoose.disconnect(); return; }
+  }
 
   // ── Backup ─────────────────────────────────────────────────
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -224,16 +266,19 @@ const main = async () => {
     fs.writeFileSync(path.join(dir, `${name}.json`), EJSON.stringify(docs, null, 1, { relaxed: false }));
     return docs.length;
   };
-  const backedUp = { users: await dump('users', userFilter), technicians: await dump('technicians'), listings: await dump('listings') };
-  for (const c of RELATED) backedUp[c] = await dump(c);
+  const backedUp = {};
+  for (const [c, filter] of Object.entries(filters)) backedUp[c] = await dump(c, filter);
   console.log(`\n💾 Backup written to ${dir}`, backedUp);
 
-  // ── Delete ─────────────────────────────────────────────────
-  await db.collection('users').deleteMany(userFilter);
-  await db.collection('technicians').deleteMany({});
-  await db.collection('listings').deleteMany({});
-  for (const c of RELATED) await db.collection(c).deleteMany({});
-  console.log('🗑️  Deleted');
+  // ── Delete (the same filters as the backup) ────────────────
+  const deleted = {};
+  for (const [c, filter] of Object.entries(filters)) deleted[c] = (await db.collection(c).deleteMany(filter)).deletedCount;
+  console.log('🗑️  Deleted', deleted);
+  if (DELETE_ONLY) {
+    console.log('\n✅ Test data removed. Nothing was created (--delete-only).');
+    await mongoose.disconnect();
+    return;
+  }
 
   // ── Create ─────────────────────────────────────────────────
   const password = 'Webafix-' + crypto.randomBytes(5).toString('hex');

@@ -13,9 +13,15 @@
  */
 
 const User = require('../models/User');
+const Technician = require('../models/Technician');
+const ServiceCatalog = require('../models/ServiceCatalog');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const sendEmail = require('../utils/emailService');
+const { normalizeServiceSelection } = require('../utils/serviceSelection');
+const { CATEGORY_IDS } = require('../utils/listingCategories');
+const { updateCompletionStats, trialSubscriptionFields } = require('./technician/profile/helpers');
+const { setAuthCookie, clearAuthCookie } = require('../utils/authCookie');
 
 // ─────────────────────────────────────────────────────────────
 // HELPER
@@ -24,6 +30,7 @@ const sendEmail = require('../utils/emailService');
 /**
  * Generate a JWT for a regular user (client or technician).
  * Note: Admins never use this token — they use the admin JWT.
+ * `tv` is the user's tokenVersion; bumping it revokes the token.
  */
 const generateToken = (user) => {
   return jwt.sign(
@@ -31,11 +38,49 @@ const generateToken = (user) => {
       userId: user._id,
       email: user.email,
       role: user.role,
+      tv: user.tokenVersion || 0,
     },
     process.env.JWT_SECRET,
     { expiresIn: '30d' }
   );
 };
+
+/**
+ * Sign the user in: set the httpOnly cookie and return the token for the
+ * JSON body. Set AUTH_TOKEN_IN_BODY=false once the frontend runs cookie-only.
+ */
+const issueSession = (res, user) => {
+  const token = generateToken(user);
+  setAuthCookie(res, token);
+  return process.env.AUTH_TOKEN_IN_BODY === 'false' ? {} : { token };
+};
+
+/**
+ * Signup and location fields the frontend uses to route people
+ * (added to the user objects returned below).
+ */
+const signupFields = (user) => ({
+  signupIntent: user.signupIntent || null,
+  preferences: {
+    mainCategory: user.preferences?.mainCategory || '',
+    listingCategory: user.preferences?.listingCategory || '',
+  },
+  location: user.location?.lat != null ? user.location : null,
+  address: user.address || {},
+});
+
+/**
+ * Read { lat, lng } from the request; null when missing or not a real fix.
+ */
+const parseLocation = (raw) => {
+  const lat = Number(raw?.lat);
+  const lng = Number(raw?.lng);
+  const valid = Number.isFinite(lat) && Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
+  return valid ? { lat, lng } : null;
+};
+
+const SIGNUP_INTENTS = ['expert', 'client', 'lister', 'stay_seeker'];
 
 // ─────────────────────────────────────────────────────────────
 // REGISTER (client / technician only)
@@ -46,25 +91,71 @@ const generateToken = (user) => {
  * @route   POST /api/auth/register
  * @access  Public
  * 
- * Only 'client' and 'technician' roles are allowed via public
- * registration. Admins are created by super admins via the admin panel.
+ * The signup form asks what the person is here for (signupIntent):
+ *   expert      → technician account + expert profile from the categories
+ *                 they picked (pending until an admin approves it)
+ *   client      → client, with the kind of expert they're after
+ *   lister      → client, with the Stays & Spaces category they'll list
+ *   stay_seeker → client, with the Stays & Spaces category they want
+ * Everyone must share their device location.
+ *
+ * Only 'client' and 'technician' roles are created here. Admins are
+ * created by super admins via the admin panel.
  */
 exports.register = async (req, res) => {
   try {
-    console.log('Registration request received:', req.body);
+    const { email, password, firstName, lastName, phone } = req.body;
 
-    const { email, password, firstName, lastName, phone, role = 'client' } = req.body;
-
-    // SECURITY: Only client/technician can be created here
-    const allowedRoles = ['client', 'technician'];
-    const requestedRole = role || 'client';
-
-    if (!allowedRoles.includes(requestedRole)) {
+    const signupIntent = req.body.signupIntent;
+    if (!SIGNUP_INTENTS.includes(signupIntent)) {
       return res.status(400).json({
         success: false,
-        message:
-          'Invalid role selection. Admin accounts cannot be created through public registration.',
+        message: 'Tell us how you will use Webafix (expert, client, list a property or find a stay).',
       });
+    }
+    const role = signupIntent === 'expert' ? 'technician' : 'client';
+
+    const coords = parseLocation(req.body.location);
+    if (!coords) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please share your location to sign up.',
+      });
+    }
+    const address = {
+      city: String(req.body.address?.city || '').trim(),
+      state: String(req.body.address?.state || '').trim(),
+      country: String(req.body.address?.country || '').trim() || 'Kenya',
+    };
+    if (!address.city || !address.state) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter your town and county.',
+      });
+    }
+
+    // What they picked on the form
+    const preferences = {};
+    let services = null;
+    if (signupIntent === 'expert') {
+      try {
+        services = await normalizeServiceSelection(req.body.services);
+      } catch (err) {
+        return res.status(400).json({ success: false, message: err.message });
+      }
+    } else if (signupIntent === 'client') {
+      const mainCategory = String(req.body.mainCategory || '').trim();
+      const exists = mainCategory && await ServiceCatalog.exists({ mainCategory, isActive: true });
+      if (!exists) {
+        return res.status(400).json({ success: false, message: 'Pick the kind of expert you are looking for.' });
+      }
+      preferences.mainCategory = mainCategory;
+    } else {
+      const listingCategory = String(req.body.listingCategory || '');
+      if (!CATEGORY_IDS.includes(listingCategory)) {
+        return res.status(400).json({ success: false, message: 'Pick a Stays & Spaces category.' });
+      }
+      preferences.listingCategory = listingCategory;
     }
 
     // Duplicate check
@@ -76,6 +167,8 @@ exports.register = async (req, res) => {
       });
     }
 
+    const formattedAddress = String(req.body.location?.formattedAddress || '').slice(0, 300);
+
     // Create user
     const user = new User({
       email,
@@ -83,22 +176,49 @@ exports.register = async (req, res) => {
       firstName,
       lastName,
       phone,
-      role: requestedRole,
+      role,
       profileImage: '',
       isVerified: false,
       status: 'active',
+      signupIntent,
+      preferences,
+      location: { ...coords, formattedAddress, updatedAt: new Date() },
+      address,
     });
 
-    console.log('Saving user to database...');
     await user.save();
-    console.log('User saved successfully with ID:', user._id);
 
-    const token = generateToken(user);
+    // Experts get their profile straight away; it waits for admin approval
+    if (services) {
+      try {
+        const technician = new Technician({
+          userId: user._id,
+          ...services,
+          address: { city: address.city, state: address.state, country: address.country },
+          location: { type: 'Point', coordinates: [coords.lng, coords.lat], formattedAddress },
+          locationUpdatedAt: new Date(),
+          yearsOfExperience: 0,
+          languages: [{ name: 'English', proficiency: 'Fluent' }],
+          pricing: { paymentMethods: ['Cash', 'M-Pesa'] },
+          verificationStatus: 'pending',
+          awaitingApproval: true,
+          ...trialSubscriptionFields(),
+        });
+        await technician.save();
+        await updateCompletionStats(technician);
+      } catch (err) {
+        // Don't leave an expert account without a profile
+        await User.deleteOne({ _id: user._id });
+        throw err;
+      }
+    }
+
+    const session = issueSession(res, user);
 
     res.status(201).json({
       success: true,
       message: `User registered successfully as ${user.role}`,
-      token,
+      ...session,
       user: {
         id: user._id,
         email: user.email,
@@ -109,6 +229,7 @@ exports.register = async (req, res) => {
         phone: user.phone,
         profileImage: user.profileImage || '',
         isVerified: user.isVerified,
+        ...signupFields(user),
       },
     });
   } catch (error) {
@@ -174,12 +295,12 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user);
+    const session = issueSession(res, user);
 
     res.json({
       success: true,
       message: `Welcome back, ${user.firstName}!`,
-      token,
+      ...session,
       user: {
         id: user._id,
         email: user.email,
@@ -190,6 +311,7 @@ exports.login = async (req, res) => {
         phone: user.phone,
         profileImage: user.profileImage || '',
         isVerified: user.isVerified,
+        ...signupFields(user),
         status: user.status,
       },
     });
@@ -248,6 +370,7 @@ exports.getProfile = async (req, res) => {
         phone: user.phone,
         profileImage: user.profileImage || '',
         isVerified: user.isVerified,
+        ...signupFields(user),
         status: user.status,
         createdAt: user.createdAt,
       },
@@ -361,6 +484,10 @@ exports.updateProfile = async (req, res) => {
         role: user.role,
         phone: user.phone,
         profileImage: user.profileImage || '',
+        isVerified: user.isVerified,
+        status: user.status,
+        createdAt: user.createdAt,
+        ...signupFields(user),
       },
     });
   } catch (error) {
@@ -369,6 +496,73 @@ exports.updateProfile = async (req, res) => {
       success: false,
       message: 'Server error',
     });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// UPDATE LOCATION
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * @desc    Save the device location (and town/county) on the account.
+ *          For experts the profile location is moved too, so clients
+ *          find them where they now are.
+ * @route   PUT /api/auth/location
+ * @access  Private
+ */
+exports.updateLocation = async (req, res) => {
+  try {
+    const coords = parseLocation(req.body.location);
+    if (!coords) {
+      return res.status(400).json({ success: false, message: 'Invalid location' });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const formattedAddress = String(req.body.location?.formattedAddress || '').slice(0, 300);
+    user.location = { ...coords, formattedAddress, updatedAt: new Date() };
+    const city = String(req.body.address?.city || '').trim();
+    const state = String(req.body.address?.state || '').trim();
+    user.address = { ...(user.toObject().address || {}), ...(city && { city }), ...(state && { state }) };
+    await user.save();
+
+    if (user.role === 'technician') {
+      const technician = await Technician.findOne({ userId: user._id });
+      if (technician) {
+        const current = technician.toObject();
+        technician.location = { ...current.location, type: 'Point', coordinates: [coords.lng, coords.lat], formattedAddress };
+        technician.locationUpdatedAt = new Date();
+        if (city || state) {
+          technician.address = { ...current.address, ...(city && { city }), ...(state && { state }) };
+        }
+        await technician.save();
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Location updated',
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        fullName: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        phone: user.phone,
+        profileImage: user.profileImage || '',
+        isVerified: user.isVerified,
+        status: user.status,
+        createdAt: user.createdAt,
+        ...signupFields(user),
+      },
+    });
+  } catch (error) {
+    console.error('Update location error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
@@ -488,6 +682,8 @@ exports.resetPassword = async (req, res) => {
     user.password = newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    // Sign out every existing session (someone else may have the old password)
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
 
     await user.save();
 
@@ -501,6 +697,36 @@ exports.resetPassword = async (req, res) => {
       success: false,
       message: 'Server error. Could not reset password.',
     });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// LOGOUT
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * @desc    Log out this browser (clears the httpOnly auth cookie)
+ * @route   POST /api/auth/logout
+ * @access  Public — works even when the session already expired
+ */
+exports.logout = (req, res) => {
+  clearAuthCookie(res);
+  res.json({ success: true, message: 'Logged out' });
+};
+
+/**
+ * @desc    Log out everywhere: revokes every token issued so far
+ * @route   POST /api/auth/logout-all
+ * @access  Private
+ */
+exports.logoutAll = async (req, res) => {
+  try {
+    await User.updateOne({ _id: req.user.userId }, { $inc: { tokenVersion: 1 } });
+    clearAuthCookie(res);
+    res.json({ success: true, message: 'Logged out on all devices' });
+  } catch (error) {
+    console.error('Logout all error:', error);
+    res.status(500).json({ success: false, message: 'Server error. Could not log out.' });
   }
 };
 

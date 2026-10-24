@@ -1,12 +1,12 @@
 /**
  * ListingForm.jsx
  * ===============
- * Create (/stays/new) or edit (/stays/:id/edit) a Stays & Spaces listing.
+ * Create (/stays/new, optionally ?category=) or edit (/stays/:id/edit) a Stays & Spaces listing.
  * Photos upload one at a time to /listings/photos and are saved with the listing.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, AlertCircle, ImagePlus, X, Star } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -72,7 +72,11 @@ const ListingForm = () => {
   const { user } = useAuth();
   const fileInput = useRef(null);
 
-  const [form, setForm] = useState({ ...EMPTY, contactPhone: user?.phone || '' });
+  // ?category= comes from signup ("I want to list a property")
+  const [searchParams] = useSearchParams();
+  const startCategory = categoryById(searchParams.get('category')) ? searchParams.get('category') : '';
+
+  const [form, setForm] = useState({ ...EMPTY, category: isEdit ? '' : startCategory, contactPhone: user?.phone || '' });
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(0);

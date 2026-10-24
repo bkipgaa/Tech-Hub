@@ -12,6 +12,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LocateFixed, Loader2, Navigation, ChevronRight, AlertCircle } from 'lucide-react';
 import api from '../../services/api';
 import useMyLocation from '../../hooks/useMyLocation';
+import { useAuth } from '../../context/AuthContext';
 import ListingCard from './ListingCard';
 import { ExpertCard } from '../ServicesHighlights';
 
@@ -27,6 +28,7 @@ const TABS = [
 
 const NearYou = ({ className = '' }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { location, status, error, locate } = useMyLocation({ autoIfGranted: true });
   const [tab, setTab] = useState('short_stays');
   const [result, setResult] = useState({ key: null, items: [] });
@@ -84,7 +86,8 @@ const NearYou = ({ className = '' }) => {
             )}
           </div>
           <button
-            onClick={locate}
+            // Guests are asked to log in or sign up first, then land on places near them
+            onClick={user ? locate : () => navigate('/stays?near=1')}
             disabled={status === 'locating'}
             className="inline-flex items-center justify-center gap-2 bg-red-600 text-white font-semibold px-5 py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-60"
           >

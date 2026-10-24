@@ -1,7 +1,6 @@
 const User = require('../../../models/User');
 const Technician = require('../../../models/Technician');
-const { subscriptionPlans } = require('../../../utils/subscriptionPlans'); // ✅ import
-const { updateCompletionStats } = require('./helpers');
+const { updateCompletionStats, trialSubscriptionFields } = require('./helpers');
 
 exports.createProfile = async (req, res) => {
   try {
@@ -161,26 +160,16 @@ exports.createProfile = async (req, res) => {
         }
       },
       isAvailable: req.body.isAvailable !== undefined ? req.body.isAvailable : true,
+      // Hidden from clients until an admin approves the profile
+      awaitingApproval: true,
       lastActive: new Date()
     };
 
     // ============================================================
     // ✅ AUTOMATIC 30‑DAY TRIAL SUBSCRIPTION
     // ============================================================
-    const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 30);
-
-    technicianData.subscription = {
-      plan: 'trial',
-      planDetails: subscriptionPlans.trial,
-      startDate: new Date(),
-      trialEndDate: trialEndDate,
-      isTrial: true,
-      autoRenew: false
-    };
-    technicianData.trialHistory = { freeTrialUsedAt: new Date() };
-    // Override service radius to match trial plan (10km)
-    technicianData.serviceRadius = subscriptionPlans.trial.visibilityRadius;
+    // Also overrides the service radius to match the trial plan (10km)
+    Object.assign(technicianData, trialSubscriptionFields());
 
     // 6. Create and save technician profile
     const technician = new Technician(technicianData);

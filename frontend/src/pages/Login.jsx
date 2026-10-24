@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
@@ -12,14 +12,15 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
-  const [showToken, setShowToken] = useState(false);
-  const [receivedToken, setReceivedToken] = useState('');
   const { login, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   // Get redirect path from location state or default to home
-  const from = location.state?.from?.pathname || '/';
+  const fromLocation = location.state?.from;
+  const from = fromLocation ? `${fromLocation.pathname}${fromLocation.search || ''}` : '/';
+  // Set when a guest tried to open a page that needs an account
+  const needsAccount = location.state?.needsAccount;
 
   // If user is already logged in, redirect based on role
   useEffect(() => {
@@ -30,7 +31,7 @@ const Login = () => {
 
   const redirectBasedOnRole = (role) => {
     // If there's a specific redirect path in state, use it
-    if (from && from !== '/login' && from !== '/signup') {
+    if (from && !from.startsWith('/login') && !from.startsWith('/signup')) {
       navigate(from);
       return;
     }
@@ -66,16 +67,8 @@ const Login = () => {
       const result = await login(formData.email, formData.password);
       
       if (result.success) {
-        // ✅ Token should be stored in localStorage by AuthContext
-        const storedToken = localStorage.getItem('token');
-        setReceivedToken(storedToken || result.token);
         setLoginSuccess(true);
-        
-        console.log('✅ Login successful!');
-        console.log('Token stored:', !!localStorage.getItem('token'));
-        console.log('User stored:', !!localStorage.getItem('user'));
-        console.log('User role:', result.user?.role);
-        
+
         // Show success message briefly then redirect
         setTimeout(() => {
           redirectBasedOnRole(result.user?.role);
@@ -91,36 +84,23 @@ const Login = () => {
     }
   };
 
-  const toggleTokenDisplay = () => {
-    setShowToken(!showToken);
-  };
-
-  // Debug: Check localStorage
-  const checkStoredData = () => {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-    console.log('🔍 localStorage check:');
-    console.log('  - Token exists:', !!token);
-    console.log('  - Token preview:', token ? `${token.substring(0, 20)}...` : 'none');
-    console.log('  - User exists:', !!user);
-    if (user) {
-      try {
-        const userData = JSON.parse(user);
-        console.log('  - User role:', userData.role);
-        console.log('  - User email:', userData.email);
-        console.log('  - User ID:', userData._id);
-      } catch (e) {
-        console.log('  - User data invalid');
-      }
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-xl">
         <div>
           <h2 className="text-3xl font-bold text-center text-red-600">Welcome Back</h2>
           <p className="mt-2 text-center text-gray-600">Sign in to your account</p>
+          {needsAccount && (
+            <div className="mt-4 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 text-sm text-center">
+              <p>Log in or create a free account to continue.</p>
+              <Link
+                to="/signup"
+                className="mt-3 inline-block bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700"
+              >
+                Create an account
+              </Link>
+            </div>
+          )}
         </div>
         
         {error && (
@@ -137,33 +117,6 @@ const Login = () => {
               <p className="font-semibold">✅ Login successful!</p>
             </div>
             <p className="text-sm mt-1">Redirecting to dashboard...</p>
-            
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={toggleTokenDisplay}
-                className="text-xs bg-green-200 px-3 py-1 rounded-full hover:bg-green-300 transition-colors flex items-center gap-1"
-              >
-                {showToken ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                {showToken ? 'Hide Token' : 'View Token'}
-              </button>
-              
-              <button
-                type="button"
-                onClick={checkStoredData}
-                className="text-xs bg-blue-200 px-3 py-1 rounded-full hover:bg-blue-300 transition-colors"
-              >
-                Check Storage
-              </button>
-            </div>
-            
-            {showToken && receivedToken && (
-              <div className="mt-3 p-2 bg-white rounded border border-green-300 overflow-auto max-h-24">
-                <p className="text-xs font-mono text-gray-700 break-all">
-                  Token: {receivedToken}
-                </p>
-              </div>
-            )}
           </div>
         )}
 

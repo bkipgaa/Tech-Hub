@@ -8,11 +8,12 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Loader2, AlertCircle, BadgeCheck, Ban, CheckCircle,
-  Mail, Phone, MapPin, Star, Briefcase, Calendar, TrendingUp,
+  Mail, Phone, MapPin, Star, Briefcase, Calendar, TrendingUp, Pencil,
 } from 'lucide-react';
 import adminApi from '../../services/adminApi';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import PermissionGate from '../../components/admin/PermissionGate';
+import EditExpertProfile from '../../components/admin/EditExpertProfile';
 
 const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -31,6 +32,7 @@ const TechnicianDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const fetchTech = async () => {
     setLoading(true);
@@ -60,7 +62,8 @@ const TechnicianDetail = () => {
   };
 
   const handleVerify = () => {
-    if (window.confirm('Mark this expert as verified?')) runAction('verify');
+    const note = tech.awaitingApproval ? ' Clients will be able to find them.' : '';
+    if (window.confirm(`Mark this expert as verified?${note}`)) runAction('verify');
   };
 
   const handleReject = () => {
@@ -117,24 +120,35 @@ const TechnicianDetail = () => {
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
+        <PermissionGate permission="technicians.edit">
+          {!editing && (
+            <button
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+            >
+              <Pencil className="w-4 h-4" /> Edit profile
+            </button>
+          )}
+        </PermissionGate>
         <PermissionGate permission="technicians.verify">
+          {/* Rejected experts can still be approved later, e.g. after their profile is fixed */}
+          {tech.verificationStatus !== 'verified' && (
+            <button
+              onClick={handleVerify}
+              disabled={acting}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+            >
+              <BadgeCheck className="w-4 h-4" /> Approve Verification
+            </button>
+          )}
           {tech.verificationStatus === 'pending' && (
-            <>
-              <button
-                onClick={handleVerify}
-                disabled={acting}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-              >
-                <BadgeCheck className="w-4 h-4" /> Approve Verification
-              </button>
-              <button
-                onClick={handleReject}
-                disabled={acting}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50"
-              >
-                <Ban className="w-4 h-4" /> Reject
-              </button>
-            </>
+            <button
+              onClick={handleReject}
+              disabled={acting}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50"
+            >
+              <Ban className="w-4 h-4" /> Reject
+            </button>
           )}
         </PermissionGate>
         <PermissionGate permission="technicians.suspend">
@@ -156,6 +170,17 @@ const TechnicianDetail = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: info */}
         <div className="lg:col-span-2 space-y-6">
+          {editing && (
+            <EditExpertProfile
+              tech={tech}
+              onCancel={() => setEditing(false)}
+              onSaved={async () => {
+                setEditing(false);
+                await fetchTech();
+              }}
+            />
+          )}
+
           {/* Contact */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-base font-semibold text-gray-800 mb-4">Contact</h2>
@@ -187,11 +212,42 @@ const TechnicianDetail = () => {
               <Detail label="Service categories" value={tech.serviceCategories?.length || 0} />
               <Detail label="Profile completion" value={`${tech.profileCompletionPercentage || 0}%`} />
             </dl>
+            {tech.profileHeadline && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Headline</p>
+                <p className="text-sm text-gray-700">{tech.profileHeadline}</p>
+              </div>
+            )}
             {tech.aboutMe && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">About</p>
                 <p className="text-sm text-gray-700 leading-relaxed">{tech.aboutMe}</p>
               </div>
+            )}
+            {tech.skills?.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Skills</p>
+                <p className="text-sm text-gray-700">{tech.skills.map((s) => s.name).join(', ')}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Services */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="text-base font-semibold text-gray-800 mb-4">Services</h2>
+            {tech.serviceCategories?.length > 0 ? (
+              <ul className="space-y-3">
+                {tech.serviceCategories.map((sc) => (
+                  <li key={`${sc.mainCategory}||${sc.categoryName}`}>
+                    <p className="text-sm font-medium text-gray-800">
+                      {sc.categoryName} <span className="text-xs font-normal text-gray-400">· {sc.mainCategory}</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{(sc.subServices || []).join(', ')}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">No services yet.</p>
             )}
           </div>
 
@@ -239,6 +295,11 @@ const TechnicianDetail = () => {
                   : tech.verificationStatus === 'rejected' ? 'red'
                   : 'yellow'
                 }
+              />
+              <StatusRow
+                label="Visible to clients"
+                value={tech.awaitingApproval ? 'Hidden until approved' : tech.isActive ? 'Yes' : 'No'}
+                color={tech.awaitingApproval ? 'yellow' : tech.isActive ? 'green' : 'gray'}
               />
               <StatusRow
                 label="Account"
