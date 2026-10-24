@@ -11,9 +11,14 @@
  *
  * A rated booking's completedAt is the moment it was rated (rating is what
  * completes a booking), so older ratings without ratingCheck still count here.
+ *
+ * A booking made while the expert was on the Free plan owes a commission. Its
+ * rating and completed job only reach the expert's profile once that is paid
+ * (countRatingIfReady runs after the rating, an admin approval and a payment).
  */
 
 const Booking = require('../models/Booking');
+const Technician = require('../models/Technician');
 
 const MAX_COUNTED_PER_DAY = 2;
 const SHORT_GAP_HOURS = 4;
@@ -53,6 +58,10 @@ const checkNewRating = async (technicianId, bookingId, now = new Date()) => {
   };
 };
 
+/** True while a booking's commission (Free-plan job) is still owed. */
+const commissionOwed = (booking) =>
+  (booking?.commission?.amount || 0) > 0 && !['paid', 'waived'].includes(booking.commission.status);
+
 /** Counts a rating toward the expert's score, reviews and completed jobs. */
 const applyRatingToTechnician = async (technician, booking) => {
   await technician.updateRating(booking.clientRating);
@@ -69,9 +78,39 @@ const applyRatingToTechnician = async (technician, booking) => {
   await technician.save();
 };
 
+/**
+ * Count a booking's rating on the expert's profile once nothing holds it back:
+ * rated, not held by (or rejected in) the timing check, and no commission owed.
+ * Claimed with ratingCountedAt in one conditional update, so it counts once.
+ * Returns true if it was counted now.
+ */
+const countRatingIfReady = async (bookingId) => {
+  const booking = await Booking.findOneAndUpdate(
+    {
+      _id: bookingId,
+      status: 'completed',
+      clientRating: { $ne: null },
+      ratingCountedAt: null,
+      'ratingCheck.status': { $in: ['counted', 'approved'] },
+      $or: [
+        { 'commission.amount': { $not: { $gt: 0 } } },
+        { 'commission.status': { $in: ['paid', 'waived'] } },
+      ],
+    },
+    { $set: { ratingCountedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  if (!booking) return false;
+  const technician = await Technician.findById(booking.technicianId);
+  if (technician) await applyRatingToTechnician(technician, booking);
+  return true;
+};
+
 module.exports = {
   MAX_COUNTED_PER_DAY,
   SHORT_GAP_HOURS,
   checkNewRating,
   applyRatingToTechnician,
+  commissionOwed,
+  countRatingIfReady,
 };

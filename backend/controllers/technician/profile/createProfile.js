@@ -1,6 +1,6 @@
 const User = require('../../../models/User');
 const Technician = require('../../../models/Technician');
-const { updateCompletionStats, trialSubscriptionFields } = require('./helpers');
+const { updateCompletionStats, newExpertSubscriptionFields } = require('./helpers');
 
 exports.createProfile = async (req, res) => {
   try {
@@ -166,10 +166,10 @@ exports.createProfile = async (req, res) => {
     };
 
     // ============================================================
-    // ✅ AUTOMATIC 30‑DAY TRIAL SUBSCRIPTION
+    // ✅ STARTS ON THE FREE PLAN (50km, forever)
     // ============================================================
-    // Also overrides the service radius to match the trial plan (10km)
-    Object.assign(technicianData, trialSubscriptionFields());
+    // Also sets the service radius to the Free plan's 50km
+    Object.assign(technicianData, newExpertSubscriptionFields());
 
     // 6. Create and save technician profile
     const technician = new Technician(technicianData);

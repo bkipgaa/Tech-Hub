@@ -20,7 +20,7 @@
 const Technician = require('../../models/Technician');
 const User = require('../../models/User');
 const Booking = require('../../models/Booking');
-const { isPlanActive } = require('../../utils/subscriptionPlans');
+const { isPlanActive, getEffectivePlan } = require('../../utils/subscriptionPlans');
 const { normalizeServiceSelection } = require('../../utils/serviceSelection');
 const { updateCompletionStats } = require('../technician/profile/helpers');
 
@@ -80,7 +80,7 @@ const decorateTechnician = (tech, now = Date.now()) => {
       endDate: endDate || null,
       daysRemaining,
       autoRenew: tech.subscription?.autoRenew || false,
-      visibilityRadius: tech.subscription?.planDetails?.visibilityRadius || 10,
+      visibilityRadius: getEffectivePlan(tech.subscription).visibilityRadius,
     },
   };
 };

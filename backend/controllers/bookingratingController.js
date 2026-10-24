@@ -18,7 +18,8 @@ const User = require('../models/User');
 const notify = require('../services/notificationService');
 const mongoose = require('mongoose');
 const jobEvidence = require('../utils/jobEvidence');
-const { checkNewRating, applyRatingToTechnician } = require('../utils/ratingChecks');
+const { checkNewRating, commissionOwed, countRatingIfReady } = require('../utils/ratingChecks');
+const { getEffectivePlan } = require('../utils/subscriptionPlans');
 const { uploadQuotationToCloudinary } = require('../config/cloudinary');
 
 // Technician business name plus the person's name (no contact details)
@@ -229,8 +230,15 @@ exports.createBooking = async (req, res) => {
       bookingLocation.pinnedAt = new Date();
     }
 
+    // On the Free plan the expert owes a commission on this job once it's done
+    const effectivePlan = getEffectivePlan(technician.subscription);
+    const commission = effectivePlan.commissionPerJob > 0
+      ? { amount: effectivePlan.commissionPerJob, plan: effectivePlan.plan, status: 'unpaid' }
+      : { amount: 0, plan: effectivePlan.plan };
+
     // Create booking
     const booking = new Booking({
+      commission,
       clientId,
       technicianId,
       serviceCategory,
@@ -838,18 +846,36 @@ exports.rateTechnician = async (req, res) => {
       return handleControllerError(res, new Error('Already rated'), 'You have already rated this booking.', 400, 'rateTechnician');
     }
 
+    // Held for the admin, or waiting on the expert's commission (Free plan):
+    // the rating is saved and shows on their profile later
     const held = ratingCheck.status === 'held';
-    if (held) {
-      const techUser = await User.findById(technician.userId).select('firstName lastName').lean();
+    const awaitingCommission = commissionOwed(claimed);
+    if (held || awaitingCommission) {
+      const techUser = await User.findById(technician.userId).select('firstName lastName email').lean();
       const expertName = `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || technician.businessName || 'the expert';
+      if (awaitingCommission && techUser?.email) {
+        try {
+          await notify.technicianCommissionDue({
+            technicianEmail: techUser.email,
+            technicianName: expertName,
+            amount: claimed.commission.amount,
+            rating,
+          });
+        } catch (notifyErr) {
+          console.error('Commission notification failed:', notifyErr.message);
+        }
+      }
       return res.json({
         success: true,
-        message: `Thanks! Your rating is saved and will appear on ${expertName}'s profile after a quick check by our team.`,
+        message: held
+          ? `Thanks! Your rating is saved and will appear on ${expertName}'s profile after a quick check by our team.`
+          : `Thanks! Your rating is saved and will appear on ${expertName}'s profile once the job is finalised.`,
         data: { bookingId: booking._id, rating, review: claimed.clientReview, held: true },
       });
     }
 
-    await applyRatingToTechnician(technician, claimed);
+    await countRatingIfReady(claimed._id);
+    const { rating: score } = await Technician.findById(technician._id).select('rating').lean();
 
     // ─── Send notification email to technician (non-blocking) ───
     try {
@@ -878,9 +904,9 @@ exports.rateTechnician = async (req, res) => {
         rating,
         review: claimed.clientReview,
         technicianRating: {
-          average: technician.rating.average,
-          count: technician.rating.count,
-          distribution: technician.rating.distribution,
+          average: score?.average,
+          count: score?.count,
+          distribution: score?.distribution,
         },
       },
     });

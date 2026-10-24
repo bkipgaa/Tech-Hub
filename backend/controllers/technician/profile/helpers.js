@@ -149,30 +149,25 @@ const getProfileCompletionBreakdown = (technician) => {
 };
 
 /**
- * Fields that start a new expert on the automatic 30-day free trial
+ * Fields that start a new expert on the Free plan (50 km, forever). The free
+ * first month on a paid plan stays available for them to start later.
  *
- * @returns {Object} subscription, trialHistory and serviceRadius
+ * @returns {Object} subscription and serviceRadius
  */
-const trialSubscriptionFields = () => {
-  const trialEndDate = new Date();
-  trialEndDate.setDate(trialEndDate.getDate() + 30);
-  return {
-    subscription: {
-      plan: 'trial',
-      planDetails: subscriptionPlans.trial,
-      startDate: new Date(),
-      trialEndDate,
-      isTrial: true,
-      autoRenew: false
-    },
-    trialHistory: { freeTrialUsedAt: new Date() },
-    serviceRadius: subscriptionPlans.trial.visibilityRadius
-  };
-};
+const newExpertSubscriptionFields = () => ({
+  subscription: {
+    plan: 'free',
+    planDetails: subscriptionPlans.free,
+    startDate: new Date(),
+    isTrial: false,
+    autoRenew: false
+  },
+  serviceRadius: subscriptionPlans.free.visibilityRadius
+});
 
 module.exports = {
   calculateProfileCompletion,
   updateCompletionStats,
   getProfileCompletionBreakdown,
-  trialSubscriptionFields
+  newExpertSubscriptionFields
 };

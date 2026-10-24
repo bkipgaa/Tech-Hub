@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { visiblePlans } from '../../utils/plans';
+import { visiblePlans, COMMISSION_PER_JOB, FREE_RADIUS_KM, formatKes } from '../../utils/plans';
 
 const StatCard = ({ icon: Icon, title, children, action, onAction, tone = 'default' }) => {
   const tones = {
@@ -90,11 +90,13 @@ const TechnicianHome = () => {
 
   const rating = technicianProfile?.rating;
   const completedJobs = technicianProfile?.statistics?.completedJobs || 0;
-  const currentPlanId = subscription?.plan || technicianProfile?.subscription?.plan;
+  const rawPlanId = subscription?.plan || technicianProfile?.subscription?.plan;
+  // The old trial is now the Free plan
+  const currentPlanId = !rawPlanId || rawPlanId === 'trial' ? 'free' : rawPlanId;
   const currentPlanName =
     plans.find((p) => p.id === currentPlanId)?.name ||
-    (currentPlanId === 'trial' ? 'Free Trial' : currentPlanId === 'free' ? 'Free' : currentPlanId) ||
-    'Free';
+    (currentPlanId === 'free' ? 'Free' : subscription?.planDetails?.name || currentPlanId);
+  const onFreePlan = subscription ? subscription.commissionPerJob > 0 : currentPlanId === 'free';
   const radius = subscription?.visibilityRadius;
   const completion = technicianProfile?.profileCompletionPercentage ?? 0;
   const missing = missingProfileItems(technicianProfile);
@@ -149,6 +151,14 @@ const TechnicianHome = () => {
               {radius ? `Visible within ${radius} km` : 'Visibility radius unavailable'}
               {subscription?.daysRemaining > 0 ? ` · ${subscription.daysRemaining} days left` : ''}
             </p>
+            {onFreePlan && (
+              <p className="text-xs text-amber-700 mt-1">
+                {formatKes(COMMISSION_PER_JOB)} commission per job ·{' '}
+                <button onClick={() => navigate('/commissions')} className="underline font-semibold">
+                  Commissions
+                </button>
+              </p>
+            )}
           </StatCard>
         </div>
       </div>
@@ -159,7 +169,9 @@ const TechnicianHome = () => {
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800 mb-1">Reach More Clients</h2>
             <p className="text-gray-500 text-sm">
-              Your plan sets how far away clients can find you. Every plan runs for 30 days.
+              Your plan sets how far away clients can find you. The Free plan reaches {FREE_RADIUS_KM} km with no monthly fee,
+              but each job costs a {formatKes(COMMISSION_PER_JOB)} commission and its rating shows once that is paid.
+              Paid plans run for 30 days, charge no commission and show ratings immediately.
               {subscription?.freeMonthAvailable && (
                 <span className="block mt-1 font-semibold text-green-700">
                   Your first month on any plan is free — once. No payment details needed.
@@ -169,6 +181,25 @@ const TechnicianHome = () => {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div
+              className={`rounded-xl border p-4 text-center flex flex-col ${
+                currentPlanId === 'free' ? 'border-green-600 bg-green-50 ring-2 ring-green-600' : 'border-gray-200 bg-white'
+              }`}
+            >
+              <p className="font-semibold text-gray-800">Free</p>
+              <p className="text-xl font-bold text-green-700 mt-1">KES 0</p>
+              <p className="text-sm text-gray-600 mt-1 flex-1">
+                Visible within <strong>{FREE_RADIUS_KM} km</strong>
+                <span className="block text-xs text-amber-700 mt-1">{formatKes(COMMISSION_PER_JOB)} per job</span>
+              </p>
+              {currentPlanId === 'free' ? (
+                <span className="mt-3 text-xs font-semibold text-green-700 flex items-center justify-center gap-1">
+                  <CheckCircle className="w-4 h-4" /> Current plan
+                </span>
+              ) : (
+                <span className="mt-3 text-xs text-gray-500">When a paid plan ends</span>
+              )}
+            </div>
             {plans.map((plan) => {
               const isCurrent = plan.id === currentPlanId;
               return (
@@ -183,7 +214,8 @@ const TechnicianHome = () => {
                     KES {Number(plan.price).toLocaleString()}
                   </p>
                   <p className="text-sm text-gray-600 mt-1 flex-1">
-                    Visible within <strong>{plan.visibilityRadius} km</strong>
+                    Visible within <strong>{Number(plan.visibilityRadius).toLocaleString()} km</strong>
+                    <span className="block text-xs text-green-700 mt-1">No commission</span>
                   </p>
                   {isCurrent ? (
                     <span className="mt-3 text-xs font-semibold text-green-700 flex items-center justify-center gap-1">

@@ -4,7 +4,8 @@ import {
   Shield, TrendingUp, MapPin, Calendar, Zap, Phone, HelpCircle, X
 } from 'lucide-react';
 import api from '../../services/api';
-import { visiblePlans } from '../../utils/plans';
+import { Link } from 'react-router-dom';
+import { visiblePlans, COMMISSION_PER_JOB, FREE_RADIUS_KM, formatKes } from '../../utils/plans';
 
 // Closable popup used for "How subscriptions work" and "Current plan"
 const InfoPopup = ({ title, onClose, children }) => (
@@ -39,7 +40,8 @@ const InfoPopup = ({ title, onClose, children }) => (
  * SubscriptionManager Component
  * 
  * Displays all available subscription plans, shows the technician's current plan,
- * allows activation of a free trial, and initiates payment for upgrades.
+ * explains the Free plan's commission, offers the free first month on a paid
+ * plan, and initiates payment for upgrades.
  * Supports Card (Paystack) and M-Pesa (Daraja STK Push).
  */
 const SubscriptionManager = () => {
@@ -99,19 +101,6 @@ const SubscriptionManager = () => {
   // ============================================================
   // ACTION HANDLERS
   // ============================================================
-
-  const activateTrial = async () => {
-    setProcessing(true);
-    try {
-      const response = await api.post('/subscription/trial');
-      setMessage({ type: 'success', text: response.data.message });
-      await fetchData();
-    } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to activate trial' });
-    } finally {
-      setProcessing(false);
-    }
-  };
 
   // Free first month of a paid plan — once per expert, no payment details
   const startFreeMonth = async (planId) => {
@@ -271,11 +260,12 @@ const SubscriptionManager = () => {
     !['free', 'trial'].includes(currentSubscription.plan) &&
     currentSubscription.daysRemaining > 0;
   const canStartFreeMonth = !!currentSubscription?.freeMonthAvailable && !onPaidPlan;
+  const onFreePlan = !onPaidPlan;
 
   return (
     <div className="max-w-6xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-2">Subscription Management</h1>
-      <p className="text-gray-600 mb-6">Choose a plan that fits your business needs</p>
+      <p className="text-gray-600 mb-6">Stay on the Free plan and pay a small commission per job, or choose a monthly plan with no commission.</p>
 
       {/* How it works + current plan: buttons that open closable popups */}
       <div className="mb-8 flex flex-wrap gap-3">
@@ -300,26 +290,41 @@ const SubscriptionManager = () => {
 
       {popup === 'how' && (
         <InfoPopup title="How subscriptions work" onClose={() => setPopup(null)}>
-          <ul className="space-y-2 text-sm text-gray-700">
+          <ul className="space-y-3 text-sm text-gray-700">
             <li>
-              <strong>Free Trial:</strong> every new expert gets 30 days free, visible to clients within 10 km.
+              <strong>Free plan — forever.</strong> Every expert starts here. Clients within {FREE_RADIUS_KM} km can find you and
+              there is no monthly fee.
             </li>
             <li>
-              <strong>Free plan, forever:</strong> when a trial or plan ends you stay on the Free plan, still visible within 10 km — at no cost.
+              <strong>Commission on the Free plan:</strong> for each job you get through a booking while on the Free plan you pay a
+              one-time <strong>{formatKes(COMMISSION_PER_JOB)}</strong> commission once the work is done. Your client still confirms
+              and rates the job, but <strong>the rating and the completed job only appear on your profile after the commission is
+              paid</strong>. You pay it from the <Link to="/commissions" className="text-green-700 underline">Commissions</Link> page
+              by M-Pesa or card.
             </li>
             <li>
-              <strong>Paid plans</strong> let clients further away find you (20 km up to 1,000 km). Each runs for 30 days and you pay by Card or M-Pesa.
-              You're never charged automatically — to continue, simply pay again.
+              <strong>Paid plans (from KES 1,000 a month)</strong> let clients further away find you — 100 km up to 5,000 km.
+              There is <strong>no commission</strong> on any job, and your ratings and completed jobs show on your profile
+              immediately.
             </li>
             <li>
-              <strong>Your first month on a paid plan is free — once.</strong> Pick any plan and try it for 30 days with no payment details.
-              This can only be used once, whichever plan you choose. When the month ends you return to the Free plan (10 km) unless you subscribe.
+              <strong>Paying:</strong> each plan runs for 30 days and you pay by M-Pesa or card. You're never charged automatically.
+              Paying early adds 30 days to the time you have left.
             </li>
             <li>
-              <strong>Reminders:</strong> we email you 7, 3 and 1 day before any plan or trial ends.
+              <strong>If you don't renew,</strong> you go back to the Free plan ({FREE_RADIUS_KM} km, with the per-job commission).
+              You never disappear from search.
             </li>
             <li>
-              <strong>Ranking:</strong> your plan sets how far away clients can see you; your position in results comes from your ratings and completed jobs.
+              <strong>One month free trial — once.</strong> Pick any paid plan and use it free for 30 days, with no payment details
+              and no commission. It can only be used once, whichever plan you choose.
+            </li>
+            <li>
+              <strong>Reminders:</strong> we email you 7, 3 and 1 day before a plan or free month ends.
+            </li>
+            <li>
+              <strong>Ranking:</strong> your plan sets how far away clients can see you; your position in results comes from your
+              ratings and completed jobs.
             </li>
           </ul>
         </InfoPopup>
@@ -349,7 +354,7 @@ const SubscriptionManager = () => {
                   <Calendar className="w-4 h-4" />
                   <span>
                     {currentSubscription.daysRemaining} days remaining
-                    {currentSubscription.isFreeMonth && ' of your free month — then the Free plan (10 km) unless you subscribe'}
+                    {currentSubscription.isFreeMonth && ` of your free month — then the Free plan (${FREE_RADIUS_KM} km, commission per job) unless you subscribe`}
                   </span>
                 </div>
               )}
@@ -368,15 +373,6 @@ const SubscriptionManager = () => {
             </div>
           </div>
           <div className="flex gap-3">
-            {currentSubscription.plan !== 'trial' && currentSubscription.canActivateTrial && (
-              <button
-                onClick={activateTrial}
-                disabled={processing}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-              >
-                Start Free Trial
-              </button>
-            )}
             {currentSubscription.autoRenew && (
               <button
                 onClick={cancelAutoRenew}
@@ -393,7 +389,7 @@ const SubscriptionManager = () => {
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
             <span className="text-red-700 font-medium flex-1">
-              Your plan has ended. You're still visible to clients within 10 km on the Free plan — upgrade to reach clients further away.
+              Your plan has ended. You're on the Free plan: visible within {FREE_RADIUS_KM} km, with a {formatKes(COMMISSION_PER_JOB)} commission per job. Upgrade to reach clients further away and pay no commission.
             </span>
             <button
               onClick={() => {
@@ -417,6 +413,32 @@ const SubscriptionManager = () => {
         </div>
       )}
 
+      {/* Free plan vs paid plans, always visible */}
+      <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`rounded-lg border p-5 ${onFreePlan ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+          <h3 className="font-semibold text-gray-800 mb-1">
+            Free plan — KES 0 a month{onFreePlan && <span className="ml-2 text-xs text-amber-800">(your plan)</span>}
+          </h3>
+          <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
+            <li>Clients within <strong>{FREE_RADIUS_KM} km</strong> can find you, forever.</li>
+            <li><strong>{formatKes(COMMISSION_PER_JOB)} commission</strong> on each job you get through a booking, paid after the work is done.</li>
+            <li>The client's rating and the completed job show on your profile <strong>only after the commission is paid</strong>.</li>
+          </ul>
+          <Link to="/commissions" className="inline-block mt-3 text-sm font-semibold text-amber-800 underline">
+            See and pay commissions
+          </Link>
+        </div>
+        <div className="rounded-lg border border-green-300 bg-green-50 p-5">
+          <h3 className="font-semibold text-gray-800 mb-1">Paid plans — from KES 1,000 a month</h3>
+          <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
+            <li>Reach clients from <strong>100 km up to 5,000 km</strong> away.</li>
+            <li><strong>No commission</strong> on any job.</li>
+            <li>Ratings and completed jobs show on your profile <strong>immediately</strong>.</li>
+            <li>First month free, once. If you don't renew, you return to the Free plan.</li>
+          </ul>
+        </div>
+      </div>
+
       {/* Plans Grid */}
       <div id="plans-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {plans.filter(p => p.id !== 'trial').map((plan) => (
@@ -430,11 +452,12 @@ const SubscriptionManager = () => {
               <div className="mb-4 p-3 bg-blue-50 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Visibility Radius</span>
-                  <span className="text-lg font-bold text-blue-600">{plan.visibilityRadius}km</span>
+                  <span className="text-lg font-bold text-blue-600">{Number(plan.visibilityRadius).toLocaleString()} km</span>
                 </div>
+                {plan.description && <p className="text-xs text-blue-700 mt-1">{plan.description}</p>}
               </div>
               <ul className="space-y-2 mb-6">
-                {plan.features.slice(0, 4).map((feature, idx) => (
+                {plan.features.map((feature, idx) => (
                   <li key={idx} className="flex items-center gap-2 text-sm">
                     <CheckCircle className="w-4 h-4 text-green-500" />
                     <span>{feature}</span>
@@ -484,7 +507,8 @@ const SubscriptionManager = () => {
                 For 30 days, clients within <strong>{plans.find((p) => p.id === freeMonthPlan)?.visibilityRadius} km</strong> can find you.
               </li>
               <li>No payment details needed and nothing is charged.</li>
-              <li>We'll remind you 7, 3 and 1 day before it ends. Then you return to the Free plan (10 km) unless you subscribe.</li>
+              <li>No commission on jobs you get during the month, and ratings show immediately.</li>
+              <li>We'll remind you 7, 3 and 1 day before it ends. Then you return to the Free plan ({FREE_RADIUS_KM} km, {formatKes(COMMISSION_PER_JOB)} commission per job) unless you subscribe.</li>
               <li className="text-red-700">
                 <strong>This can only be used once.</strong> You won't get a free month on any other plan later.
               </li>

@@ -145,6 +145,22 @@ const bookingSchema = new mongoose.Schema({
     reviewedAt: Date,
     reviewNote: { type: String, maxlength: 500 },
   },
+  // When the rating was added to the expert's score, reviews and completed jobs
+  ratingCountedAt: Date,
+
+  // ── Commission (expert on the Free plan when booked) ──
+  // Owed once the work is done. Until it is paid the client's rating and the
+  // completed job are saved but don't show on the expert's profile.
+  commission: {
+    amount: { type: Number, min: 0, default: 0 },   // KES; 0 = none owed
+    plan: String,                                   // expert's plan when booked
+    status: { type: String, enum: ['unpaid', 'paid', 'waived'] },
+    paidAt: Date,
+    method: { type: String, enum: ['mpesa', 'card', 'admin'] },
+    reference: String,                              // M-Pesa CheckoutRequestID or Paystack reference
+    pendingRef: String,                             // payment started, not yet confirmed
+    pendingAt: Date,
+  },
 
   // ── Quotation ──────────────────────────────────────────────────
   quotation: {
@@ -239,6 +255,7 @@ bookingSchema.index({ technicianId: 1, createdAt: -1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ preferredDate: 1 });
 bookingSchema.index({ technicianId: 1, completedAt: -1 });   // recent ratings per expert
+bookingSchema.index({ 'commission.pendingRef': 1 }, { sparse: true });   // settling commission payments
 
 // ─── Virtuals ──────────────────────────────────────────────────
 bookingSchema.virtual('isCancellable').get(function() {

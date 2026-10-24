@@ -93,6 +93,9 @@ exports.technicianVerificationRejected = (data) =>
 exports.technicianClientRated = (data) =>
   dispatch(data.technicianEmail, templates.technicianClientRated, data, 'technician_client_rated');
 
+exports.technicianCommissionDue = (data) =>
+  dispatch(data.technicianEmail, templates.technicianCommissionDue, data, 'technician_commission_due');
+
 // ─────────────────────────────────────────────────────────────
 // STAYS & SPACES LISTERS
 // ─────────────────────────────────────────────────────────────
