@@ -673,7 +673,8 @@ const TechnicianDashboard = () => {
         />
 
         <VerificationBanner 
-          status={currentProfile?.verificationStatus} 
+          status={currentProfile?.verificationStatus}
+          awaitingApproval={currentProfile?.awaitingApproval}
           isAdminView={isAdminView}
           technicianId={currentProfile?._id}
         />

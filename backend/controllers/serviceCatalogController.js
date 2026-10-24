@@ -1,5 +1,6 @@
 const ServiceCatalog = require('../models/ServiceCatalog');
 const Technician = require('../models/Technician');
+const { PUBLIC_EXPERT_FILTER } = require('../utils/expertVisibility');
 const Booking = require('../models/Booking');
 const searchController = require('./searchController');
 const mongoose = require('mongoose');
@@ -467,7 +468,7 @@ exports.getPopularServices = async (req, res) => {
     if (ranked.length < limit) {
       const expertCounts = new Map(
         (await Technician.aggregate([
-          { $match: { isActive: true } },
+          { $match: { isActive: true, ...PUBLIC_EXPERT_FILTER } },
           { $group: { _id: '$mainCategory', n: { $sum: 1 } } },
         ])).map((r) => [r._id, r.n])
       );

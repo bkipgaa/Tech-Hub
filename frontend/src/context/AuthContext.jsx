@@ -146,14 +146,43 @@ export const AuthProvider = ({ children }) => {
       const { token, user } = response.data;
 
       setAuthToken(token);
+      localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
+
+      // Experts get their profile created at signup
+      if (user.role === 'technician') {
+        await fetchTechnicianProfile();
+      }
 
       return { success: true, user };
     } catch (error) {
       console.error('Registration error:', error);
+      const fieldError = error.response?.data?.errors?.[0];
       return {
         success: false,
-        error: error.response?.data?.message || 'Registration failed',
+        error: error.response?.data?.message
+          || (fieldError ? `Please check your ${fieldError.path || fieldError.param}.` : 'Registration failed'),
+      };
+    }
+  };
+
+  /**
+   * Save the device location on the account (experts' profiles move with it)
+   * @param {Object} data - { location: { lat, lng, formattedAddress }, address: { city, state } }
+   * @returns {Object} { success: boolean, user: Object, error: string }
+   */
+  const updateMyLocation = async (data) => {
+    try {
+      const response = await api.put('/auth/location', data);
+      setUser(response.data.user);
+      if (response.data.user.role === 'technician') {
+        await fetchTechnicianProfile();
+      }
+      return { success: true, user: response.data.user };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Could not update your location',
       };
     }
   };
@@ -1001,7 +1030,8 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     logout,
     becomeTechnician,
     updateUserProfile,
-    
+    updateMyLocation,
+
     // Technician profile functions
     createTechnicianProfile,
     updateTechnicianProfile,

@@ -268,6 +268,10 @@ const TechnicianSchema = new Schema({
     default: 'pending'
   },
 
+  // New experts are hidden from clients until an admin approves them
+  // (utils/expertVisibility.js). Experts from before this aren't flagged.
+  awaitingApproval: { type: Boolean, default: false },
+
   verifiedDocuments: [{
     type: {
       type: String,

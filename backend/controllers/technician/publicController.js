@@ -10,6 +10,7 @@
  */
 
 const Technician = require('../../models/Technician');
+const { PUBLIC_EXPERT_FILTER } = require('../../utils/expertVisibility');
 
 /**
  * Get public technician profile by ID
@@ -32,8 +33,8 @@ exports.getPublicProfile = async (req, res) => {
     const technician = await Technician.findById(id)
       .populate('userId', 'firstName lastName profileImage') // contacts are shared via chat only;
     
-    // Check if technician exists
-    if (!technician) {
+    // Check if technician exists (new experts stay hidden until approved)
+    if (!technician || technician.awaitingApproval) {
       return res.status(404).json({ 
         success: false, 
         message: 'Technician not found' 
@@ -116,6 +117,7 @@ exports.getAllPublicProfiles = async (req, res) => {
     // Only show active and appropriately verified technicians
     filter.isActive = true;
     filter.verificationStatus = { $in: ['verified', 'pending'] };
+    Object.assign(filter, PUBLIC_EXPERT_FILTER);
     
     // Apply optional filters - UPDATED for three-level hierarchy
     if (mainCategory) {
@@ -239,7 +241,8 @@ exports.getTechniciansByCategory = async (req, res) => {
     const technicians = await Technician.find({
       mainCategory: decodeURIComponent(mainCategory), // UPDATED: Use mainCategory
       isActive: true,
-      verificationStatus: { $in: ['verified', 'pending'] }
+      verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER
     })
       .populate('userId', 'firstName lastName profileImage')
       .limit(parseInt(limit))
@@ -273,7 +276,8 @@ exports.getTechniciansByServiceCategory = async (req, res) => {
     const technicians = await Technician.find({
       'serviceCategories.categoryName': decodeURIComponent(serviceCategory),
       isActive: true,
-      verificationStatus: { $in: ['verified', 'pending'] }
+      verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER
     })
       .populate('userId', 'firstName lastName profileImage')
       .limit(parseInt(limit))
@@ -307,7 +311,8 @@ exports.getTechniciansBySubService = async (req, res) => {
     const technicians = await Technician.find({
       'serviceCategories.subServices': decodeURIComponent(subService),
       isActive: true,
-      verificationStatus: { $in: ['verified', 'pending'] }
+      verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER
     })
       .populate('userId', 'firstName lastName profileImage')
       .limit(parseInt(limit))
@@ -339,7 +344,8 @@ exports.getTechnicianStats = async (req, res) => {
       {
         $match: {
           isActive: true,
-          verificationStatus: { $in: ['verified', 'pending'] }
+          verificationStatus: { $in: ['verified', 'pending'] },
+          ...PUBLIC_EXPERT_FILTER
         }
       },
       {
@@ -360,13 +366,15 @@ exports.getTechnicianStats = async (req, res) => {
     // Get total count of active technicians
     const totalTechnicians = await Technician.countDocuments({
       isActive: true,
-      verificationStatus: { $in: ['verified', 'pending'] }
+      verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER
     });
     
     // Get unique service categories across all technicians
     const allServiceCategories = await Technician.distinct('serviceCategories.categoryName', {
       isActive: true,
-      verificationStatus: { $in: ['verified', 'pending'] }
+      verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER
     });
     
     // Get unique sub-services across all technicians
@@ -374,7 +382,8 @@ exports.getTechnicianStats = async (req, res) => {
       {
         $match: {
           isActive: true,
-          verificationStatus: { $in: ['verified', 'pending'] }
+          verificationStatus: { $in: ['verified', 'pending'] },
+          ...PUBLIC_EXPERT_FILTER
         }
       },
       {

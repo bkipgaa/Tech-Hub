@@ -23,6 +23,7 @@
  * PROTECTED (any authenticated user)
  *   GET    /profile
  *   PUT    /profile
+ *   PUT    /location
  *   PUT    /become-technician
  * ─────────────────────────────────────────────────────────────
  */
@@ -36,6 +37,7 @@ const {
   getProfile,
   becomeTechnician,
   updateProfile,
+  updateLocation,
   forgotPassword,
   resetPassword,
 } = require('../controllers/authcontroller');
@@ -53,6 +55,7 @@ router.post('/reset-password/:token', passwordResetLimiter, resetPassword);
 // ============ PROTECTED ROUTES (any authenticated user) ============
 router.get('/profile', auth, getProfile);
 router.put('/profile', auth, updateProfile);
+router.put('/location', auth, updateLocation);
 router.put('/become-technician', auth, becomeTechnician);
 
 // ============================================================

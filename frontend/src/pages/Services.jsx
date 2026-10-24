@@ -15,7 +15,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Wrench,
   Clock,
@@ -29,11 +29,18 @@ import {
   Search,
 } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import RadiusPicker from '../components/RadiusPicker';
 import ServicesHighlights from '../components/ServicesHighlights';
 
 const Services = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // ?category= preselects a main category (new clients land here after signup)
+  const [searchParams] = useSearchParams();
+  const categoryParam = searchParams.get('category');
+  // Location saved on the account; used instead of asking the device
+  const savedLocation = user?.location?.lat != null ? { lat: user.location.lat, lng: user.location.lng } : null;
 
   // ── Catalog ───────────────────────────────────────────
   const [catalog, setCatalog] = useState([]);
@@ -59,9 +66,25 @@ const Services = () => {
   // ═══════════════════════════════════════════════════════
   useEffect(() => {
     fetchServiceCatalog();
-    requestUserLocation();
+    if (!savedLocation) requestUserLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The signed-in user's saved location (it may load after the page does)
+  useEffect(() => {
+    if (!savedLocation || userLocation) return;
+    setUserLocation(savedLocation);
+    setLocationStatus('success');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedLocation?.lat, savedLocation?.lng]);
+
+  // Preselect the category from the URL once the catalog is in
+  useEffect(() => {
+    if (!categoryParam || selectedMainCategory) return;
+    const match = catalog.find((c) => c.mainCategory === categoryParam);
+    if (match) setSelectedMainCategory(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog, categoryParam]);
 
   // ═══════════════════════════════════════════════════════
   // FETCHING
@@ -447,7 +470,9 @@ const Services = () => {
                   {locationStatus === 'success' && (
                     <div className="inline-flex items-center gap-2 px-4 py-3 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 text-sm font-medium">
                       <MapPin className="w-4 h-4" />
-                      Location active
+                      {savedLocation && userLocation?.lat === savedLocation.lat
+                        ? `Your saved location${user.address?.city ? ` · ${user.address.city}` : ''}`
+                        : 'Location active'}
                     </div>
                   )}
 

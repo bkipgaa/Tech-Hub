@@ -6,10 +6,72 @@ import { userRoleLabel } from '../utils/roleHelpers';
 // Import useNavigate from react-router-dom for redirecting if user is not logged in
 import { useNavigate } from 'react-router-dom';
 // Import icon components from lucide-react for the UI
-import { User, Mail, Phone, Camera, Save, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, Camera, Save, Loader2, MapPin, Navigation } from 'lucide-react';
 // Import your configured axios instance that has baseURL and auth headers set up
 import api from '../services/api';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
+import { getLivePosition, reverseGeocode } from '../utils/geo';
+
+// The location saved on the account (shared at signup); "near me" searches
+// use it, and for experts it is where clients find them
+const MyLocation = () => {
+  const { user, updateMyLocation } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState({ text: '', error: false });
+
+  const update = async () => {
+    setBusy(true);
+    setMessage({ text: '', error: false });
+    try {
+      const pos = await getLivePosition({ timeout: 20000 });
+      const place = await reverseGeocode(pos);
+      const result = await updateMyLocation({
+        location: { lat: pos.lat, lng: pos.lng, formattedAddress: place.formattedAddress },
+        address: { city: place.city, state: place.state },
+      });
+      setMessage(result.success ? { text: 'Location updated.', error: false } : { text: result.error, error: true });
+    } catch (err) {
+      setMessage({ text: err.message, error: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const place = [user.address?.city, user.address?.state].filter(Boolean).join(', ');
+
+  return (
+    <div className="mt-8 pt-8 border-t border-gray-100">
+      <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+        <MapPin className="w-5 h-5 text-green-600" /> My location
+      </h3>
+      <p className="text-sm text-gray-500 mt-1">
+        {user.role === 'technician'
+          ? 'Clients near this location can find you. Update it if you move to a new work area.'
+          : 'We use this to show you experts and places near you.'}
+      </p>
+      <p className="mt-3 text-gray-800">
+        {user.location
+          ? user.location.formattedAddress || place || `${user.location.lat.toFixed(4)}, ${user.location.lng.toFixed(4)}`
+          : 'No location saved yet.'}
+      </p>
+      {user.location?.updatedAt && (
+        <p className="text-xs text-gray-400 mt-0.5">Updated {new Date(user.location.updatedAt).toLocaleDateString()}</p>
+      )}
+      <button
+        type="button"
+        onClick={update}
+        disabled={busy}
+        className="mt-3 inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-60"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+        {busy ? 'Getting location…' : 'Update to my current location'}
+      </button>
+      {message.text && (
+        <p className={`text-sm mt-2 ${message.error ? 'text-red-600' : 'text-green-700'}`}>{message.text}</p>
+      )}
+    </div>
+  );
+};
 
 // Define the Profile functional component
 const Profile = () => {
@@ -336,6 +398,7 @@ const Profile = () => {
               )}
             </div>
           </div>
+          <MyLocation />
         </div>
       </div>
     </div>

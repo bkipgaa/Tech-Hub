@@ -52,6 +52,30 @@ const userSchema = new mongoose.Schema({
     default: 'active'
   },
 
+  // What they chose on the signup form; decides where they land afterwards
+  signupIntent: {
+    type: String,
+    enum: ['expert', 'client', 'lister', 'stay_seeker'],
+  },
+  preferences: {
+    mainCategory: String,     // clients: the kind of expert they're after
+    listingCategory: String,  // listers and stay seekers: a Stays & Spaces category id
+  },
+
+  // Device location shared at signup (required) and updated from the profile page.
+  // Used for "near me" searches instead of asking the browser every time.
+  location: {
+    lat: Number,
+    lng: Number,
+    formattedAddress: String,
+    updatedAt: Date,
+  },
+  address: {
+    city: String,
+    state: String,   // county
+    country: { type: String, default: 'Kenya' },
+  },
+
   // Stays & Spaces: 3 free months from the first listing (up to 5 listings),
   // then KES 200 per listing per month (utils/listingPlan.js)
   listingPlan: {

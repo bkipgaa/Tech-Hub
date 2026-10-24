@@ -1,5 +1,6 @@
 // backend/controllers/technician/profile/updateLocation.js
 const Technician = require('../../../models/Technician');
+const User = require('../../../models/User');
 const { updateCompletionStats } = require('./helpers');
 
 exports.updateLocation = async (req, res) => {
@@ -25,6 +26,15 @@ exports.updateLocation = async (req, res) => {
     if (req.body.serviceRadius !== undefined) technician.serviceRadius = req.body.serviceRadius;
 
     await updateCompletionStats(technician);
+
+    // Keep the account's saved location (used for "near me") in step
+    if (coords !== undefined) {
+      const [lng, lat] = coords.map(Number);
+      await User.updateOne(
+        { _id: req.user.userId },
+        { $set: { location: { lat, lng, formattedAddress: technician.location.formattedAddress || '', updatedAt: new Date() } } }
+      );
+    }
     await technician.populate('userId', 'email firstName lastName phone profileImage');
     // Full profile back, so the frontend can replace its copy in one go
     res.json({

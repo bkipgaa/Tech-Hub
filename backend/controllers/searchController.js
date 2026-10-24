@@ -9,6 +9,7 @@
 
 const mongoose = require('mongoose');
 const Technician = require('../models/Technician');
+const { PUBLIC_EXPERT_FILTER } = require('../utils/expertVisibility');
 const ServiceCatalog = require('../models/ServiceCatalog');
 const { getEffectivePlan } = require('../utils/subscriptionPlans');
 
@@ -188,7 +189,8 @@ exports.searchTechnicians = async (req, res) => {
     // 5. Build MongoDB query
     const query = {
       isActive: true,
-      isAvailable: isAvailable === 'true' || isAvailable === true
+      isAvailable: isAvailable === 'true' || isAvailable === true,
+      ...PUBLIC_EXPERT_FILTER
     };
 
     // --- VERIFICATION STATUS: include 'verified' and 'pending' by default ---
@@ -452,6 +454,7 @@ exports.getTechniciansBySubService = async (req, res) => {
       isActive: true,
       isAvailable: true,
       verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER,
       'serviceCategories.subServices': subService
     };
 
@@ -583,7 +586,8 @@ exports.getNearbyTechnicians = async (req, res) => {
     const technicians = await Technician.find({
       isActive: true,
       isAvailable: true,
-      verificationStatus: { $in: ['verified', 'pending'] }
+      verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER
     })
     .populate('userId', 'firstName lastName profileImage')
     .lean();
@@ -678,7 +682,8 @@ exports.getTopTechnicians = async (req, res) => {
 
     const technicians = await Technician.find({
       isActive: true,
-      verificationStatus: { $in: ['verified', 'pending'] }
+      verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER
     })
     .sort({ 'rating.average': -1, 'statistics.completedJobs': -1, 'rating.count': -1 })
     .limit(limitNum)
@@ -733,19 +738,19 @@ exports.getSearchSuggestions = async (req, res) => {
     const limitNum = Math.min(parseInt(limit) || 10, 20);
 
     const [businesses, categories, serviceTechs, subServiceTechs] = await Promise.all([
-      Technician.find({ businessName: searchRegex, isActive: true })
+      Technician.find({ businessName: searchRegex, isActive: true, ...PUBLIC_EXPERT_FILTER })
         .limit(limitNum)
         .select('businessName mainCategory')
         .lean(),
 
-      Technician.distinct('mainCategory', { mainCategory: searchRegex, isActive: true }),
+      Technician.distinct('mainCategory', { mainCategory: searchRegex, isActive: true, ...PUBLIC_EXPERT_FILTER }),
 
-      Technician.find({ 'serviceCategories.categoryName': searchRegex, isActive: true })
+      Technician.find({ 'serviceCategories.categoryName': searchRegex, isActive: true, ...PUBLIC_EXPERT_FILTER })
         .limit(limitNum)
         .select('serviceCategories')
         .lean(),
 
-      Technician.find({ 'serviceCategories.subServices': searchRegex, isActive: true })
+      Technician.find({ 'serviceCategories.subServices': searchRegex, isActive: true, ...PUBLIC_EXPERT_FILTER })
         .limit(limitNum)
         .select('serviceCategories')
         .lean()
@@ -800,7 +805,8 @@ exports.getCategories = async (req, res) => {
   try {
     const categories = await Technician.distinct('mainCategory', {
       isActive: true,
-      verificationStatus: { $in: ['verified', 'pending'] }
+      verificationStatus: { $in: ['verified', 'pending'] },
+      ...PUBLIC_EXPERT_FILTER
     });
 
     console.log(`[getCategories] Found ${categories.length} distinct categories`);
@@ -837,7 +843,8 @@ exports.getFullCategories = async (req, res) => {
       console.log('[getFullCategories] ServiceCatalog empty, building from Technician data');
       const technicians = await Technician.find({
         isActive: true,
-        verificationStatus: { $in: ['verified', 'pending'] }
+        verificationStatus: { $in: ['verified', 'pending'] },
+        ...PUBLIC_EXPERT_FILTER
       })
       .select('mainCategory serviceCategories.categoryName serviceCategories.subServices')
       .limit(500)
