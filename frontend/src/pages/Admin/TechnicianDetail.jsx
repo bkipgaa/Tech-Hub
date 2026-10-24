@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Loader2, AlertCircle, BadgeCheck, Ban, CheckCircle,
   Mail, Phone, MapPin, Star, Briefcase, Calendar, TrendingUp, Pencil,
@@ -32,7 +32,9 @@ const TechnicianDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // ?edit=1 (from the Verifications review) opens the edit form straight away
+  const [searchParams] = useSearchParams();
+  const [editing, setEditing] = useState(searchParams.get('edit') === '1');
 
   const fetchTech = async () => {
     setLoading(true);
@@ -130,7 +132,7 @@ const TechnicianDetail = () => {
             </button>
           )}
         </PermissionGate>
-        <PermissionGate permission="technicians.verify">
+        <PermissionGate anyOf={['technicians.verify', 'verifications.approve']}>
           {/* Rejected experts can still be approved later, e.g. after their profile is fixed */}
           {tech.verificationStatus !== 'verified' && (
             <button
@@ -141,6 +143,8 @@ const TechnicianDetail = () => {
               <BadgeCheck className="w-4 h-4" /> Approve Verification
             </button>
           )}
+        </PermissionGate>
+        <PermissionGate anyOf={['technicians.verify', 'verifications.reject']}>
           {tech.verificationStatus === 'pending' && (
             <button
               onClick={handleReject}

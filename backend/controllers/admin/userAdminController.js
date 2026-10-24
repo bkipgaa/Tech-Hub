@@ -124,9 +124,32 @@ exports.update = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     const allowed = ['firstName', 'lastName', 'phone'];
-    allowed.forEach((k) => {
-      if (req.body[k] !== undefined) user[k] = String(req.body[k]).trim();
-    });
+    for (const k of allowed) {
+      if (req.body[k] === undefined) continue;
+      const value = String(req.body[k]).trim();
+      if (!value) return res.status(400).json({ success: false, message: `${k} cannot be empty` });
+      user[k] = value;
+    }
+
+    if (req.body.email !== undefined) {
+      const email = String(req.body.email).trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(email)) {
+        return res.status(400).json({ success: false, message: 'Enter a valid email address' });
+      }
+      if (email !== user.email && await User.exists({ email, _id: { $ne: user._id } })) {
+        return res.status(400).json({ success: false, message: 'Another account already uses this email' });
+      }
+      user.email = email;
+    }
+
+    if (req.body.address) {
+      const current = user.toObject().address || {};
+      const next = { ...current };
+      for (const k of ['city', 'state']) {
+        if (req.body.address[k] !== undefined) next[k] = String(req.body.address[k]).trim();
+      }
+      user.address = next;
+    }
 
     if (typeof req.body.status === 'string' &&
         ['active', 'suspended', 'pending'].includes(req.body.status)) {

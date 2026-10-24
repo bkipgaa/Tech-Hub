@@ -10,7 +10,7 @@ import {
   Search, Loader2, AlertCircle, ChevronLeft, ChevronRight, BadgeCheck,
   X, Check, Eye, FileText, Image as ImageIcon, Download, Shield,
   User as UserIcon, MapPin, FileWarning, Clock, XCircle, ExternalLink,
-  Filter, MessageSquare,
+  Filter, MessageSquare, Pencil,
 } from 'lucide-react';
 import adminApi from '../../services/adminApi';
 import PermissionGate from '../../components/admin/PermissionGate';
@@ -571,6 +571,15 @@ const Verifications = () => {
             {/* Actions */}
             {!modalLoading && selected.verificationStatus !== 'verified' && (
               <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex flex-wrap items-center gap-2 justify-end">
+                {/* Tidy the profile up before approving it */}
+                <PermissionGate permission="technicians.edit">
+                  <Link
+                    to={`/admin/technicians/${selected._id}?edit=1`}
+                    className="mr-auto inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white"
+                  >
+                    <Pencil className="w-4 h-4" /> Edit profile
+                  </Link>
+                </PermissionGate>
                 <button
                   onClick={() => openPrompt('request-more')}
                   disabled={actionLoading}

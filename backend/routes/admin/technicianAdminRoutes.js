@@ -7,7 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { adminAuth, requirePermission } = require('../../middleware/AdminAuth');
+const { adminAuth, requirePermission, requireAnyPermission } = require('../../middleware/AdminAuth');
 const ctrl = require('../../controllers/admin/technicianAdminController');
 
 router.use(adminAuth);
@@ -20,9 +20,9 @@ router.get('/stats',  requirePermission('technicians.view'), ctrl.getStats);
 router.get('/:id',    requirePermission('technicians.view_details'), ctrl.getTechnician);
 router.patch('/:id',  requirePermission('technicians.edit'),         ctrl.updateTechnician);
 
-// Verification
-router.patch('/:id/verify', requirePermission('technicians.verify'), ctrl.verifyTechnician);
-router.patch('/:id/reject', requirePermission('technicians.verify'), ctrl.rejectVerification);
+// Verification (technicians.verify was never seeded; roles carry the verifications.* keys)
+router.patch('/:id/verify', requireAnyPermission('technicians.verify', 'verifications.approve'), ctrl.verifyTechnician);
+router.patch('/:id/reject', requireAnyPermission('technicians.verify', 'verifications.reject'), ctrl.rejectVerification);
 
 // Suspension
 router.patch('/:id/suspend',  requirePermission('technicians.suspend'), ctrl.suspendTechnician);
