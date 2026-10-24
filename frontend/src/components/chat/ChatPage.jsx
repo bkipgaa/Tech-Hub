@@ -27,7 +27,7 @@ const ChatPage = () => {
   const navigate = useNavigate();
 
   // ─── AUTH CONTEXT ─────────────────────────────
-  // Pull user, token, and chat-related API functions from AuthContext.
+  // Pull user and chat-related API functions from AuthContext.
   // All HTTP calls are centralized there for consistency with the rest of the app.
   const { 
     user, 
@@ -56,7 +56,7 @@ const ChatPage = () => {
   // SOCKET.IO SETUP
   // ===========================================
   /**
-   * Initialize the socket singleton once the user has a token.
+   * Initialize the socket singleton once the user is signed in.
    * We register event listeners for:
    *   - new_message      → append to current chat + refresh sidebar
    *   - typing           → show / hide the "Typing..." indicator
@@ -65,12 +65,15 @@ const ChatPage = () => {
    * Cleanup removes listeners on unmount to prevent duplicates
    * when React StrictMode remounts the component.
    */
+  const signedIn = !!user;
+
   useEffect(() => {
-    if (!token) return;
-    
+    if (!signedIn) return;
+
+    // token is null in cookie-only mode; the server then uses the auth cookie
     const socket = initSocket(token);
     socket.emit('authenticate', token);
-    
+
     // ─── INCOMING REAL-TIME MESSAGE ─────────────
     socket.on('new_message', ({ message, conversationId: convId }) => {
       // Only append if we're currently viewing this exact conversation.
@@ -106,7 +109,7 @@ const ChatPage = () => {
       socket.off('typing');
       socket.off('messages_read');
     };
-  }, [token, conversationId]);
+  }, [signedIn, token, conversationId]);
 
   // ===========================================
   // LOAD CONVERSATION LIST (sidebar inbox)

@@ -29,6 +29,11 @@ const userSchema = new mongoose.Schema({
 
   resetPasswordToken: String,
   resetPasswordExpires: Date,
+  // Stamped into every JWT; bump it to revoke all of the user's sessions
+  tokenVersion: {
+    type: Number,
+    default: 0
+  },
   lastName: {
     type: String,
     required: [true, 'Last name is required'],

@@ -1,6 +1,8 @@
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
+const { loadUser } = require('../middleware/auth');
+const { readAuthCookie } = require('../utils/authCookie');
 
 /**
  * ACTIVE USERS MAP
@@ -25,10 +27,11 @@ module.exports = (io) => {
     // AUTHENTICATE
     // ===========================================
     /**
-     * Clients must emit 'authenticate' with their JWT token
-     * immediately after connecting. Until then, socket.userId is null
+     * Clients must emit 'authenticate' immediately after connecting,
+     * with their JWT token, or with nothing to use the httpOnly auth
+     * cookie sent in the handshake. Until then, socket.userId is null
      * and most events are rejected.
-     * 
+     *
      * On success:
      *  - socket.userId is set
      *  - user added to activeUsers map
@@ -37,8 +40,13 @@ module.exports = (io) => {
     socket.on('authenticate', async (token) => {
       try {
         const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.userId;
+        const credential = (typeof token === 'string' && token)
+          || readAuthCookie(socket.handshake.headers.cookie);
+        const decoded = jwt.verify(credential, process.env.JWT_SECRET);
+        // Revoked tokens and suspended/deleted accounts can't connect
+        const user = await loadUser(decoded);
+        if (!user || user.status !== 'active') throw new Error('Session no longer valid');
+        const userId = user._id.toString();
         
         socket.userId = userId;
         activeUsers.set(userId.toString(), socket.id);

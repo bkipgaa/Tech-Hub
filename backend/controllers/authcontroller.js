@@ -21,6 +21,7 @@ const sendEmail = require('../utils/emailService');
 const { normalizeServiceSelection } = require('../utils/serviceSelection');
 const { CATEGORY_IDS } = require('../utils/listingCategories');
 const { updateCompletionStats, trialSubscriptionFields } = require('./technician/profile/helpers');
+const { setAuthCookie, clearAuthCookie } = require('../utils/authCookie');
 
 // ─────────────────────────────────────────────────────────────
 // HELPER
@@ -29,6 +30,7 @@ const { updateCompletionStats, trialSubscriptionFields } = require('./technician
 /**
  * Generate a JWT for a regular user (client or technician).
  * Note: Admins never use this token — they use the admin JWT.
+ * `tv` is the user's tokenVersion; bumping it revokes the token.
  */
 const generateToken = (user) => {
   return jwt.sign(
@@ -36,10 +38,21 @@ const generateToken = (user) => {
       userId: user._id,
       email: user.email,
       role: user.role,
+      tv: user.tokenVersion || 0,
     },
     process.env.JWT_SECRET,
     { expiresIn: '30d' }
   );
+};
+
+/**
+ * Sign the user in: set the httpOnly cookie and return the token for the
+ * JSON body. Set AUTH_TOKEN_IN_BODY=false once the frontend runs cookie-only.
+ */
+const issueSession = (res, user) => {
+  const token = generateToken(user);
+  setAuthCookie(res, token);
+  return process.env.AUTH_TOKEN_IN_BODY === 'false' ? {} : { token };
 };
 
 /**
@@ -200,12 +213,12 @@ exports.register = async (req, res) => {
       }
     }
 
-    const token = generateToken(user);
+    const session = issueSession(res, user);
 
     res.status(201).json({
       success: true,
       message: `User registered successfully as ${user.role}`,
-      token,
+      ...session,
       user: {
         id: user._id,
         email: user.email,
@@ -282,12 +295,12 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user);
+    const session = issueSession(res, user);
 
     res.json({
       success: true,
       message: `Welcome back, ${user.firstName}!`,
-      token,
+      ...session,
       user: {
         id: user._id,
         email: user.email,
@@ -669,6 +682,8 @@ exports.resetPassword = async (req, res) => {
     user.password = newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    // Sign out every existing session (someone else may have the old password)
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
 
     await user.save();
 
@@ -682,6 +697,36 @@ exports.resetPassword = async (req, res) => {
       success: false,
       message: 'Server error. Could not reset password.',
     });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// LOGOUT
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * @desc    Log out this browser (clears the httpOnly auth cookie)
+ * @route   POST /api/auth/logout
+ * @access  Public — works even when the session already expired
+ */
+exports.logout = (req, res) => {
+  clearAuthCookie(res);
+  res.json({ success: true, message: 'Logged out' });
+};
+
+/**
+ * @desc    Log out everywhere: revokes every token issued so far
+ * @route   POST /api/auth/logout-all
+ * @access  Private
+ */
+exports.logoutAll = async (req, res) => {
+  try {
+    await User.updateOne({ _id: req.user.userId }, { $inc: { tokenVersion: 1 } });
+    clearAuthCookie(res);
+    res.json({ success: true, message: 'Logged out on all devices' });
+  } catch (error) {
+    console.error('Logout all error:', error);
+    res.status(500).json({ success: false, message: 'Server error. Could not log out.' });
   }
 };
 

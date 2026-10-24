@@ -28,15 +28,8 @@ const BecomeTechnician = () => {
     setError('');
     
     try {
-      // ✅ FIX: Check if token exists before making request
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Please login first');
-        setLoading(false);
-        navigate('/login');
-        return;
-      }
-      
+      // Signed-in check is the `user` guard above (the token may be in an httpOnly cookie)
+
       const result = await becomeTechnician();
       
       if (result.success) {

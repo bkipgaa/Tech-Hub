@@ -13,6 +13,36 @@ const Technician = require('../../models/Technician');
 const { PUBLIC_EXPERT_FILTER } = require('../../utils/expertVisibility');
 
 /**
+ * Whitelist of fields a technician card may show publicly.
+ * Never send the raw document: it holds earnings, subscription and payment
+ * history, trial history, verification documents and private settings.
+ */
+const toPublicSummary = (tech) => ({
+  _id: tech._id,
+  userId: tech.userId,
+  aboutMe: tech.aboutMe,
+  profileHeadline: tech.profileHeadline,
+  skills: tech.skills,
+  mainCategory: tech.mainCategory,
+  serviceCategories: tech.serviceCategories,
+  pricing: tech.pricing,
+  yearsOfExperience: tech.yearsOfExperience,
+  portfolio: tech.portfolio?.slice(0, 3),
+  location: tech.location,
+  serviceRadius: tech.serviceRadius,
+  languages: tech.languages,
+  availability: tech.availability,
+  emergencyAvailable: tech.emergencyAvailable,
+  remoteServiceAvailable: tech.remoteServiceAvailable,
+  weekendAvailable: tech.weekendAvailable,
+  rating: tech.rating,
+  businessName: tech.businessName,
+  isAvailable: tech.isAvailable,
+  verificationStatus: tech.verificationStatus,
+  createdAt: tech.createdAt
+});
+
+/**
  * Get public technician profile by ID
  * @route   GET /api/technician/public/:id
  * @access  Public
@@ -72,7 +102,6 @@ exports.getPublicProfile = async (req, res) => {
         completedJobs: technician.statistics?.completedJobs || 0,
         acceptingBookings: true,
         businessName: technician.businessName,
-        settings: technician.settings,
         isAvailable: technician.isAvailable,
         verificationStatus: technician.verificationStatus,
         profileCompletionPercentage: technician.profileCompletionPercentage,
@@ -166,37 +195,7 @@ exports.getAllPublicProfiles = async (req, res) => {
     const total = await Technician.countDocuments(filter);
     
     // Remove sensitive data from each technician
-    const sanitizedTechnicians = technicians.map(tech => {
-      // Remove any sensitive internal fields
-      delete tech.__v;
-      
-      return {
-        _id: tech._id,
-        userId: tech.userId,
-        aboutMe: tech.aboutMe,
-        profileHeadline: tech.profileHeadline,
-        skills: tech.skills,
-        // UPDATED: Use mainCategory
-        mainCategory: tech.mainCategory,
-        // UPDATED: Full service categories
-        serviceCategories: tech.serviceCategories,
-        pricing: tech.pricing,
-        yearsOfExperience: tech.yearsOfExperience,
-        portfolio: tech.portfolio?.slice(0, 3),
-        location: tech.location,
-        serviceRadius: tech.serviceRadius,
-        languages: tech.languages,
-        availability: tech.availability,
-        emergencyAvailable: tech.emergencyAvailable,
-        remoteServiceAvailable: tech.remoteServiceAvailable,
-        weekendAvailable: tech.weekendAvailable,
-        rating: tech.rating,
-        businessName: tech.businessName,
-        isAvailable: tech.isAvailable,
-        verificationStatus: tech.verificationStatus,
-        createdAt: tech.createdAt
-      };
-    });
+    const sanitizedTechnicians = technicians.map(toPublicSummary);
     
     res.json({
       success: true,
@@ -246,12 +245,13 @@ exports.getTechniciansByCategory = async (req, res) => {
     })
       .populate('userId', 'firstName lastName profileImage')
       .limit(parseInt(limit))
-      .sort({ 'rating.average': -1 }); // Sort by highest rated first
+      .sort({ 'rating.average': -1 }) // Sort by highest rated first
+      .lean();
     
     res.json({
       success: true,
       count: technicians.length,
-      data: technicians
+      data: technicians.map(toPublicSummary)
     });
     
   } catch (error) {
@@ -281,12 +281,13 @@ exports.getTechniciansByServiceCategory = async (req, res) => {
     })
       .populate('userId', 'firstName lastName profileImage')
       .limit(parseInt(limit))
-      .sort({ 'rating.average': -1 });
+      .sort({ 'rating.average': -1 })
+      .lean();
     
     res.json({
       success: true,
       count: technicians.length,
-      data: technicians
+      data: technicians.map(toPublicSummary)
     });
     
   } catch (error) {
@@ -316,12 +317,13 @@ exports.getTechniciansBySubService = async (req, res) => {
     })
       .populate('userId', 'firstName lastName profileImage')
       .limit(parseInt(limit))
-      .sort({ 'rating.average': -1 });
+      .sort({ 'rating.average': -1 })
+      .lean();
     
     res.json({
       success: true,
       count: technicians.length,
-      data: technicians
+      data: technicians.map(toPublicSummary)
     });
     
   } catch (error) {

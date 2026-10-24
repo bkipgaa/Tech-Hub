@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
@@ -12,8 +12,6 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
-  const [showToken, setShowToken] = useState(false);
-  const [receivedToken, setReceivedToken] = useState('');
   const { login, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -69,16 +67,8 @@ const Login = () => {
       const result = await login(formData.email, formData.password);
       
       if (result.success) {
-        // ✅ Token should be stored in localStorage by AuthContext
-        const storedToken = localStorage.getItem('token');
-        setReceivedToken(storedToken || result.token);
         setLoginSuccess(true);
-        
-        console.log('✅ Login successful!');
-        console.log('Token stored:', !!localStorage.getItem('token'));
-        console.log('User stored:', !!localStorage.getItem('user'));
-        console.log('User role:', result.user?.role);
-        
+
         // Show success message briefly then redirect
         setTimeout(() => {
           redirectBasedOnRole(result.user?.role);
@@ -91,30 +81,6 @@ const Login = () => {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const toggleTokenDisplay = () => {
-    setShowToken(!showToken);
-  };
-
-  // Debug: Check localStorage
-  const checkStoredData = () => {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-    console.log('🔍 localStorage check:');
-    console.log('  - Token exists:', !!token);
-    console.log('  - Token preview:', token ? `${token.substring(0, 20)}...` : 'none');
-    console.log('  - User exists:', !!user);
-    if (user) {
-      try {
-        const userData = JSON.parse(user);
-        console.log('  - User role:', userData.role);
-        console.log('  - User email:', userData.email);
-        console.log('  - User ID:', userData._id);
-      } catch (e) {
-        console.log('  - User data invalid');
-      }
     }
   };
 
@@ -151,33 +117,6 @@ const Login = () => {
               <p className="font-semibold">✅ Login successful!</p>
             </div>
             <p className="text-sm mt-1">Redirecting to dashboard...</p>
-            
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={toggleTokenDisplay}
-                className="text-xs bg-green-200 px-3 py-1 rounded-full hover:bg-green-300 transition-colors flex items-center gap-1"
-              >
-                {showToken ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                {showToken ? 'Hide Token' : 'View Token'}
-              </button>
-              
-              <button
-                type="button"
-                onClick={checkStoredData}
-                className="text-xs bg-blue-200 px-3 py-1 rounded-full hover:bg-blue-300 transition-colors"
-              >
-                Check Storage
-              </button>
-            </div>
-            
-            {showToken && receivedToken && (
-              <div className="mt-3 p-2 bg-white rounded border border-green-300 overflow-auto max-h-24">
-                <p className="text-xs font-mono text-gray-700 break-all">
-                  Token: {receivedToken}
-                </p>
-              </div>
-            )}
           </div>
         )}
 

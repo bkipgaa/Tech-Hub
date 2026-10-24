@@ -16,6 +16,16 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import api from '../services/api';
+import { disconnectSocket } from '../services/socket';
+
+/**
+ * The API always sets an httpOnly auth cookie at login. With
+ * VITE_AUTH_COOKIE_ONLY=true the token is no longer kept in localStorage,
+ * so page scripts (and XSS) can't read it. Turn it on only once the API is
+ * on the same site as the frontend (e.g. api.webafix.com); otherwise
+ * browsers that block third-party cookies (Safari) can't stay signed in.
+ */
+const COOKIE_ONLY = import.meta.env.VITE_AUTH_COOKIE_ONLY === 'true';
 
 // Create the authentication context
 const AuthContext = createContext();
@@ -31,7 +41,7 @@ export const AuthProvider = ({ children }) => {
   
   const [user, setUser] = useState(null);
   const [technicianProfile, setTechnicianProfile] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(COOKIE_ONLY ? null : localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   
@@ -48,7 +58,7 @@ export const AuthProvider = ({ children }) => {
    * @param {string|null} newToken - JWT token or null to remove
    */
   const setAuthToken = (newToken) => {
-    if (newToken) {
+    if (newToken && !COOKIE_ONLY) {
       localStorage.setItem('token', newToken);
       api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
       setToken(newToken);
@@ -70,9 +80,6 @@ export const AuthProvider = ({ children }) => {
    */
   const fetchTechnicianProfile = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return null;
-
       const response = await api.get('/technician/profile');
       
       if (response.data.success) {
@@ -208,11 +215,9 @@ export const AuthProvider = ({ children }) => {
           };
         }
         
-        // Store authentication data
-        localStorage.setItem('token', token);
+        // Store authentication data (the API also set the httpOnly cookie)
+        setAuthToken(token);
         localStorage.setItem('user', JSON.stringify(userData));
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        setToken(token);
         setUser(userData);
         
         // Fetch technician profile if needed
@@ -220,9 +225,8 @@ export const AuthProvider = ({ children }) => {
           await fetchTechnicianProfile();
         }
         
-        return { 
-          success: true, 
-          token: token,
+        return {
+          success: true,
           user: userData,
           data: response.data 
         };
@@ -245,12 +249,34 @@ export const AuthProvider = ({ children }) => {
    * Logout user - clear all stored data and reset state
    */
   const logout = () => {
+    // Clear the httpOnly cookie (only the server can); fine if it fails
+    api.post('/auth/logout').catch(() => {});
+    disconnectSocket();
     setAuthToken(null);
+    localStorage.removeItem('user');
     setUser(null);
     setTechnicianProfile(null);
     setTechnicians([]);
     setAdminStats(null);
     setAuthError(null);
+  };
+
+  /**
+   * Log out on every device: revokes all tokens issued so far, including
+   * any that were copied or leaked, then logs out here.
+   * @returns {Object} { success: boolean, error: string }
+   */
+  const logoutAll = async () => {
+    try {
+      await api.post('/auth/logout-all');
+      logout();
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Could not log out of all devices',
+      };
+    }
   };
 
   /**
@@ -336,21 +362,15 @@ export const AuthProvider = ({ children }) => {
    */
   const createTechnicianProfile = async (profileData) => {
     try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
+      if (!user) {
         return {
           success: false,
           error: 'Please login first to create an expert profile'
         };
       }
 
-      const response = await api.post('/technician/create-profile', profileData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // The api client attaches the auth header/cookie
+      const response = await api.post('/technician/create-profile', profileData);
       
       if (response.data.success) {
         const profile = updateProfileState(response);
@@ -533,20 +553,14 @@ const updateServiceCategories = async (serviceCategories) => {
  */
 const addServiceCategory = async (categoryData) => {
   try {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!user) {
       return {
         success: false,
         error: 'Please login first'
       };
     }
 
-    const response = await api.post('/technician/profile/service-category', categoryData, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const response = await api.post('/technician/profile/service-category', categoryData);
     
     if (response.data.success) {
       const profile = updateProfileState(response);
@@ -588,8 +602,7 @@ const updateServiceCategoryServices = (mainCategory, categoryName, subServices) 
 
 const removeServiceCategory = async (categoryName, mainCategory) => {
   try {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!user) {
       return {
         success: false,
         error: 'Please login first'
@@ -602,11 +615,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
       url += `?mainCategory=${encodeURIComponent(mainCategory)}`;
     }
 
-    const response = await api.delete(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
+    const response = await api.delete(url);
     
     if (response.data.success) {
       const profile = updateProfileState(response);
@@ -975,15 +984,22 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
   
   useEffect(() => {
     const initAuth = async () => {
-      const storedToken = localStorage.getItem('token');
+      const storedToken = COOKIE_ONLY ? null : localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
-      
-      if (storedToken && storedUser) {
+
+      // A stored user means a session to restore; the token may live only
+      // in the httpOnly cookie. fetchUserProfile logs out on a 401.
+      if (storedUser) {
         try {
-          // Set token in axios headers
-          api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-          setToken(storedToken);
-          
+          if (storedToken) {
+            // Set token in axios headers
+            api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+            setToken(storedToken);
+          } else {
+            // Drop a token left over from before cookie-only mode
+            localStorage.removeItem('token');
+          }
+
           // Restore user from localStorage
           const userData = JSON.parse(storedUser);
           setUser(userData);
@@ -1028,6 +1044,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     register,
     login,
     logout,
+    logoutAll,
     becomeTechnician,
     updateUserProfile,
     updateMyLocation,

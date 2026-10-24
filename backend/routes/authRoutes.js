@@ -19,12 +19,14 @@
  *   POST   /login
  *   POST   /forgot-password
  *   POST   /reset-password/:token
+ *   POST   /logout
  * 
  * PROTECTED (any authenticated user)
  *   GET    /profile
  *   PUT    /profile
  *   PUT    /location
  *   PUT    /become-technician
+ *   POST   /logout-all
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -40,6 +42,8 @@ const {
   updateLocation,
   forgotPassword,
   resetPassword,
+  logout,
+  logoutAll,
 } = require('../controllers/authcontroller');
 
 const { validateRegistration, validateLogin } = require('../middleware/validation');
@@ -51,12 +55,14 @@ router.post('/register', registerLimiter, validateRegistration, register);
 router.post('/login', loginLimiter, validateLogin, login);
 router.post('/forgot-password', passwordResetLimiter, forgotPassword);
 router.post('/reset-password/:token', passwordResetLimiter, resetPassword);
+router.post('/logout', logout);
 
 // ============ PROTECTED ROUTES (any authenticated user) ============
 router.get('/profile', auth, getProfile);
 router.put('/profile', auth, updateProfile);
 router.put('/location', auth, updateLocation);
 router.put('/become-technician', auth, becomeTechnician);
+router.post('/logout-all', auth, logoutAll);
 
 // ============================================================
 // REMOVED (now handled by the separate admin panel):
