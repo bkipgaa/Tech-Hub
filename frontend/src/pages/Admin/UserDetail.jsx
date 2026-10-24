@@ -15,9 +15,9 @@ import { adminUserServiceFull } from '../../services/adminRevenueService';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import PermissionGate from '../../components/admin/PermissionGate';
 import EditExpertProfile from '../../components/admin/EditExpertProfile';
+import EditSubscription from '../../components/admin/EditSubscription';
 import ServicePicker from '../../components/ServicePicker';
 import { EMPTY_GROUP, servicesError } from '../../utils/serviceGroups';
-import { PLAN_TIERS, formatKes } from '../../utils/plans';
 
 const inputClass =
   'mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none';
@@ -293,91 +293,11 @@ const MakeExpertForm = ({ user, onCreated }) => {
 // ─────────────────────────────────────────────────────────────
 // Subscription (experts)
 // ─────────────────────────────────────────────────────────────
-const SubscriptionCard = ({ tech, onSaved }) => {
-  const sub = tech.subscription || {};
-  const currentId = !sub.plan || sub.plan === 'trial' ? 'free' : sub.plan;
-  const endDate = sub.endDate ? new Date(sub.endDate) : null;
-  const active = currentId === 'free' || (endDate && endDate > new Date());
-  const [planId, setPlanId] = useState(currentId === 'free' ? 'basic' : currentId);
-  const [days, setDays] = useState(30);
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState(null);
-  const tier = PLAN_TIERS.find((p) => p.id === planId);
-
-  const run = async (request, fallback) => {
-    setSaving(true);
-    setNotice(null);
-    try {
-      const r = await request();
-      setNotice({ type: 'success', text: r.data.message || 'Saved.' });
-      onSaved();
-    } catch (err) {
-      setNotice({ type: 'error', text: errorText(err, fallback) });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const setPlan = (e) => {
-    e.preventDefault();
-    run(() => adminApi.patch(`/subscriptions/${tech._id}/plan`, { planId, days: Number(days) }), 'Could not set the plan.');
-  };
-
-  return (
-    <Card title="Subscription" icon={Crown}>
-      <Notice notice={notice} />
-      <div className="text-sm text-gray-700 space-y-1">
-        <p>
-          Current plan: <strong>{PLAN_TIERS.find((p) => p.id === currentId)?.name || sub.planDetails?.name || currentId}</strong>
-          {sub.isFreeMonth && ' (free month)'}
-          {!active && <span className="ml-2 text-red-600">(ended — on Free now)</span>}
-        </p>
-        {endDate && active && <p>Ends {endDate.toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}</p>}
-        {(currentId === 'free' || !active) && <p className="text-amber-700">Owes KES 500 commission on each new job.</p>}
-      </div>
-
-      <PermissionGate permission="subscriptions.manage" fallback={<p className="text-xs text-gray-400">You can't change plans.</p>}>
-        <form onSubmit={setPlan} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <Field label="Plan">
-            <select className={inputClass} value={planId} onChange={(e) => setPlanId(e.target.value)}>
-              {PLAN_TIERS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} — {p.radius.toLocaleString()} km — {p.price ? `${formatKes(p.price)}/month` : 'free, commission per job'}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Days" hint={tier?.price ? 'Runs from today; no payment is taken.' : 'Free never ends.'}>
-            <input type="number" min="1" max="365" className={inputClass} value={days} onChange={(e) => setDays(e.target.value)} disabled={!tier?.price} />
-          </Field>
-          <div>
-            <SaveButton saving={saving}>Set plan</SaveButton>
-          </div>
-        </form>
-        {currentId !== 'free' && active && (
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => run(() => adminApi.patch(`/subscriptions/${tech._id}/extend`, { days: Number(days) || 30 }), 'Could not extend the plan.')}
-              className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-            >
-              Extend by {Number(days) || 30} days
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => run(() => adminApi.patch(`/subscriptions/${tech._id}/cancel`, {}), 'Could not cancel the plan.')}
-              className="px-3 py-2 rounded-lg text-sm font-medium border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
-            >
-              Move to Free now
-            </button>
-          </div>
-        )}
-      </PermissionGate>
-    </Card>
-  );
-};
+const SubscriptionCard = ({ tech, onSaved }) => (
+  <Card title="Subscription" icon={Crown}>
+    <EditSubscription techId={tech._id} subscription={tech.subscription} onSaved={onSaved} />
+  </Card>
+);
 
 // ─────────────────────────────────────────────────────────────
 // Page
