@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import adminApi from '../../services/adminApi';
 import PermissionGate from '../../components/admin/PermissionGate';
+import EditSubscription from '../../components/admin/EditSubscription';
 import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 
 // ─── PERIOD OPTIONS ─────────────────────────────────────────
@@ -82,6 +83,7 @@ const Subscriptions = () => {
   });
 
   // Modal state
+  const [planModal, setPlanModal] = useState(null); // row whose plan is being changed
   const [extendModal, setExtendModal] = useState({
     open: false,
     tech: null,
@@ -576,6 +578,13 @@ const Subscriptions = () => {
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex items-center gap-1">
                           <PermissionGate permission="subscriptions.manage">
+                            <button
+                              onClick={() => setPlanModal(s)}
+                              className="px-2 py-1 text-xs font-medium text-green-700 border border-green-300 hover:bg-green-50 rounded"
+                              title="Change plan"
+                            >
+                              Change plan
+                            </button>
                             {info.isPaid && (
                               <>
                                 <button
@@ -639,6 +648,29 @@ const Subscriptions = () => {
       </div>
 
       {/* Extend modal */}
+      {planModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setPlanModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl my-8 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">
+                Change plan — {planModal.user?.firstName} {planModal.user?.lastName}
+              </h3>
+              <button onClick={() => setPlanModal(null)} className="p-1 text-gray-400 hover:text-gray-700" aria-label="Close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <EditSubscription
+              techId={planModal._id}
+              subscription={planModal.subscriptionStatus}
+              onSaved={() => {
+                fetchSubscriptions(pagination.page);
+                fetchStats();
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {extendModal.open && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
