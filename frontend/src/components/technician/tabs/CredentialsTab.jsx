@@ -10,11 +10,13 @@
  * @version 4.0.0 – Sectioned layout, modal forms, instant save
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  Briefcase, GraduationCap, BadgeCheck, CheckCircle, ExternalLink, Clock, MapPin,
+  Briefcase, GraduationCap, BadgeCheck, CheckCircle, ExternalLink, Clock, MapPin, FileText, Upload, Loader2, Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import api from '../../../services/api';
+import { CV_ACCEPT, cvFileError, cvFilledText } from '../../../utils/cv';
 import {
   Section, Field, EmptyState, AddButton, RowActions, Banner, FormModal,
   inputClass, toDateInput, formatMonthYear, formatRange, saveList,
@@ -173,9 +175,80 @@ const CertificationFields = ({ item, set }) => (
 
 const FIELDS = { experience: ExperienceFields, education: EducationFields, certifications: CertificationFields };
 
+// ─── CV ──────────────────────────────────────────────────────────────────────
+// Uploading reads the CV and fills in the sections that are still empty.
+const CvCard = ({ cv, canManage, onUploaded, onRemoved, onError, flash }) => {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState('');
+
+  const upload = async (file) => {
+    const problem = cvFileError(file);
+    if (problem) return onError(problem);
+    setBusy('upload');
+    try {
+      const body = new FormData();
+      body.append('cv', file);
+      const { data } = await api.post('/technician/profile/cv', body);
+      onUploaded(data);
+      flash(cvFilledText(data.filled));
+    } catch (err) {
+      onError(err.response?.data?.message || 'Could not upload your CV. Please try again.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm('Remove your CV from your profile?')) return;
+    setBusy('remove');
+    try {
+      await api.delete('/technician/profile/cv');
+      onRemoved();
+      flash('CV removed.');
+    } catch (err) {
+      onError(err.response?.data?.message || 'Could not remove your CV.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <Section icon={FileText} title="CV" description="Shown on your public profile. Uploading one also fills in any empty sections below."
+      action={canManage && (
+        <AddButton onClick={() => inputRef.current?.click()} disabled={!!busy}>{cv ? 'Replace CV' : 'Upload CV'}</AddButton>
+      )}>
+      <input ref={inputRef} type="file" accept={CV_ACCEPT} className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f); }} />
+      {busy === 'upload' ? (
+        <p className="flex items-center gap-2 text-sm text-gray-600"><Loader2 className="w-4 h-4 animate-spin" /> Uploading and reading your CV…</p>
+      ) : cv ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <FileText className="w-8 h-8 text-green-700 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-gray-900 truncate">{cv.fileName || 'CV'}</p>
+            {cv.uploadedAt && <p className="text-xs text-gray-500">Uploaded {formatMonthYear(cv.uploadedAt)}</p>}
+          </div>
+          <a href={cv.url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-green-700 hover:underline">
+            <ExternalLink className="w-4 h-4" /> View
+          </a>
+          {canManage && (
+            <button type="button" onClick={remove} disabled={!!busy}
+              className="inline-flex items-center gap-1 text-sm font-semibold text-red-600 hover:underline disabled:opacity-50">
+              <Trash2 className="w-4 h-4" /> Remove
+            </button>
+          )}
+        </div>
+      ) : (
+        <EmptyState icon={Upload} title="No CV uploaded" text="Upload a PDF or Word (.docx) CV, up to 5 MB." />
+      )}
+    </Section>
+  );
+};
+
 // ─── Tab ─────────────────────────────────────────────────────────────────────
-const CredentialsTab = ({ formData, setFormData, isEditing, handleInputChange }) => {
-  const { updateEducation, updateCertifications, updateExperience } = useAuth();
+const CredentialsTab = ({ formData, setFormData, isEditing, handleInputChange, canManageCv = false }) => {
+  const { updateEducation, updateCertifications, updateExperience, getTechnicianProfile } = useAuth();
   const [editor, setEditor] = useState(null); // { field, index|null, item }
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -247,6 +320,19 @@ const CredentialsTab = ({ formData, setFormData, isEditing, handleInputChange })
     <div className="space-y-6">
       {error && <Banner onClose={() => setError('')}>{error}</Banner>}
       {notice && <Banner type="success">{notice}</Banner>}
+
+      <CvCard
+        cv={formData.cv}
+        canManage={canManageCv}
+        onError={setError}
+        flash={flash}
+        onUploaded={({ cv, filled = [], data }) => {
+          const updates = Object.fromEntries(filled.map((k) => [k, data[k]]));
+          setFormData((prev) => ({ ...prev, ...updates, cv }));
+          getTechnicianProfile?.(); // keeps the completion bar and other tabs in step
+        }}
+        onRemoved={() => setFormData((prev) => ({ ...prev, cv: null }))}
+      />
 
       {/* Summary */}
       <div className="flex flex-wrap items-center gap-4 bg-gray-50 rounded-xl border border-gray-200 px-5 py-4">

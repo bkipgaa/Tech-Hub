@@ -145,7 +145,37 @@ const uploadQuotationToCloudinary = (buffer, mimetype = '') =>
     }),
   });
 
+// CVs: one PDF or Word (.docx) file, 5 MB
+const CV_TYPES = {
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+};
+const cvUpload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (CV_TYPES[file.mimetype]) cb(null, true);
+    else cb(new Error('Your CV must be a PDF or a Word (.docx) file.'));
+  },
+});
+
+// Raw files keep their extension in the public_id, so the link downloads as a .pdf/.docx
+const uploadCvToCloudinary = (buffer, mimetype, userId) =>
+  new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'technicians/cvs',
+        resource_type: 'raw',
+        public_id: `cv-${userId}-${Date.now()}.${CV_TYPES[mimetype]}`,
+      },
+      (error, result) => (error ? reject(error) : resolve(result))
+    );
+    stream.end(buffer);
+  });
+
 module.exports = {
+  cvUpload,
+  uploadCvToCloudinary,
   quotationUpload,
   uploadQuotationToCloudinary,
   evidenceUpload,

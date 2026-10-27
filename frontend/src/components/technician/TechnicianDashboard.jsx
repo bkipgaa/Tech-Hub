@@ -309,6 +309,7 @@ const TechnicianDashboard = () => {
         yearsOfExperience: profile.yearsOfExperience || 0,
         experience: profile.experience || [],
         portfolio: profile.portfolio || [],
+        cv: profile.cv?.url ? profile.cv : null,
         address: profile.address || {
           street: '',
           city: '',
@@ -853,9 +854,10 @@ const TechnicianDashboard = () => {
                 isEditing={canEdit}
                 isReadOnly={isReadOnly}
                 handleInputChange={handleInputChange}
+                canManageCv={!isAdminViewing && user?.role === 'technician'}
               />
             )}
-            
+
             {activeTab === 'availability' && (
               <AvailabilityTab 
                 formData={formData}

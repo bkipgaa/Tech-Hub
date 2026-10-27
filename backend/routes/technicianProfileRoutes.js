@@ -23,7 +23,18 @@ const { updateProfileStatus } = require('../controllers/technician/profile/updat
 const { updateSettings } = require('../controllers/technician/profile/updateSettings');
 const { updateSkills } = require('../controllers/technician/profile/updateSkills');
 const { updateSocialLinks } = require('../controllers/technician/profile/updateSocialLinks');
+const { uploadCv, deleteCv } = require('../controllers/technician/profile/updateCv');
+const { cvUpload } = require('../config/cloudinary');
 const { getPublicProfile } = require('../controllers/technician/publicController');
+
+// Multer errors (wrong type, too big) as a 400 instead of the generic 500
+const cvFile = (req, res, next) => {
+  cvUpload.single('cv')(req, res, (err) => {
+    if (!err) return next();
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'Your CV must be under 5 MB.' : err.message;
+    res.status(400).json({ success: false, message });
+  });
+};
 const { getCompleteCatalog } = require('../controllers/serviceCatalogController');
 const { addServiceCategory, removeServiceCategory, updateServiceCategory } = require('../controllers/technician/profile/addService-category');
 
@@ -62,6 +73,8 @@ protectedRouter.put('/profile/social-links', updateSocialLinks);
 protectedRouter.put('/profile/availability', updateAvailability);
 protectedRouter.put('/profile/settings', updateSettings);
 protectedRouter.put('/profile/status', updateProfileStatus);
+protectedRouter.post('/profile/cv', cvFile, uploadCv);
+protectedRouter.delete('/profile/cv', deleteCv);
 protectedRouter.post('/profile/service-category', addServiceCategory);
 protectedRouter.put('/profile/service-category', updateServiceCategory);
 protectedRouter.delete('/profile/service-category/:categoryName', removeServiceCategory);
