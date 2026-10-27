@@ -14,6 +14,7 @@ import adminApi from '../../services/adminApi';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import PermissionGate from '../../components/admin/PermissionGate';
 import EditExpertProfile from '../../components/admin/EditExpertProfile';
+import EditSubscription from '../../components/admin/EditSubscription';
 
 const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -22,6 +23,7 @@ const formatDateTime = (d) =>
   d ? new Date(d).toLocaleString('en-KE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const formatCurrency = (n) => `KES ${Number(n || 0).toLocaleString()}`;
+
 
 const TechnicianDetail = () => {
   const { id } = useParams();
@@ -211,7 +213,7 @@ const TechnicianDetail = () => {
             <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <Detail label="Business name" value={tech.businessName || '—'} />
               <Detail label="Main category" value={tech.mainCategory || '—'} />
-              <Detail label="Service radius" value={`${tech.serviceRadius || 10} km`} />
+              <Detail label="Service radius" value={`${tech.serviceRadius || 50} km`} />
               <Detail label="Years of experience" value={tech.yearsOfExperience || 0} />
               <Detail label="Service categories" value={tech.serviceCategories?.length || 0} />
               <Detail label="Profile completion" value={`${tech.profileCompletionPercentage || 0}%`} />
@@ -326,13 +328,7 @@ const TechnicianDetail = () => {
           {/* Subscription */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Subscription</h3>
-            <dl className="space-y-2 text-sm">
-              <Detail label="Plan" value={tech.subscription?.plan || 'free'} />
-              <Detail label="Price" value={formatCurrency(tech.subscription?.planDetails?.price || 0)} />
-              <Detail label="Started" value={formatDate(tech.subscription?.startDate)} />
-              <Detail label="Ends" value={formatDate(tech.subscription?.endDate)} />
-              <Detail label="Auto-renew" value={tech.subscription?.autoRenew ? 'On' : 'Off'} />
-            </dl>
+            <EditSubscription key={`${tech.subscription?.plan}-${tech.subscription?.endDate}`} techId={tech._id} subscription={tech.subscription} onSaved={fetchTech} />
           </div>
 
           {/* Stats */}
