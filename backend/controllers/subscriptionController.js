@@ -71,7 +71,7 @@ exports.getCurrentSubscription = async (req, res) => {
         // KES owed per job while on Free (0 on a paid plan or free month)
         commissionPerJob: effective.commissionPerJob,
         canUpgrade: true,
-        // The old 10 km trial is gone: Free is 50 km forever
+        // The old 10 km trial is gone: Free is 1000 km forever
         canActivateTrial: false,
         // Free first month on a paid plan — once per expert, ever
         freeMonthAvailable: !technician.trialHistory?.paidPlanTrialUsedAt,
@@ -84,12 +84,12 @@ exports.getCurrentSubscription = async (req, res) => {
 };
 
 // ─── ACTIVATE TRIAL (retired) ───────────────────────────────────────────────
-// The 10 km Free Trial was replaced by the Free plan (50 km, forever). The
+// The 10 km Free Trial was replaced by the Free plan (1000 km, forever). The
 // one-month trial now means the free first month on a paid plan (/free-month).
 exports.activateTrial = async (req, res) => {
   res.status(400).json({
     success: false,
-    message: 'Every expert is already on the Free plan (50 km, forever). To try a paid plan, start your free month on it.',
+    message: 'Every expert is already on the Free plan (1000 km, forever). To try a paid plan, start your free month on it.',
   });
 };
 
@@ -772,7 +772,7 @@ exports.getSubscriptionHistory = async (req, res) => {
 // ─── FREE FIRST MONTH ON A PAID PLAN ────────────────────────────────────────
 /**
  * Give an expert one month of a paid plan for free. No payment details:
- * when the month ends they return to Free (50 km) unless they subscribe.
+ * when the month ends they return to Free (1000 km) unless they subscribe.
  * Only once per expert, whichever plan they choose.
  */
 exports.startFreeMonth = async (req, res) => {
@@ -863,7 +863,7 @@ const downgradeExpiredSubscription = async (technician) => {
 
   const { plan } = technician.subscription;
 
-  // Lapsed paid plan or ended trial → Free (50 km), which never expires
+  // Lapsed paid plan or ended trial → Free (1000 km), which never expires
   if (plan !== 'free' && getEffectivePlan(technician.subscription).plan === 'free') {
     console.log(`🔄 Downgrading technician ${technician._id} from ${plan} to free plan due to expiry.`);
 

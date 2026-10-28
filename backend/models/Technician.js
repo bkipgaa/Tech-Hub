@@ -347,7 +347,7 @@ const TechnicianSchema = new Schema({
     },
     planDetails: {
       name: String,
-      visibilityRadius: { type: Number, default: 50 },
+      visibilityRadius: { type: Number, default: 1000 },
       price: { type: Number, default: 0 },
       features: [String]
     },

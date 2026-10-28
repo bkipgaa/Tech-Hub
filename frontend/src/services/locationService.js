@@ -98,8 +98,8 @@ class LocationService {
   getVisibilityDescription(plan) {
     // Matches backend/utils/subscriptionPlans.js (the old trial is now Free)
     const visibilityRadii = {
-      free: 'Visible up to 50km',
-      trial: 'Visible up to 50km',
+      free: 'Visible up to 1000km',
+      trial: 'Visible up to 1000km',
       basic: 'Visible up to 100km',
       basicPlus: 'Visible up to 250km',
       premium: 'Visible up to 250km',
@@ -108,7 +108,7 @@ class LocationService {
       unlimited: 'Visible up to 5000km'
     };
 
-    return visibilityRadii[plan] || 'Free: Visible up to 50km';
+    return visibilityRadii[plan] || 'Free: Visible up to 1000km';
   }
 
   getCachedLocation() {

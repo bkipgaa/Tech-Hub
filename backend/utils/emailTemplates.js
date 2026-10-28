@@ -117,7 +117,7 @@ exports.technicianSubscriptionExpiring = (data) => {
       subject: `⏰ Your free trial ends ${when}`,
       title: `Your free trial ends ${when}`,
       ends: `Your <strong>${data.planName}</strong> ends on <strong>${data.endDate}</strong>.`,
-      note: `<strong>Good to know:</strong> after your trial you stay on the Free plan, visible to clients within 50 km with no monthly fee
+      note: `<strong>Good to know:</strong> after your trial you stay on the Free plan, visible to clients within 1,000 km with no monthly fee
              (KES 500 commission per job). Choose a paid plan to reach clients up to 5,000 km away with no commission.`,
       cta: 'See Plans',
     },
@@ -125,7 +125,7 @@ exports.technicianSubscriptionExpiring = (data) => {
       subject: `⏰ Your free month of ${data.planName} ends ${when}`,
       title: `Your free month of ${data.planName} ends ${when}`,
       ends: `Your free month of <strong>${data.planName}</strong> ends on <strong>${data.endDate}</strong>.`,
-      note: `<strong>Nothing will be charged.</strong> After it ends you go back to the Free plan: visible within 50 km, with a
+      note: `<strong>Nothing will be charged.</strong> After it ends you go back to the Free plan: visible within 1,000 km, with a
              KES 500 commission on each job. Subscribe to ${data.planName} to keep your ${data.currentRadius} km visibility and pay no commission.`,
       cta: `Subscribe to ${data.planName}`,
     },
@@ -133,7 +133,7 @@ exports.technicianSubscriptionExpiring = (data) => {
       subject: data.daysLeft === 1 ? '⚠️ Your subscription expires TOMORROW' : `⚠️ Your subscription expires ${when}`,
       title: `Your subscription expires ${when}`,
       ends: `Your <strong>${data.planName}</strong> subscription will expire on <strong>${data.endDate}</strong>.`,
-      note: `<strong>Important:</strong> When your subscription expires, you'll be moved to the Free plan: visible within 50 km, with a
+      note: `<strong>Important:</strong> When your subscription expires, you'll be moved to the Free plan: visible within 1,000 km, with a
              KES 500 commission on each job and ratings shown only once it is paid. Renew now to keep your ${data.currentRadius} km visibility and pay no commission.`,
       cta: 'Renew Subscription',
     },
