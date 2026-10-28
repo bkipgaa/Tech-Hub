@@ -3,7 +3,7 @@
  * ========================
  * Daily scan for paid plans (and free months of them) that are about to end.
  * Sends a reminder 7, 3 and 1 day(s) before. When a plan ends the expert stays
- * visible on the Free plan (50 km, KES 500 commission per job).
+ * visible on the Free plan (1000 km, KES 500 commission per job).
  *
  * Run via node-cron in server.js.
  */

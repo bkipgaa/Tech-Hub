@@ -214,6 +214,11 @@ const connectDB = async () => {
       console.error('Booking flow upgrade failed:', err.message)
     );
 
+    // Free experts saved with the old 50 km radius move to the Free plan's current one
+    require('./utils/subscriptionPlans').migrateFreePlanRadius().catch((err) =>
+      console.error('Free plan radius upgrade failed:', err.message)
+    );
+
     mongoose.connection.on('error', (err) => {
       console.error('MongoDB connection error:', err);
     });

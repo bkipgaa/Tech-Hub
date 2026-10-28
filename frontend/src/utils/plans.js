@@ -15,11 +15,11 @@ export const visiblePlans = (plans = []) => plans.filter(isVisiblePlan);
 
 /** KES owed on each job an expert gets while on the Free plan */
 export const COMMISSION_PER_JOB = 500;
-export const FREE_RADIUS_KM = 50;
+export const FREE_RADIUS_KM = 1000;
 
 /** Every plan experts can be on, smallest first (Free, then the paid plans) */
 export const PLAN_TIERS = [
-  { id: 'free', name: 'Free', radius: 50, price: 0, reach: 'your area' },
+  { id: 'free', name: 'Free', radius: 1000, price: 0, reach: 'all of Kenya' },
   { id: 'basic', name: 'Basic', radius: 100, price: 1000, reach: 'your town and nearby towns' },
   { id: 'basicPlus', name: 'Basic Plus', radius: 250, price: 2000, reach: 'several counties' },
   { id: 'business', name: 'Business', radius: 500, price: 4000, reach: 'most of Kenya' },

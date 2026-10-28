@@ -4,7 +4,7 @@
  * Subscription Plans Configuration for Technician Visibility
  *
  * VISIBILITY RULES:
- * - Free:        50km   radius  (KES 0, forever)  – KES 500 commission per job
+ * - Free:        1000km radius  (KES 0, forever)  – KES 500 commission per job
  * - Basic:       100km  radius  (KES 1,000/month) – no commission
  * - Basic Plus:  250km  radius  (KES 2,000/month) – no commission
  * - Business:    500km  radius  (KES 4,000/month) – no commission
@@ -13,7 +13,7 @@
  * - Test:        100km  radius  (KES 10/month)    – for testing payment flow
  *
  * Every expert is always visible. A paid plan that is not renewed falls back
- * to Free (50km). The first month on any paid plan can be taken free, once.
+ * to Free (1000km). The first month on any paid plan can be taken free, once.
  *
  * Commission: a booking made while the expert is on Free owes KES 500 once the
  * work is done. Until it is paid, the client's rating and the completed job
@@ -22,7 +22,7 @@
  * Legacy ids: 'trial' (the old 10km free trial) now means Free; 'premium'
  * is no longer sold but kept so existing subscribers keep it until it ends.
  *
- * @version 3.0.0 – Free 50km with commission; paid plans 100km–5000km
+ * @version 3.1.0 – Free 1000km with commission; paid plans 100km–5000km
  */
 
 /** KES owed on each job an expert gets while on the Free plan */
@@ -30,7 +30,7 @@ const COMMISSION_PER_JOB = 500;
 
 const FREE_FEATURES = [
   'Free forever — no monthly fee',
-  'Clients within 50km can find you',
+  'Clients within 1000km can find you (all of Kenya)',
   `KES ${COMMISSION_PER_JOB} commission on each job you get through a booking`,
   'Ratings and completed jobs show on your profile once the commission is paid',
 ];
@@ -46,11 +46,11 @@ const paidFeatures = (radiusLine) => [
 
 const subscriptionPlans = {
   // ─────────────────────────────────────────────────────────
-  // FREE — 50km, forever, KES 500 commission per job
+  // FREE — 1000km, forever, KES 500 commission per job
   // ─────────────────────────────────────────────────────────
   free: {
     name: 'Free',
-    visibilityRadius: 50,
+    visibilityRadius: 1000,
     price: 0,
     durationDays: null,
     commissionPerJob: COMMISSION_PER_JOB,
@@ -62,7 +62,7 @@ const subscriptionPlans = {
   // ─────────────────────────────────────────────────────────
   trial: {
     name: 'Free',
-    visibilityRadius: 50,
+    visibilityRadius: 1000,
     price: 0,
     durationDays: null,
     commissionPerJob: COMMISSION_PER_JOB,
@@ -159,7 +159,7 @@ const subscriptionPlans = {
 // Plans List — used in dropdowns and API responses
 // ═══════════════════════════════════════════════════════════
 const plansList = [
-  { id: 'free',       name: 'Free',        visibilityRadius: 50,   price: 0,    commissionPerJob: COMMISSION_PER_JOB, duration: 'Forever', description: `Local coverage (50km) — KES ${COMMISSION_PER_JOB} commission per job` },
+  { id: 'free',       name: 'Free',        visibilityRadius: 1000, price: 0,    commissionPerJob: COMMISSION_PER_JOB, duration: 'Forever', description: `All of Kenya (1,000km) — KES ${COMMISSION_PER_JOB} commission per job` },
   { id: 'test',       name: 'Test Plan',   visibilityRadius: 100,  price: 10,   commissionPerJob: 0, duration: '30 days', description: 'Test payment flow (KES 10)' },
   { id: 'basic',      name: 'Basic',       visibilityRadius: 100,  price: 1000, commissionPerJob: 0, duration: '30 days', description: 'Town and nearby towns (100km)' },
   { id: 'basicPlus',  name: 'Basic Plus',  visibilityRadius: 250,  price: 2000, commissionPerJob: 0, duration: '30 days', description: 'Several counties (250km)' },
@@ -176,12 +176,9 @@ const plansList = [
  * Return the smallest/cheapest plan that covers a given radius.
  */
 function getPlanByRadius(radius) {
+  // Free reaches 1000km, so only Platinum goes further
   const radiusThresholds = [
-    { maxRadius: 50,   plan: 'free' },
-    { maxRadius: 100,  plan: 'basic' },
-    { maxRadius: 250,  plan: 'basicPlus' },
-    { maxRadius: 500,  plan: 'business' },
-    { maxRadius: 1000, plan: 'enterprise' },
+    { maxRadius: subscriptionPlans.free.visibilityRadius, plan: 'free' },
     { maxRadius: 5000, plan: 'unlimited' },
   ];
   for (const threshold of radiusThresholds) {
@@ -308,7 +305,7 @@ function getFeaturesComparison() {
 // ═══════════════════════════════════════════════════════════
 // Every expert stays visible: a paid plan (or free month) counts until its
 // endDate; the old trial, a lapsed paid plan or the Free plan all mean Free
-// (50 km, commission per job), forever.
+// (1000 km, commission per job), forever.
 const FREE_PLANS = ['free', 'trial'];
 
 function getEffectivePlan(subscription, now = new Date()) {
@@ -328,7 +325,21 @@ function getEffectivePlan(subscription, now = new Date()) {
   return { plan, visibilityRadius: subscriptionPlans[plan].visibilityRadius, commissionPerJob: 0, paid: true };
 }
 
+// Free went from 50km to 1000km. Search already reads the radius from the plan
+// above; this brings the radius saved on Free experts (shown on their profile)
+// up to date. Runs at startup and only touches experts still below it.
+async function migrateFreePlanRadius() {
+  const Technician = require('../models/Technician');
+  const radius = subscriptionPlans.free.visibilityRadius;
+  const { modifiedCount } = await Technician.updateMany(
+    { 'subscription.plan': { $in: FREE_PLANS }, serviceRadius: { $lt: radius } },
+    { $set: { serviceRadius: radius, 'subscription.planDetails.visibilityRadius': radius } }
+  );
+  if (modifiedCount) console.log(`📍 Free plan radius: ${modifiedCount} experts moved to ${radius} km`);
+}
+
 module.exports = {
+  migrateFreePlanRadius,
   COMMISSION_PER_JOB,
   subscriptionPlans,
   plansList,

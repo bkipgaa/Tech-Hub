@@ -149,7 +149,7 @@ const getProfileCompletionBreakdown = (technician) => {
 };
 
 /**
- * Fields that start a new expert on the Free plan (50 km, forever). The free
+ * Fields that start a new expert on the Free plan (1000 km, forever). The free
  * first month on a paid plan stays available for them to start later.
  *
  * @returns {Object} subscription and serviceRadius
