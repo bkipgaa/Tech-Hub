@@ -173,6 +173,16 @@ const TechnicianSchema = new Schema({
     views: { type: Number, default: 0 }
   }],
 
+  // CV the expert uploaded (PDF or Word), shown on their public profile.
+  // Stored on Cloudinary as a raw file so it downloads as it was uploaded.
+  cv: {
+    url: String,
+    publicId: String,
+    fileName: String,
+    mimeType: String,
+    uploadedAt: Date
+  },
+
   address: {
     street: String,
     city: { type: String, required: true },

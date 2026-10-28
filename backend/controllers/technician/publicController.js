@@ -90,6 +90,7 @@ exports.getPublicProfile = async (req, res) => {
         yearsOfExperience: technician.yearsOfExperience,
         experience: technician.experience,
         portfolio: technician.portfolio,
+        cv: technician.cv?.url ? { url: technician.cv.url, fileName: technician.cv.fileName } : null,
         address: technician.address,
         location: technician.location,
         serviceRadius: technician.serviceRadius,

@@ -6,7 +6,8 @@
  *   2. What for: an expert's categories and services, the kind of expert a
  *      client needs, or a Stays & Spaces category
  *   3. Share your location (required); town and county are filled in from it
- *   4. Account details
+ *   4. Account details; experts can also attach their CV, which is uploaded
+ *      once the account exists and fills in their profile sections
  * Afterwards each kind of user lands where they can get going: experts on
  * their dashboard, clients on Services, listers on the listing form and
  * stay seekers on Stays & Spaces near them.
@@ -16,7 +17,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   UserPlus, Mail, Lock, User, Phone, Wrench, Search, Home as HomeIcon, BedDouble,
-  ArrowLeft, ArrowRight, Navigation, Loader2, CheckCircle, MapPin, AlertCircle,
+  ArrowLeft, ArrowRight, Navigation, Loader2, CheckCircle, MapPin, AlertCircle, FileText, X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -24,6 +25,7 @@ import ServicePicker from '../components/ServicePicker';
 import { EMPTY_GROUP, servicesError } from '../utils/serviceGroups';
 import { LISTING_GROUPS } from '../utils/listingCategories';
 import { getLivePosition, reverseGeocode } from '../utils/geo';
+import { CV_ACCEPT, cvFileError } from '../utils/cv';
 
 const INTENTS = [
   { id: 'expert', icon: Wrench, title: "I'm an expert", text: 'Offer my services and get hired' },
@@ -37,7 +39,7 @@ const STEPS = ['You are', 'Details', 'Location', 'Account'];
 const inputClass = 'w-full p-3 border-2 border-green-300 rounded-lg focus:border-red-500 focus:outline-none';
 
 const SignUp = () => {
-  const { register } = useAuth();
+  const { register, getTechnicianProfile } = useAuth();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
@@ -59,8 +61,9 @@ const SignUp = () => {
   const [catalog, setCatalog] = useState(null);
   const [catalogError, setCatalogError] = useState('');
   const [catalogTry, setCatalogTry] = useState(0); // bumped by "Try again"
+  const [cvFile, setCvFile] = useState(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(''); // '' | 'account' | 'cv'
 
   // Experts and clients pick from the service catalog
   useEffect(() => {
@@ -73,6 +76,14 @@ const SignUp = () => {
   }, [intent, catalog, catalogTry]);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+  const pickCv = (e) => {
+    const file = e.target.files?.[0] || null;
+    e.target.value = '';
+    const problem = cvFileError(file);
+    setError(problem);
+    if (!problem) setCvFile(file);
+  };
 
   const shareLocation = async () => {
     setLocating(true);
@@ -143,14 +154,33 @@ const SignUp = () => {
       ...((intent === 'lister' || intent === 'stay_seeker') && { listingCategory }),
     };
 
-    setLoading(true);
+    setLoading('account');
     const result = await register(payload);
-    setLoading(false);
 
     if (!result.success) {
+      setLoading('');
       setError(result.error);
       return;
     }
+
+    // The account exists now; a CV that fails to upload can be added from the dashboard
+    if (intent === 'expert' && cvFile) {
+      setLoading('cv');
+      try {
+        const body = new FormData();
+        body.append('cv', cvFile);
+        await api.post('/technician/profile/cv', body);
+        await getTechnicianProfile();
+      } catch (err) {
+        console.error('CV upload after sign up failed:', err);
+        window.alert(
+          `Your account is ready, but your CV could not be uploaded (${err.response?.data?.message || 'connection problem'}). ` +
+          'You can upload it from Education & Certifications on your dashboard.'
+        );
+      }
+    }
+    setLoading('');
+
     if (intent === 'expert') navigate('/technician-dashboard');
     else if (intent === 'client') navigate(`/services?category=${encodeURIComponent(mainCategory)}`);
     else if (intent === 'lister') navigate(`/stays/new?category=${listingCategory}`);
@@ -402,6 +432,31 @@ const SignUp = () => {
                 </label>
                 <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required className={inputClass} placeholder="••••••••" />
               </div>
+
+              {intent === 'expert' && (
+                <div>
+                  <label htmlFor="cv" className="block text-gray-700 font-semibold mb-1 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-green-600" />
+                    Your CV <span className="font-normal text-gray-400">(optional)</span>
+                  </label>
+                  <p className="text-sm text-gray-500 mb-2">
+                    We'll fill in your experience, education and skills from it, and show it on your profile. PDF or Word, up to 5 MB.
+                  </p>
+                  {cvFile ? (
+                    <div className="flex items-center gap-3 p-3 rounded-lg border-2 border-green-300 bg-green-50">
+                      <FileText className="w-5 h-5 text-green-700 flex-shrink-0" />
+                      <span className="flex-1 min-w-0 truncate text-sm text-gray-800">{cvFile.name}</span>
+                      <button type="button" onClick={() => setCvFile(null)} aria-label="Remove CV"
+                        className="p-1 rounded text-gray-500 hover:text-red-600 hover:bg-white">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <input id="cv" type="file" accept={CV_ACCEPT} onChange={pickCv}
+                      className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-green-100 file:text-green-800 file:font-semibold hover:file:bg-green-200" />
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -425,11 +480,11 @@ const SignUp = () => {
               ) : (
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={!!loading}
                   className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <UserPlus className="w-5 h-5" />
-                  {loading ? 'Creating Account...' : 'Sign Up'}
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
+                  {loading === 'account' ? 'Creating Account...' : loading === 'cv' ? 'Reading your CV...' : 'Sign Up'}
                 </button>
               )}
             </div>

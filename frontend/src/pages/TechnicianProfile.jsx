@@ -31,6 +31,8 @@ import {
   Briefcase,
   BookOpen,
   BadgeCheck,
+  FileText,
+  ExternalLink,
   User,
   ArrowLeft,
   FolderOpen,
@@ -776,6 +778,25 @@ const TechnicianProfile = () => {
               <p className="font-semibold text-green-800">Verified Professional</p>
               <p className="text-sm text-green-700">This expert has been verified by Webafix</p>
             </div>
+          </div>
+        )}
+
+        {/* ─── CV ───────────────────────────────────────────── */}
+        {/^https:\/\//.test(technician.cv?.url || '') && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6 flex flex-wrap items-center gap-4">
+            <FileText className="w-8 h-8 text-green-600 flex-shrink-0" />
+            <div className="flex-1 min-w-0 text-left">
+              <h2 className="text-xl font-bold text-gray-800">CV</h2>
+              <p className="text-sm text-gray-500 truncate">{technician.cv.fileName || 'Curriculum vitae'}</p>
+            </div>
+            <a
+              href={technician.cv.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700"
+            >
+              <ExternalLink className="w-4 h-4" /> View CV
+            </a>
           </div>
         )}
 
