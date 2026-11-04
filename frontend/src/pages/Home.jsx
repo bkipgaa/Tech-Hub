@@ -20,7 +20,7 @@ const TECHNICIAN_STEPS = [
   { title: 'Get a Booking', text: 'Clients near you find you in search and send a request' },
   { title: 'Quote & Do the Work', text: 'Send your quotation, agree with the client, and complete the job' },
   { title: 'Get Rated', text: 'The client rates you after the job — ratings move you up in search' },
-  { title: 'Keep What You Earn', text: 'No commission on your jobs — just a simple monthly plan' },
+  { title: 'Keep What You Earn', text: 'Start free and pay KES 500 per job, or choose a monthly plan with no commission' },
 ];
 
 const Home = () => {
