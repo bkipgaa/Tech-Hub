@@ -167,7 +167,7 @@ const TechnicianHome = () => {
       {plans.length > 0 && (
         <div className="max-w-7xl mx-auto px-4 pt-12">
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-1">Reach More Clients</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-1">Choose Your Plan</h2>
             <p className="text-gray-500 text-sm">
               Your plan sets how far away clients can find you. The Free plan reaches {FREE_RADIUS_KM} km with no monthly fee,
               but each job costs a {formatKes(COMMISSION_PER_JOB)} commission and its rating shows once that is paid.

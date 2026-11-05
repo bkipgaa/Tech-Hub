@@ -303,8 +303,8 @@ const SubscriptionManager = () => {
               by M-Pesa or card.
             </li>
             <li>
-              <strong>Paid plans (from KES 1,000 a month)</strong> let clients further away find you — 100 km up to 5,000 km.
-              There is <strong>no commission</strong> on any job, and your ratings and completed jobs show on your profile
+              <strong>Paid plans (from KES 1,000 a month)</strong> each have their own reach, from 100 km up to 5,000 km.
+              Only Platinum reaches further than the Free plan's {FREE_RADIUS_KM} km. There is <strong>no commission</strong> on any job, and your ratings and completed jobs show on your profile
               immediately.
             </li>
             <li>
@@ -389,7 +389,7 @@ const SubscriptionManager = () => {
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
             <span className="text-red-700 font-medium flex-1">
-              Your plan has ended. You're on the Free plan: visible within {FREE_RADIUS_KM} km, with a {formatKes(COMMISSION_PER_JOB)} commission per job. Upgrade to reach clients further away and pay no commission.
+              Your plan has ended. You're on the Free plan: visible within {FREE_RADIUS_KM} km, with a {formatKes(COMMISSION_PER_JOB)} commission per job. Choose a paid plan to pay no commission and show ratings immediately.
             </span>
             <button
               onClick={() => {
@@ -431,7 +431,7 @@ const SubscriptionManager = () => {
         <div className="rounded-lg border border-green-300 bg-green-50 p-5">
           <h3 className="font-semibold text-gray-800 mb-1">Paid plans — from KES 1,000 a month</h3>
           <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
-            <li>Reach clients from <strong>100 km up to 5,000 km</strong> away.</li>
+            <li>Each plan has its own reach, from <strong>100 km up to 5,000 km</strong>. Only Platinum goes further than the Free plan's {FREE_RADIUS_KM} km.</li>
             <li><strong>No commission</strong> on any job.</li>
             <li>Ratings and completed jobs show on your profile <strong>immediately</strong>.</li>
             <li>First month free, once. If you don't renew, you return to the Free plan.</li>
