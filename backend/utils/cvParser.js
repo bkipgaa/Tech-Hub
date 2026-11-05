@@ -126,22 +126,55 @@ const SCHOOL_RE = /(university|college|polytechnic|institute|school|academy|tech
 // "Routing and Switching (BGP, OSPF)" → main skill "Routing and Switching",
 // with BGP and OSPF listed after all the main skills. Commas inside brackets
 // don't split, list numbers and "Additional:"-style labels are dropped, and a
-// lone bracketed abbreviation like "(RCA)" is left out.
+// lone bracketed abbreviation like "(RCA)" is left out. A bracket wrapped onto
+// the next lines (common in PDFs) is rejoined, one that never closes ends with
+// its line, and a stray closing bracket is dropped.
+const OPEN_BRACKET = /[([]/;
+const CLOSE_BRACKET = /[)\]]/;
+const hasOpenBracket = (s) => {
+  let depth = 0;
+  for (const ch of s) {
+    if (OPEN_BRACKET.test(ch)) depth += 1;
+    if (CLOSE_BRACKET.test(ch)) depth = Math.max(0, depth - 1);
+  }
+  return depth > 0;
+};
+const closesBracket = (s = '') => {
+  const close = s.search(CLOSE_BRACKET);
+  const open = s.search(OPEN_BRACKET);
+  return close >= 0 && (open < 0 || close < open);
+};
+const joinWrappedBrackets = (lines) => {
+  const joined = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    let end = i;
+    if (hasOpenBracket(lines[i])) {
+      if (closesBracket(lines[i + 1])) end = i + 1;
+      else if (lines[i + 1] && !/[()[\]]/.test(lines[i + 1]) && closesBracket(lines[i + 2])) end = i + 2;
+    }
+    joined.push(lines.slice(i, end + 1).join(' '));
+    i = end;
+  }
+  return joined;
+};
+
 const skillsFrom = (lines = []) => {
   const main = [];
   const extra = [];
-  lines.forEach((raw) => {
-    const line = unbullet(raw)
-      .replace(/^\(?\d{1,2}[.)]\s+/, '')
-      .replace(/^[A-Za-z][\w &/-]{0,25}:\s+/, '');
+  const cleaned = lines.map((raw) => unbullet(raw)
+    .replace(/^\(?\d{1,2}[.)]\s+/, '')
+    .replace(/^[A-Za-z][\w &/-]{0,25}:\s+/, ''));
+  joinWrappedBrackets(cleaned).forEach((line) => {
     let depth = 0;
     let part = '';
     const parts = [];
-    for (const ch of `${line},`) {
-      if (ch === '(' || ch === '[') depth += 1;
-      if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1);
+    for (const ch of line) {
+      if (CLOSE_BRACKET.test(ch) && !depth) continue;
+      if (OPEN_BRACKET.test(ch)) depth += 1;
+      if (CLOSE_BRACKET.test(ch)) depth -= 1;
       if (!depth && /[,;|•·]/.test(ch)) { parts.push(part); part = ''; } else part += ch;
     }
+    parts.push(part + ')'.repeat(depth));
     parts.forEach((p) => {
       const inner = (p.match(/[([]([^)\]]*)[)\]]/) || [])[1];
       main.push(p.replace(/\s*[([][^)\]]*[)\]]?/g, ''));
