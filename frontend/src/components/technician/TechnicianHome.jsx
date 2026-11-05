@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { visiblePlans, COMMISSION_PER_JOB, formatKes } from '../../utils/plans';
+import { visiblePlans, COMMISSION_PER_JOB, FREE_RADIUS_KM, formatKes } from '../../utils/plans';
 
 const StatCard = ({ icon: Icon, title, children, action, onAction, tone = 'default' }) => {
   const tones = {
@@ -167,9 +167,9 @@ const TechnicianHome = () => {
       {plans.length > 0 && (
         <div className="max-w-7xl mx-auto px-4 pt-12">
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-1">Reach More Clients</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-1">Choose Your Plan</h2>
             <p className="text-gray-500 text-sm">
-              Your plan sets how far away clients can find you. The Free plan reaches clients near you with no monthly fee,
+              Your plan sets how far away clients can find you. The Free plan reaches {FREE_RADIUS_KM} km with no monthly fee,
               but each job costs a {formatKes(COMMISSION_PER_JOB)} commission and its rating shows once that is paid.
               Paid plans run for 30 days, charge no commission and show ratings immediately.
               {subscription?.freeMonthAvailable && (
@@ -189,7 +189,7 @@ const TechnicianHome = () => {
               <p className="font-semibold text-gray-800">Free</p>
               <p className="text-xl font-bold text-green-700 mt-1">KES 0</p>
               <p className="text-sm text-gray-600 mt-1 flex-1">
-                Visible to <strong>clients near you</strong>
+                Visible within <strong>{FREE_RADIUS_KM} km</strong>
                 <span className="block text-xs text-amber-700 mt-1">{formatKes(COMMISSION_PER_JOB)} per job</span>
               </p>
               {currentPlanId === 'free' ? (

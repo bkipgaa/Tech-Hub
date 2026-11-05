@@ -33,6 +33,7 @@ export const LEGAL = {
   vatNote: '{{inclusive / exclusive}} of VAT where applicable',
 
   // Technician subscriptions (match backend/utils/subscriptionPlans.js and jobs/subscriptionReminders.js)
+  freeRadius: '1,000 km',
   commissionPerJob: 'KES 500',
   reminderDays: '7, 3 and 1 days',
 

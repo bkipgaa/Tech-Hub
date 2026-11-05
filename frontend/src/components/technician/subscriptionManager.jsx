@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { Link } from 'react-router-dom';
-import { visiblePlans, COMMISSION_PER_JOB, formatKes } from '../../utils/plans';
+import { visiblePlans, COMMISSION_PER_JOB, FREE_RADIUS_KM, formatKes } from '../../utils/plans';
 
 // Closable popup used for "How subscriptions work" and "Current plan"
 const InfoPopup = ({ title, onClose, children }) => (
@@ -292,7 +292,7 @@ const SubscriptionManager = () => {
         <InfoPopup title="How subscriptions work" onClose={() => setPopup(null)}>
           <ul className="space-y-3 text-sm text-gray-700">
             <li>
-              <strong>Free plan — forever.</strong> Every expert starts here. Clients near you can find you and
+              <strong>Free plan — forever.</strong> Every expert starts here. Clients within {FREE_RADIUS_KM} km can find you and
               there is no monthly fee.
             </li>
             <li>
@@ -303,8 +303,8 @@ const SubscriptionManager = () => {
               by M-Pesa or card.
             </li>
             <li>
-              <strong>Paid plans (from KES 1,000 a month)</strong> let clients further away find you — 100 km up to 5,000 km.
-              There is <strong>no commission</strong> on any job, and your ratings and completed jobs show on your profile
+              <strong>Paid plans (from KES 1,000 a month)</strong> each have their own reach, from 100 km up to 5,000 km.
+              Only Platinum reaches further than the Free plan's {FREE_RADIUS_KM} km. There is <strong>no commission</strong> on any job, and your ratings and completed jobs show on your profile
               immediately.
             </li>
             <li>
@@ -312,7 +312,7 @@ const SubscriptionManager = () => {
               Paying early adds 30 days to the time you have left.
             </li>
             <li>
-              <strong>If you don't renew,</strong> you go back to the Free plan (with the per-job commission).
+              <strong>If you don't renew,</strong> you go back to the Free plan ({FREE_RADIUS_KM} km, with the per-job commission).
               You never disappear from search.
             </li>
             <li>
@@ -347,18 +347,14 @@ const SubscriptionManager = () => {
             <div className="space-y-1 text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4" />
-                {onFreePlan ? (
-                  <span>Visible to clients near you</span>
-                ) : (
-                  <span>Visibility Radius: <strong>{currentSubscription.visibilityRadius}km</strong></span>
-                )}
+                <span>Visibility Radius: <strong>{currentSubscription.visibilityRadius}km</strong></span>
               </div>
               {currentSubscription.daysRemaining > 0 && (
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
                   <span>
                     {currentSubscription.daysRemaining} days remaining
-                    {currentSubscription.isFreeMonth && ` of your free month — then the Free plan (commission per job) unless you subscribe`}
+                    {currentSubscription.isFreeMonth && ` of your free month — then the Free plan (${FREE_RADIUS_KM} km, commission per job) unless you subscribe`}
                   </span>
                 </div>
               )}
@@ -393,7 +389,7 @@ const SubscriptionManager = () => {
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
             <span className="text-red-700 font-medium flex-1">
-              Your plan has ended. You're on the Free plan, with a {formatKes(COMMISSION_PER_JOB)} commission per job. Upgrade to reach clients further away and pay no commission.
+              Your plan has ended. You're on the Free plan: visible within {FREE_RADIUS_KM} km, with a {formatKes(COMMISSION_PER_JOB)} commission per job. Choose a paid plan to pay no commission and show ratings immediately.
             </span>
             <button
               onClick={() => {
@@ -424,7 +420,7 @@ const SubscriptionManager = () => {
             Free plan — KES 0 a month{onFreePlan && <span className="ml-2 text-xs text-amber-800">(your plan)</span>}
           </h3>
           <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
-            <li>Clients near you can find you, forever.</li>
+            <li>Clients within <strong>{FREE_RADIUS_KM} km</strong> can find you, forever.</li>
             <li><strong>{formatKes(COMMISSION_PER_JOB)} commission</strong> on each job you get through a booking, paid after the work is done.</li>
             <li>The client's rating and the completed job show on your profile <strong>only after the commission is paid</strong>.</li>
           </ul>
@@ -435,7 +431,7 @@ const SubscriptionManager = () => {
         <div className="rounded-lg border border-green-300 bg-green-50 p-5">
           <h3 className="font-semibold text-gray-800 mb-1">Paid plans — from KES 1,000 a month</h3>
           <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
-            <li>Reach clients from <strong>100 km up to 5,000 km</strong> away.</li>
+            <li>Each plan has its own reach, from <strong>100 km up to 5,000 km</strong>. Only Platinum goes further than the Free plan's {FREE_RADIUS_KM} km.</li>
             <li><strong>No commission</strong> on any job.</li>
             <li>Ratings and completed jobs show on your profile <strong>immediately</strong>.</li>
             <li>First month free, once. If you don't renew, you return to the Free plan.</li>
@@ -456,9 +452,7 @@ const SubscriptionManager = () => {
               <div className="mb-4 p-3 bg-blue-50 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Visibility Radius</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {plan.id === 'free' ? 'Near you' : `${Number(plan.visibilityRadius).toLocaleString()} km`}
-                  </span>
+                  <span className="text-lg font-bold text-blue-600">{Number(plan.visibilityRadius).toLocaleString()} km</span>
                 </div>
                 {plan.description && <p className="text-xs text-blue-700 mt-1">{plan.description}</p>}
               </div>
@@ -514,7 +508,7 @@ const SubscriptionManager = () => {
               </li>
               <li>No payment details needed and nothing is charged.</li>
               <li>No commission on jobs you get during the month, and ratings show immediately.</li>
-              <li>We'll remind you 7, 3 and 1 day before it ends. Then you return to the Free plan ({formatKes(COMMISSION_PER_JOB)} commission per job) unless you subscribe.</li>
+              <li>We'll remind you 7, 3 and 1 day before it ends. Then you return to the Free plan ({FREE_RADIUS_KM} km, {formatKes(COMMISSION_PER_JOB)} commission per job) unless you subscribe.</li>
               <li className="text-red-700">
                 <strong>This can only be used once.</strong> You won't get a free month on any other plan later.
               </li>

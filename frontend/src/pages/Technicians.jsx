@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import RadiusPicker from '../components/RadiusPicker';
-import { PLAN_TIERS, isFreeReach } from '../utils/plans';
+import { PLAN_TIERS } from '../utils/plans';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
 
 /**
@@ -283,8 +283,8 @@ const Technicians = () => {
    * Includes 'test' plan with 20km.
    */
   const getVisibilityDescription = (plan, visibilityRadius, isTrial) => {
-    // The Free plan's reach (and any plan with the same radius) is not shown
-    if (isTrial || plan === 'free' || plan === 'trial') return '📍 Free Plan';
+    if (isTrial) return `🔬 Trial: Visible within ${visibilityRadius}km radius`;
+    if (plan === 'free') return `📍 Free Plan: Visible within ${visibilityRadius}km radius`;
     if (plan === 'test') return `🧪 Test Plan: Visible within ${visibilityRadius}km radius`; // test plan
     const planNames = {
       basic: 'Basic',
@@ -295,7 +295,6 @@ const Technicians = () => {
       unlimited: 'Unlimited',
     };
     const planName = planNames[plan] || plan.charAt(0).toUpperCase() + plan.slice(1);
-    if (isFreeReach(visibilityRadius)) return `🌟 ${planName}`;
     return `🌟 ${planName}: Visible within ${visibilityRadius}km radius`;
   };
 
@@ -472,12 +471,8 @@ const Technicians = () => {
                 <ul className="space-y-0.5">
                   {PLAN_TIERS.map((tier) => (
                     <li key={tier.id}>
-                      • <span className="font-medium">{tier.name} plan</span> experts:{' '}
-                      {tier.id === 'free' ? (
-                        'Visible to clients near them'
-                      ) : (
-                        <>Visible within <span className="font-bold">{tier.radius.toLocaleString()}km</span></>
-                      )}
+                      • <span className="font-medium">{tier.name} plan</span> experts: Visible within{' '}
+                      <span className="font-bold">{tier.radius.toLocaleString()}km</span>
                     </li>
                   ))}
                 </ul>
