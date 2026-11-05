@@ -877,7 +877,11 @@ const SearchPage = () => {
                           {tech.visibilityRadius && (
                             <div className="flex items-center gap-1 text-sm text-gray-500">
                               <Globe className="w-4 h-4" />
-                              <span>Visible up to {tech.visibilityRadius} km</span>
+                              <span>
+                                {tech.extendedReach
+                                  ? 'Further away: shown because few experts are closer'
+                                  : `Visible up to ${tech.visibilityRadius} km`}
+                              </span>
                             </div>
                           )}
                           <div className="flex items-center gap-1 text-sm text-gray-500">

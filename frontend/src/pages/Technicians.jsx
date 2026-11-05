@@ -200,11 +200,12 @@ const Technicians = () => {
         return tech;
       });
 
-      // Sort by distance (closest first)
+      // Paid plans first, then Free, then experts further than usual; closest first within each
+      const group = (t) => (t.extendedReach ? 2 : t.paidPlan ? 0 : 1);
       techniciansWithDistance.sort((a, b) => {
         const distA = a.distance ? parseFloat(a.distance) : Infinity;
         const distB = b.distance ? parseFloat(b.distance) : Infinity;
-        return distA - distB;
+        return group(a) - group(b) || distA - distB;
       });
 
       setTechnicians(techniciansWithDistance);
@@ -475,6 +476,7 @@ const Technicians = () => {
                       <span className="font-bold">{tier.radius.toLocaleString()}km</span>
                     </li>
                   ))}
+                  <li>• When few experts are nearby, experts further away are shown too.</li>
                 </ul>
               </div>
             </div>
@@ -716,11 +718,13 @@ const Technicians = () => {
                       )}
 
                       <div className="mt-2 text-xs text-gray-400">
-                        {getVisibilityDescription(
-                          tech.subscriptionPlan,
-                          tech.visibilityRadius,
-                          tech.isTrial
-                        )}
+                        {tech.extendedReach
+                          ? 'Further away: shown because few experts are closer'
+                          : getVisibilityDescription(
+                              tech.subscriptionPlan,
+                              tech.visibilityRadius,
+                              tech.isTrial
+                            )}
                       </div>
 
                       <div className="flex gap-3 mt-4">

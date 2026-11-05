@@ -164,12 +164,12 @@ const sections = [
   ]},
   { id: 't-fees', title: 'Subscriptions', body: [
     { ul: [
-      `**Free plan.** Every Technician can stay on the **Free plan** at no monthly cost, visible to clients within ${L.freeRadius}.`,
+      `**Free plan.** Every Technician can stay on the **Free plan** at no monthly cost, visible to clients within ${L.freeRadius}. When few Technicians match a client's search nearby, we may also show Technicians further away, on any plan. We do not guarantee this.`,
       `**Commission on the Free plan.** For each booking you receive while on the Free plan, you owe a commission of **${L.commissionPerJob}** once the work is marked completed. The client's rating and the completed job are recorded but do not appear on your profile until the commission is paid. The commission is non-refundable once the job is completed.`,
-      `**Paid plans** differ by **visibility radius** and price (in KES). A paid plan's radius can be smaller or larger than the Free plan's. Paid plans charge **no commission**, and ratings and completed jobs show on your profile immediately. The plan details and prices shown in the app when you pay are the ones that apply. Your first month on a paid plan can be taken free, **once**, whichever plan you choose.`,
+      `**Paid plans** differ by **visibility radius** and price (in KES). Some paid plans have the same radius as the Free plan. Paid plans are listed above the Free plan in default search results and charge **no commission**, and ratings and completed jobs show on your profile immediately. The plan details and prices shown in the app when you pay are the ones that apply. Your first month on a paid plan can be taken free, **once**, whichever plan you choose.`,
       `**Paying and plan length.** You pay by card (Paystack) or M-Pesa. Each payment adds **30 days**. If you pay before your plan or free month ends, the 30 days are added to the time you have left, so you never lose days. If you pay after it has ended, the 30 days start on the day the payment is confirmed. The plan you pay for applies from the day you pay.`,
       `**No automatic renewal.** Plans do not renew or charge you automatically. We send reminders ${L.reminderDays} before your plan ends.`,
-      `**Expiry.** When a paid plan or free month ends, you move to the Free plan: clients further than ${L.freeRadius} away stop seeing you until you pay again, and new bookings owe the Free plan commission. Bookings already made continue.`,
+      `**Expiry.** When a paid plan or free month ends, you move to the Free plan: clients further than ${L.freeRadius} away may stop seeing you until you pay again, and new bookings owe the Free plan commission. Bookings already made continue.`,
       `**Refunds.** Subscription fees are non-refundable, except where the law requires a refund or we end the service for our own reasons.`,
       `**Tax.** Fees are ${L.vatNote}.`,
       `**Changes.** We may change fees with ${L.feeChangeNotice} notice. Changes do not affect bookings already accepted.`,

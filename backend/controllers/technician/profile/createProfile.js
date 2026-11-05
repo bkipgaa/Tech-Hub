@@ -166,9 +166,9 @@ exports.createProfile = async (req, res) => {
     };
 
     // ============================================================
-    // ✅ STARTS ON THE FREE PLAN (1000km, forever)
+    // ✅ STARTS ON THE FREE PLAN (300km, forever)
     // ============================================================
-    // Also sets the service radius to the Free plan's 1000km
+    // Also sets the service radius to the Free plan's 300km
     Object.assign(technicianData, newExpertSubscriptionFields());
 
     // 6. Create and save technician profile
