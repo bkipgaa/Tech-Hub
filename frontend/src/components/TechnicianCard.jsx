@@ -113,7 +113,11 @@ const TechnicianCard = ({ technician, distance, showDistance = true, onViewProfi
             {technician.visibilityRadius && (
               <div className="flex items-center gap-1.5 text-xs text-gray-500">
                 <Globe className="w-3.5 h-3.5" />
-                <span>Visible up to {technician.visibilityRadius} km</span>
+                <span>
+                  {technician.extendedReach
+                    ? 'Further away: shown because few experts are closer'
+                    : `Visible up to ${technician.visibilityRadius} km`}
+                </span>
               </div>
             )}
             

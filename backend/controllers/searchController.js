@@ -12,6 +12,7 @@ const Technician = require('../models/Technician');
 const { PUBLIC_EXPERT_FILTER } = require('../utils/expertVisibility');
 const ServiceCatalog = require('../models/ServiceCatalog');
 const { getEffectivePlan } = require('../utils/subscriptionPlans');
+const { isPaidPlan, withinReach, rankByPlan } = require('../utils/searchReach');
 
 // ===========================================
 // HELPERS
@@ -20,7 +21,7 @@ const { getEffectivePlan } = require('../utils/subscriptionPlans');
 /**
  * Visibility radius (km) for a technician right now.
  * A paid plan counts until its endDate; an ended trial, a lapsed paid plan
- * or the Free plan all fall back to Free (10 km) — experts never drop out of search.
+ * or the Free plan all fall back to Free (300 km) — experts never drop out of search.
  * @param {Object} tech - Technician document
  * @returns {number} - Radius in km
  */
@@ -285,16 +286,16 @@ if (mainCategory) {
     // 7. Post‑processing: subscription check, distance calculation, visibility radius
     const latitude = lat ? parseFloat(lat) : null;
     const longitude = lng ? parseFloat(lng) : null;
-    const visibleTechnicians = [];
+    const candidates = [];
 
 
     for (const tech of technicians) {
       try {
         tech.acceptingBookings = true;
 
-        // 7a. No subscription check: lapsed plans fall back to Free (10 km) via getVisibilityRadius
+        // 7a. No subscription check: lapsed plans fall back to Free (300 km) via getVisibilityRadius
 
-        // 7b. If coordinates given, compute distance and enforce radii
+        // 7b. If coordinates given, compute distance (withinReach applies the radii below)
         if (latitude && longitude && tech.location?.coordinates) {
           const [techLng, techLat] = tech.location.coordinates;
           if (techLat === 0 && techLng === 0) {
@@ -305,15 +306,11 @@ if (mainCategory) {
           const distance = calculateDistance(latitude, longitude, techLat, techLng);
           const visibilityRadius = getVisibilityRadius(tech);
 
-          if (distance <= visibilityRadius && distance <= searchRadius) {
-            tech.distance = distance;
-            tech.visibilityRadius = visibilityRadius;
-            tech.subscriptionPlan = tech.subscription?.plan || 'trial';
-            tech.isTrial = tech.subscription?.isTrial || tech.subscription?.plan === 'trial';
-            visibleTechnicians.push(tech);
-          } else {
-            console.log(`[searchTechnicians] Technician ${tech._id} skipped: distance ${distance}km exceeds radius (visibility ${visibilityRadius}km, search ${searchRadius}km)`);
-          }
+          tech.distance = distance;
+          tech.visibilityRadius = visibilityRadius;
+          tech.subscriptionPlan = tech.subscription?.plan || 'trial';
+          tech.isTrial = tech.subscription?.isTrial || tech.subscription?.plan === 'trial';
+          candidates.push(tech);
         }
         // 7c. No coordinates – include without distance filter
         else if (!latitude || !longitude) {
@@ -321,7 +318,7 @@ if (mainCategory) {
           tech.subscriptionPlan = tech.subscription?.plan || 'trial';
           tech.isTrial = tech.subscription?.isTrial || tech.subscription?.plan === 'trial';
           tech.distance = null;
-          visibleTechnicians.push(tech);
+          candidates.push(tech);
         }
       } catch (err) {
         console.warn(`[searchTechnicians] Error processing technician ${tech._id}:`, err.message);
@@ -329,11 +326,13 @@ if (mainCategory) {
       }
     }
 
+    const visibleTechnicians = withinReach(candidates, searchRadius);
     console.log(`[searchTechnicians] ${visibleTechnicians.length} technician(s) passed filtering`);
 
-    // 8. Sorting (default: recommended — rating + completed jobs, nearer first)
+    // 8. Sorting (default: recommended — paid plans first, then rating + completed jobs, nearer first)
     if (sortBy === 'recommended' || (sortBy === 'distance' && !(latitude && longitude))) {
       visibleTechnicians.sort((a, b) => recommendedScore(b) - recommendedScore(a));
+      rankByPlan(visibleTechnicians);
     } else if (sortBy === 'distance' && latitude && longitude) {
       visibleTechnicians.sort((a, b) => {
         if (a.distance === null) return 1;
@@ -380,6 +379,8 @@ if (mainCategory) {
       yearsOfExperience: tech.yearsOfExperience,
       distance: tech.distance,
       visibilityRadius: tech.visibilityRadius,
+      paidPlan: isPaidPlan(tech),
+      extendedReach: !!tech.extendedReach,
       subscriptionPlan: tech.subscriptionPlan,
       isTrial: tech.isTrial,
       isAvailable: tech.isAvailable,
@@ -458,18 +459,14 @@ exports.getTechniciansBySubService = async (req, res) => {
       'serviceCategories.subServices': subService
     };
 
-    const total = await Technician.countDocuments(query);
-    console.log(`[getTechniciansBySubService] Found ${total} total technicians for subService: "${subService}"`);
-
     let technicians = await Technician.find(query)
       .populate('userId', 'firstName lastName profileImage')
-      .skip(skip)
-      .limit(limitNum)
       .lean();
 
     const latitude = lat ? parseFloat(lat) : null;
     const longitude = lng ? parseFloat(lng) : null;
-    const visible = [];
+    const searchRadius = parseFloat(radius) || 100;
+    const candidates = [];
 
 
     for (const tech of technicians) {
@@ -479,22 +476,22 @@ exports.getTechniciansBySubService = async (req, res) => {
         const [techLng, techLat] = tech.location.coordinates;
         if (techLat !== 0 || techLng !== 0) {
           const distance = calculateDistance(latitude, longitude, techLat, techLng);
-          const searchRadius = parseFloat(radius) || 100;
-          const visibilityRadius = getVisibilityRadius(tech);
-          if (distance <= Math.min(visibilityRadius, searchRadius)) {
-            tech.distance = distance;
-            tech.visibilityRadius = visibilityRadius;
-            visible.push(tech);
-          }
+          tech.distance = distance;
+          tech.visibilityRadius = getVisibilityRadius(tech);
+          candidates.push(tech);
         }
       } else if (!latitude || !longitude) {
-        visible.push(tech);
+        candidates.push(tech);
       }
     }
 
+    const visible = withinReach(candidates, searchRadius);
     visible.sort((a, b) => recommendedScore(b) - recommendedScore(a));
+    rankByPlan(visible);
+    const total = visible.length;
+    const paginated = visible.slice(skip, skip + limitNum);
 
-    const formatted = visible.map(tech => ({
+    const formatted = paginated.map(tech => ({
       _id: tech._id,
       businessName: tech.businessName,
       mainCategory: tech.mainCategory,
@@ -509,6 +506,8 @@ exports.getTechniciansBySubService = async (req, res) => {
       yearsOfExperience: tech.yearsOfExperience,
       distance: tech.distance,
       visibilityRadius: tech.visibilityRadius,
+      paidPlan: isPaidPlan(tech),
+      extendedReach: !!tech.extendedReach,
       subscriptionPlan: tech.subscription?.plan || 'trial',
       isTrial: tech.subscription?.isTrial || tech.subscription?.plan === 'trial',
       isAvailable: tech.isAvailable,
@@ -615,6 +614,7 @@ exports.getNearbyTechnicians = async (req, res) => {
     }
 
     visible.sort((a, b) => a.distance - b.distance);
+    rankByPlan(visible);
     const total = visible.length;
     const paginated = visible.slice(skip, skip + limitNum);
 
@@ -633,6 +633,8 @@ exports.getNearbyTechnicians = async (req, res) => {
       yearsOfExperience: tech.yearsOfExperience,
       distance: tech.distance,
       visibilityRadius: tech.visibilityRadius,
+      paidPlan: isPaidPlan(tech),
+      extendedReach: !!tech.extendedReach,
       subscriptionPlan: tech.subscriptionPlan,
       isTrial: tech.isTrial,
       isAvailable: tech.isAvailable,
