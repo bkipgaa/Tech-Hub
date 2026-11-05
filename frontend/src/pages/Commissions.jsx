@@ -10,7 +10,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle, Loader2, Phone, Star, Wallet } from 'lucide-react';
 import api from '../services/api';
-import { COMMISSION_PER_JOB, FREE_RADIUS_KM, formatKes } from '../utils/plans';
+import { COMMISSION_PER_JOB, formatKes } from '../utils/plans';
 
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 
@@ -134,7 +134,7 @@ const Commissions = () => {
       <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-gray-700">
         {data.onFreePlan ? (
           <>
-            You're on the <strong>Free plan</strong> (visible within {FREE_RADIUS_KM} km). New jobs will owe a commission.{' '}
+            You're on the <strong>Free plan</strong>. New jobs will owe a commission.{' '}
             <Link to="/subscription" className="text-green-700 font-semibold underline">
               Paid plans from KES 1,000 a month have no commission
             </Link>{' '}

@@ -44,6 +44,7 @@ import api from '../services/api';
 import RadiusPicker from '../components/RadiusPicker';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
 import { rankMatches } from '../utils/fuzzyMatch';
+import { isFreeReach } from '../utils/plans';
 
 // ============================================================
 // PLAN CONFIGURATION (matching backend subscription plans)
@@ -874,7 +875,7 @@ const SearchPage = () => {
                               <span className="text-gray-500">{tech.distance} km away</span>
                             </div>
                           )}
-                          {tech.visibilityRadius && (
+                          {tech.visibilityRadius && !isFreeReach(tech.visibilityRadius) && (
                             <div className="flex items-center gap-1 text-sm text-gray-500">
                               <Globe className="w-4 h-4" />
                               <span>Visible up to {tech.visibilityRadius} km</span>

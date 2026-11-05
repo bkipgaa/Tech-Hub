@@ -8,6 +8,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Star, Wrench, Award, User, Crown, Zap, Globe, Briefcase } from 'lucide-react';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
+import { isFreeReach } from '../utils/plans';
 
 // Plan configuration
 const planConfig = {
@@ -110,7 +111,7 @@ const TechnicianCard = ({ technician, distance, showDistance = true, onViewProfi
             )}
             
             {/* Visibility Radius - NEW */}
-            {technician.visibilityRadius && (
+            {technician.visibilityRadius && !isFreeReach(technician.visibilityRadius) && (
               <div className="flex items-center gap-1.5 text-xs text-gray-500">
                 <Globe className="w-3.5 h-3.5" />
                 <span>Visible up to {technician.visibilityRadius} km</span>

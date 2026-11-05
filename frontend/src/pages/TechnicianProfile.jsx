@@ -45,6 +45,7 @@ import {
 import api from '../services/api';
 import { cldImage, cldVideoPoster, AVATAR_WIDTH, CARD_WIDTH, VIEWER_WIDTH } from '../utils/media';
 import { getLivePosition } from '../utils/geo';
+import { isFreeReach } from '../utils/plans';
 
 /**
  * TechnicianProfile Component
@@ -744,7 +745,7 @@ const TechnicianProfile = () => {
               {technician.address?.zipCode && ` ${technician.address.zipCode}`}
             </p>
             <p className="text-gray-700">{technician.address?.country || 'Kenya'}</p>
-            {technician.serviceRadius && (
+            {technician.serviceRadius && !isFreeReach(technician.serviceRadius) && (
               <p className="text-sm text-green-600 mt-2">Service radius: {technician.serviceRadius} km</p>
             )}
           </div>

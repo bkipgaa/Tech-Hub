@@ -30,7 +30,7 @@ const COMMISSION_PER_JOB = 500;
 
 const FREE_FEATURES = [
   'Free forever — no monthly fee',
-  'Clients within 1000km can find you (all of Kenya)',
+  'Clients near you can find you', // the Free reach is not advertised
   `KES ${COMMISSION_PER_JOB} commission on each job you get through a booking`,
   'Ratings and completed jobs show on your profile once the commission is paid',
 ];
@@ -159,7 +159,7 @@ const subscriptionPlans = {
 // Plans List — used in dropdowns and API responses
 // ═══════════════════════════════════════════════════════════
 const plansList = [
-  { id: 'free',       name: 'Free',        visibilityRadius: 1000, price: 0,    commissionPerJob: COMMISSION_PER_JOB, duration: 'Forever', description: `All of Kenya (1,000km) — KES ${COMMISSION_PER_JOB} commission per job` },
+  { id: 'free',       name: 'Free',        visibilityRadius: 1000, price: 0,    commissionPerJob: COMMISSION_PER_JOB, duration: 'Forever', description: `Clients near you — KES ${COMMISSION_PER_JOB} commission per job` },
   { id: 'test',       name: 'Test Plan',   visibilityRadius: 100,  price: 10,   commissionPerJob: 0, duration: '30 days', description: 'Test payment flow (KES 10)' },
   { id: 'basic',      name: 'Basic',       visibilityRadius: 100,  price: 1000, commissionPerJob: 0, duration: '30 days', description: 'Town and nearby towns (100km)' },
   { id: 'basicPlus',  name: 'Basic Plus',  visibilityRadius: 250,  price: 2000, commissionPerJob: 0, duration: '30 days', description: 'Several counties (250km)' },
@@ -191,6 +191,7 @@ function getPlanByRadius(radius) {
 
 function getVisibilityDescription(planId) {
   const plan = subscriptionPlans[planId] || subscriptionPlans.free;
+  if (FREE_PLANS.includes(planId) || plan === subscriptionPlans.free) return 'Visible to clients nearby';
 
   const r = plan.visibilityRadius;
   let context = '';

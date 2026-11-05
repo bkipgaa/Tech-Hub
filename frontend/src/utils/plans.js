@@ -17,6 +17,9 @@ export const visiblePlans = (plans = []) => plans.filter(isVisiblePlan);
 export const COMMISSION_PER_JOB = 500;
 export const FREE_RADIUS_KM = 1000;
 
+/** The Free plan's reach is not advertised, so never print this radius to users */
+export const isFreeReach = (km) => Number(km) === FREE_RADIUS_KM;
+
 /** Every plan experts can be on, smallest first (Free, then the paid plans) */
 export const PLAN_TIERS = [
   { id: 'free', name: 'Free', radius: 1000, price: 0, reach: 'all of Kenya' },
