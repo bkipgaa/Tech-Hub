@@ -226,7 +226,7 @@ const TechnicianSearchResults = () => {
               <span className="font-semibold text-gray-800">
                 {technicians.length}
               </span>{' '}
-              technician{technicians.length !== 1 ? 's' : ''}
+              Fundi{technicians.length !== 1 ? 's' : ''}
             </p>
 
             {technicians.map((tech) => (
