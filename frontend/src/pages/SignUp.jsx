@@ -28,8 +28,8 @@ import { getLivePosition, reverseGeocode } from '../utils/geo';
 import { CV_ACCEPT, cvFileError } from '../utils/cv';
 
 const INTENTS = [
-  { id: 'expert', icon: Wrench, title: "I'm an expert", text: 'Offer my services and get hired' },
-  { id: 'client', icon: Search, title: 'I need an expert', text: 'Find someone near me for a job' },
+  { id: 'expert', icon: Wrench, title: "I'm a Fundi", text: 'Offer my services and get hired' },
+  { id: 'client', icon: Search, title: 'I need a Fundi', text: 'Find someone near me for a job' },
   { id: 'lister', icon: HomeIcon, title: 'I want to list a property', text: 'Stays, rentals, business or entertainment spaces' },
   { id: 'stay_seeker', icon: BedDouble, title: "I'm looking for a stay or space", text: 'Find places near me' },
 ];
@@ -105,7 +105,7 @@ const SignUp = () => {
     if (step === 0 && !intent) return 'Choose how you will use Webafix.';
     if (step === 1) {
       if (intent === 'expert') return servicesError(services);
-      if (intent === 'client' && !mainCategory) return 'Pick the kind of expert you need.';
+      if (intent === 'client' && !mainCategory) return 'Pick the kind of Fundi you need.';
       if ((intent === 'lister' || intent === 'stay_seeker') && !listingCategory) return 'Pick a category.';
     }
     if (step === 2) {
@@ -270,7 +270,7 @@ const SignUp = () => {
                 <p className="font-semibold text-gray-800">What services do you offer?</p>
                 <p className="text-sm text-gray-500">
                   Pick your main category, then the service categories and services you do. You can add another category too.
-                  Your expert profile goes live once our team approves it.
+                  Your Fundi profile goes live once our team approves it.
                 </p>
               </div>
               <ServicePicker catalog={catalog} value={services} onChange={setServices} />
@@ -279,7 +279,7 @@ const SignUp = () => {
 
           {step === 1 && intent === 'client' && catalog && (
             <div className="space-y-3">
-              <p className="font-semibold text-gray-800">What kind of expert are you looking for?</p>
+              <p className="font-semibold text-gray-800">What kind of Fundi are you looking for?</p>
               <div className="flex flex-wrap gap-2">
                 {Object.keys(catalog).sort().map((m) => (
                   <button
@@ -331,7 +331,7 @@ const SignUp = () => {
                 <p className="font-semibold text-gray-800">Share your location <span className="text-red-500">*</span></p>
                 <p className="text-sm text-gray-500">
                   {intent === 'expert'
-                    ? 'Clients only see experts near them, so share it from where you usually work.'
+                    ? 'Clients only see Fundis near them, so share it from where you usually work.'
                     : 'We use it to show you what is near you. You can change it later on your profile.'}
                 </p>
               </div>

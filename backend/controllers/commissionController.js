@@ -92,7 +92,7 @@ exports.applyPaystackTransaction = applyPaystackTransaction;
 exports.list = async (req, res) => {
   try {
     const technician = await myTechnician(req.user.userId);
-    if (!technician) return fail(res, 404, 'Expert profile not found.');
+    if (!technician) return fail(res, 404, 'Fundi profile not found.');
 
     const bookings = await Booking.find({ technicianId: technician._id, 'commission.amount': { $gt: 0 }, status: { $in: [...PAYABLE_STATUSES, 'in_progress', 'pending', 'quoted'] } })
       .populate('clientId', 'firstName lastName')
@@ -150,7 +150,7 @@ exports.pay = async (req, res) => {
     if (ids.length > 50) return fail(res, 400, 'You can pay for up to 50 jobs at a time.');
 
     const technician = await myTechnician(req.user.userId);
-    if (!technician) return fail(res, 404, 'Expert profile not found.');
+    if (!technician) return fail(res, 404, 'Fundi profile not found.');
     const user = await User.findById(req.user.userId).select('email');
     if (!user) return fail(res, 401, 'Please sign in again.');
 
@@ -211,7 +211,7 @@ exports.verify = async (req, res) => {
     const { reference } = req.query;
     if (typeof reference !== 'string' || !reference) return fail(res, 400, 'Payment reference missing.');
     const technician = await myTechnician(req.user.userId);
-    if (!technician) return fail(res, 404, 'Expert profile not found.');
+    if (!technician) return fail(res, 404, 'Fundi profile not found.');
     const response = await Paystack.transaction.verify(reference);
     const tx = response.data;
     if (String(tx?.metadata?.technicianId) !== String(technician._id)) {
@@ -255,7 +255,7 @@ exports.mpesaStatus = async (req, res) => {
     const { checkoutRequestID } = req.query;
     if (typeof checkoutRequestID !== 'string' || !checkoutRequestID) return fail(res, 400, 'checkoutRequestID required.');
     const technician = await myTechnician(req.user.userId);
-    if (!technician) return fail(res, 404, 'Expert profile not found.');
+    if (!technician) return fail(res, 404, 'Fundi profile not found.');
     res.json({ success: true, data: await settleMpesa(technician._id, checkoutRequestID) });
   } catch (error) {
     fail(res, 500, 'Could not check the payment.', error);

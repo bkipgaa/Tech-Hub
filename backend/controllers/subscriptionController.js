@@ -89,7 +89,7 @@ exports.getCurrentSubscription = async (req, res) => {
 exports.activateTrial = async (req, res) => {
   res.status(400).json({
     success: false,
-    message: 'Every expert is already on the Free plan (300 km, forever). To try a paid plan, start your free month on it.',
+    message: 'Every Fundi is already on the Free plan (300 km, forever). To try a paid plan, start your free month on it.',
   });
 };
 

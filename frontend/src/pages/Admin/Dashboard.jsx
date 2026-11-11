@@ -282,7 +282,7 @@ const Dashboard = () => {
           icon={Users}
           label="Total Users"
           value={formatNumber(stats?.users?.total)}
-          subtext={`${formatNumber(stats?.users?.technicians)} experts · ${formatNumber(stats?.users?.clients)} clients`}
+          subtext={`${formatNumber(stats?.users?.technicians)} Fundis · ${formatNumber(stats?.users?.clients)} clients`}
           color="blue"
         />
         <StatCard

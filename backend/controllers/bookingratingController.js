@@ -131,14 +131,14 @@ exports.createBooking = async (req, res) => {
       paymentMethod,
     } = req.body;
 
-    // Validate required fields
-    if (!technicianId || !serviceCategory || !subService || !serviceDescription ||
-        !estimatedHours || estimatedHours <= 0 ||
-        !preferredDate || !preferredTime || !location?.address) {
+    // Only the Fundi and the service are required. Description, date, time and
+    // address are optional: the Fundi calls the client (their phone is shown on
+    // the booking) to understand the work and agree on a quotation.
+    if (!technicianId || !serviceCategory || !subService) {
       return handleControllerError(
         res,
         new Error('Missing required fields'),
-        'Please provide all required booking details (hourly rate is optional).',
+        'Please choose the service you need.',
         400,
         'createBooking'
       );
@@ -155,8 +155,8 @@ exports.createBooking = async (req, res) => {
       );
     }
 
-    // Validate date
-    const selectedDate = new Date(preferredDate);
+    // Date defaults to today when the client didn't pick one
+    const selectedDate = preferredDate ? new Date(preferredDate) : new Date();
     if (isNaN(selectedDate.getTime())) {
       return handleControllerError(
         res,
@@ -177,17 +177,8 @@ exports.createBooking = async (req, res) => {
         'createBooking'
       );
     }
-
-    // Validate time
-    if (!preferredTime || preferredTime.trim() === '') {
-      return handleControllerError(
-        res,
-        new Error('Invalid time'),
-        'Please provide a valid preferred time.',
-        400,
-        'createBooking'
-      );
-    }
+    const timeText = String(preferredTime || '').trim() || 'To be agreed';
+    const hours = Number(estimatedHours) > 0 ? Number(estimatedHours) : 1;
 
     // Verify technician
     const technician = await Technician.findById(technicianId);
@@ -213,17 +204,21 @@ exports.createBooking = async (req, res) => {
     }
 
     // Fetch the client user (for notification)
-    const clientUser = await User.findById(clientId).select('firstName lastName email');
+    const clientUser = await User.findById(clientId).select('firstName lastName email phone address');
 
     // Calculate total
     const rate = (hourlyRate && hourlyRate > 0) ? hourlyRate : 0;
-    const totalAmount = rate * estimatedHours;
+    const totalAmount = rate * hours;
 
     // Optional pin from the client's device; evidence photo GPS is checked against it
-    const lat = Number(location.coordinates?.lat);
-    const lng = Number(location.coordinates?.lng);
-    const accuracy = Number(location.accuracy);
-    const bookingLocation = { address: String(location.address).trim() };
+    // No address typed: fall back to the client's town, else agree it on the phone
+    const savedTown = [clientUser?.address?.city, clientUser?.address?.state].filter(Boolean).join(', ');
+    const lat = Number(location?.coordinates?.lat);
+    const lng = Number(location?.coordinates?.lng);
+    const accuracy = Number(location?.accuracy);
+    const bookingLocation = {
+      address: String(location?.address || '').trim() || savedTown || 'To be agreed with the Fundi',
+    };
     if (jobEvidence.isValidLatLng(lat, lng)) {
       bookingLocation.coordinates = { lat, lng };
       if (Number.isFinite(accuracy)) bookingLocation.accuracy = Math.round(accuracy);
@@ -243,13 +238,13 @@ exports.createBooking = async (req, res) => {
       technicianId,
       serviceCategory,
       subService,
-      serviceDescription,
+      serviceDescription: String(serviceDescription || '').trim(),
       hourlyRate: rate,
-      estimatedHours,
+      estimatedHours: hours,
       totalAmount,
       preferredDate: selectedDate,
-      preferredTime: preferredTime.trim(),
-      duration: duration || estimatedHours,
+      preferredTime: timeText,
+      duration: duration || hours,
       location: bookingLocation,
       clientNotes,
       paymentMethod: paymentMethod || 'cash',
@@ -258,7 +253,7 @@ exports.createBooking = async (req, res) => {
     });
 
     await booking.save();
-    await booking.populate('clientId', 'firstName lastName');
+    await booking.populate('clientId', 'firstName lastName phone');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
     // ─── Send notification to technician (non-blocking) ───
@@ -287,8 +282,10 @@ exports.createBooking = async (req, res) => {
             month: 'long',
             year: 'numeric',
           }),
-          preferredTime,
-          address: location?.address,
+          preferredTime: timeText,
+          address: bookingLocation.address,
+          clientPhone: clientUser?.phone,
+          serviceDescription: booking.serviceDescription,
         });
 
         console.log(`📧 Booking notification sent to ${techUser.email || techUser.phone}`);
@@ -372,7 +369,7 @@ exports.getMyBookings = async (req, res) => {
     const limitNum = parseInt(limit) || 20;
 
     const bookings = await Booking.find(filter)
-      .populate('clientId', 'firstName lastName')
+      .populate('clientId', 'firstName lastName phone')
       .populate(TECHNICIAN_WITH_NAME)
       .sort(sort)
       .skip(skip)
@@ -419,7 +416,7 @@ exports.getBooking = async (req, res) => {
     }
 
     const booking = await Booking.findById(bookingId)
-      .populate('clientId', 'firstName lastName')
+      .populate('clientId', 'firstName lastName phone')
       .populate(TECHNICIAN_WITH_NAME)
       .lean();
 
@@ -489,7 +486,7 @@ exports.cancelBooking = async (req, res) => {
 
     await booking.cancel(reason || 'Cancelled', bookingRole);
 
-    await booking.populate('clientId', 'firstName lastName');
+    await booking.populate('clientId', 'firstName lastName phone');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
     res.json({ success: true, message: 'Booking cancelled successfully.', data: booking });
@@ -554,7 +551,7 @@ exports.sendQuotation = async (req, res) => {
     booking.status = 'quoted';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName');
+    await booking.populate('clientId', 'firstName lastName phone');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
     res.json({ success: true, message: 'Quotation sent', data: booking });
@@ -589,7 +586,7 @@ exports.acceptQuotation = async (req, res) => {
     booking.startedAt = now;
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName');
+    await booking.populate('clientId', 'firstName lastName phone');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
     res.json({ success: true, message: 'Quotation accepted', data: booking });
@@ -627,7 +624,7 @@ exports.rejectQuotation = async (req, res) => {
     booking.cancellationReason = reason || 'Client rejected quotation';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName');
+    await booking.populate('clientId', 'firstName lastName phone');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
     res.json({ success: true, message: 'Quotation rejected', data: booking });
@@ -708,7 +705,7 @@ exports.completeWork = async (req, res) => {
     booking.status = 'work_completed';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName email');
+    await booking.populate('clientId', 'firstName lastName email phone');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
     // Ask the client to check the proof and confirm (non-blocking)
@@ -718,7 +715,7 @@ exports.completeWork = async (req, res) => {
         await notify.clientWorkCompleted({
           clientEmail: booking.clientId.email,
           clientName: `${booking.clientId.firstName || ''} ${booking.clientId.lastName || ''}`.trim() || 'there',
-          technicianName: `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || 'Your expert',
+          technicianName: `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || 'Your Fundi',
           bookingId: booking._id,
         });
       }
@@ -770,7 +767,7 @@ exports.confirmLaborPayment = async (req, res) => {
     booking.paymentStatus = 'paid';
     await booking.save();
 
-    await booking.populate('clientId', 'firstName lastName');
+    await booking.populate('clientId', 'firstName lastName phone');
     await booking.populate(TECHNICIAN_WITH_NAME);
 
     res.json({ success: true, message: 'Payment confirmed.', data: jobEvidence.participantView(booking) });
@@ -806,7 +803,7 @@ exports.rateTechnician = async (req, res) => {
       status: 'work_completed',
     });
     if (!booking) {
-      return handleControllerError(res, new Error('Booking not found or not ready for rating'), 'You can rate once the expert has marked the work as completed.', 404, 'rateTechnician');
+      return handleControllerError(res, new Error('Booking not found or not ready for rating'), 'You can rate once the Fundi has marked the work as completed.', 404, 'rateTechnician');
     }
 
     if (booking.clientRating) {
@@ -852,7 +849,7 @@ exports.rateTechnician = async (req, res) => {
     const awaitingCommission = commissionOwed(claimed);
     if (held || awaitingCommission) {
       const techUser = await User.findById(technician.userId).select('firstName lastName email').lean();
-      const expertName = `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || technician.businessName || 'the expert';
+      const expertName = `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || technician.businessName || 'the Fundi';
       if (awaitingCommission && techUser?.email) {
         try {
           await notify.technicianCommissionDue({

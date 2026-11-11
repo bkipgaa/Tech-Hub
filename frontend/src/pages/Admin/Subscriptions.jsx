@@ -366,7 +366,7 @@ const Subscriptions = () => {
           Showing <strong className="text-gray-700">{currentPeriodLabel}</strong>
           {' · '}
           {period === 'all'
-            ? 'every expert regardless of subscription date'
+            ? 'every Fundi regardless of subscription date'
             : 'subscriptions that started in this window'}
         </div>
 
@@ -457,7 +457,7 @@ const Subscriptions = () => {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3 text-left">Expert</th>
+                  <th className="px-4 py-3 text-left">Fundi</th>
                   <th className="px-4 py-3 text-left">Plan</th>
                   <th className="px-4 py-3 text-left">Price</th>
                   <th className="px-4 py-3 text-left">Started</th>

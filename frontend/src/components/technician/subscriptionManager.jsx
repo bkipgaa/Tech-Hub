@@ -292,8 +292,8 @@ const SubscriptionManager = () => {
         <InfoPopup title="How subscriptions work" onClose={() => setPopup(null)}>
           <ul className="space-y-3 text-sm text-gray-700">
             <li>
-              <strong>Free plan — forever.</strong> Every expert starts here. Clients within {FREE_RADIUS_KM} km can find you and
-              there is no monthly fee. When few experts are closer, clients further away may see you too.
+              <strong>Free plan — forever.</strong> Every Fundi starts here. Clients within {FREE_RADIUS_KM} km can find you and
+              there is no monthly fee. When few Fundis are closer, clients further away may see you too.
             </li>
             <li>
               <strong>Commission on the Free plan:</strong> for each job you get through a booking while on the Free plan you pay a
@@ -304,7 +304,7 @@ const SubscriptionManager = () => {
             </li>
             <li>
               <strong>Paid plans (from KES 1,000 a month)</strong> each have their own reach, from {FREE_RADIUS_KM} km up to 5,000 km.
-              Business and above reach further than the Free plan. You are listed above Free experts in search results, there is <strong>no commission</strong> on any job, and your ratings and completed jobs show on your profile
+              Business and above reach further than the Free plan. You are listed above Free Fundis in search results, there is <strong>no commission</strong> on any job, and your ratings and completed jobs show on your profile
               immediately.
             </li>
             <li>
@@ -389,7 +389,7 @@ const SubscriptionManager = () => {
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex flex-wrap items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
             <span className="text-red-700 font-medium flex-1">
-              Your plan has ended. You're on the Free plan: visible within {FREE_RADIUS_KM} km, with a {formatKes(COMMISSION_PER_JOB)} commission per job. Choose a paid plan to be listed above Free experts, pay no commission and show ratings immediately.
+              Your plan has ended. You're on the Free plan: visible within {FREE_RADIUS_KM} km, with a {formatKes(COMMISSION_PER_JOB)} commission per job. Choose a paid plan to be listed above Free Fundis, pay no commission and show ratings immediately.
             </span>
             <button
               onClick={() => {
@@ -420,7 +420,7 @@ const SubscriptionManager = () => {
             Free plan — KES 0 a month{onFreePlan && <span className="ml-2 text-xs text-amber-800">(your plan)</span>}
           </h3>
           <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
-            <li>Clients within <strong>{FREE_RADIUS_KM} km</strong> can find you, forever. When few experts are closer, clients further away may see you too.</li>
+            <li>Clients within <strong>{FREE_RADIUS_KM} km</strong> can find you, forever. When few Fundis are closer, clients further away may see you too.</li>
             <li><strong>{formatKes(COMMISSION_PER_JOB)} commission</strong> on each job you get through a booking, paid after the work is done.</li>
             <li>The client's rating and the completed job show on your profile <strong>only after the commission is paid</strong>.</li>
           </ul>
@@ -432,7 +432,7 @@ const SubscriptionManager = () => {
           <h3 className="font-semibold text-gray-800 mb-1">Paid plans — from KES 1,000 a month</h3>
           <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
             <li>Each plan has its own reach, from <strong>{FREE_RADIUS_KM} km up to 5,000 km</strong>. Business and above go further than the Free plan.</li>
-            <li><strong>Listed above Free experts</strong> in search results.</li>
+            <li><strong>Listed above Free Fundis</strong> in search results.</li>
             <li><strong>No commission</strong> on any job.</li>
             <li>Ratings and completed jobs show on your profile <strong>immediately</strong>.</li>
             <li>First month free, once. If you don't renew, you return to the Free plan.</li>

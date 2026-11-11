@@ -171,7 +171,7 @@ const TechnicianHome = () => {
             <p className="text-gray-500 text-sm">
               Your plan sets how far away clients can find you. The Free plan reaches {FREE_RADIUS_KM} km with no monthly fee,
               but each job costs a {formatKes(COMMISSION_PER_JOB)} commission and its rating shows once that is paid.
-              Paid plans run for 30 days, list you above Free experts, charge no commission and show ratings immediately.
+              Paid plans run for 30 days, list you above Free Fundis, charge no commission and show ratings immediately.
               {subscription?.freeMonthAvailable && (
                 <span className="block mt-1 font-semibold text-green-700">
                   Your first month on any plan is free — once. No payment details needed.

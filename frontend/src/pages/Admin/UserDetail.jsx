@@ -149,20 +149,20 @@ const AccountForm = ({ user, hasExpertProfile, onSaved }) => {
             label="Role"
             hint={
               hasExpertProfile
-                ? 'Client hides their expert profile from search; Expert shows it again.'
-                : 'To make them an expert, create their expert profile below.'
+                ? 'Client hides their Fundi profile from search; Fundi shows it again.'
+                : 'To make them a Fundi, create their Fundi profile below.'
             }
           >
             <select className={inputClass} value={form.role} onChange={set('role')} disabled={user.role === 'admin'}>
               <option value="client">Client</option>
-              <option value="technician" disabled={!hasExpertProfile}>Expert</option>
+              <option value="technician" disabled={!hasExpertProfile}>Fundi</option>
               {user.role === 'admin' && <option value="admin">Admin</option>}
             </select>
           </Field>
           <Field label="Signed up as">
             <select className={inputClass} value={form.signupIntent} onChange={set('signupIntent')}>
               <option value="">—</option>
-              <option value="expert">Expert</option>
+              <option value="expert">Fundi</option>
               <option value="client">Client</option>
               <option value="lister">Property lister</option>
               <option value="stay_seeker">Stay / space seeker</option>
@@ -196,7 +196,7 @@ const AccountForm = ({ user, hasExpertProfile, onSaved }) => {
         </div>
         <p className="text-xs text-gray-500">
           {hasExpertProfile
-            ? 'Saving also moves their expert profile to this location, which decides which clients can find them.'
+            ? 'Saving also moves their Fundi profile to this location, which decides which clients can find them.'
             : 'Used for "near me" results.'}
         </p>
         <div className="flex justify-end">
@@ -241,20 +241,20 @@ const MakeExpertForm = ({ user, onCreated }) => {
       });
       onCreated();
     } catch (err) {
-      setNotice({ type: 'error', text: errorText(err, 'Could not create the expert profile.') });
+      setNotice({ type: 'error', text: errorText(err, 'Could not create the Fundi profile.') });
       setSaving(false);
     }
   };
 
   if (!open) {
     return (
-      <Card title="Expert profile" icon={Wrench}>
-        <p className="text-sm text-gray-600">This user is not an expert. Create an expert profile to make them one.</p>
+      <Card title="Fundi profile" icon={Wrench}>
+        <p className="text-sm text-gray-600">This user is not a Fundi. Create a Fundi profile to make them one.</p>
         <button
           onClick={() => setOpen(true)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700"
         >
-          <UserPlus className="w-4 h-4" /> Make expert
+          <UserPlus className="w-4 h-4" /> Make Fundi
         </button>
       </Card>
     );
@@ -262,7 +262,7 @@ const MakeExpertForm = ({ user, onCreated }) => {
 
   return (
     <form onSubmit={create}>
-      <Card title="Create expert profile" icon={UserPlus}>
+      <Card title="Create Fundi profile" icon={UserPlus}>
         <Notice notice={notice} />
         <p className="text-xs text-gray-500">
           Uses their saved town, county and location. They start on the Free plan and are visible to clients straight away.
@@ -283,7 +283,7 @@ const MakeExpertForm = ({ user, onCreated }) => {
           <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">
             Cancel
           </button>
-          <SaveButton saving={saving}>Create expert profile</SaveButton>
+          <SaveButton saving={saving}>Create Fundi profile</SaveButton>
         </div>
       </Card>
     </form>
@@ -344,12 +344,12 @@ const UserDetail = () => {
           </h1>
           <p className="text-sm text-gray-500">
             {user.email} · {stats?.bookingsAsClient || 0} bookings as client
-            {tech ? ` · ${stats?.bookingsAsTechnician || 0} as expert` : ''}
+            {tech ? ` · ${stats?.bookingsAsTechnician || 0} as Fundi` : ''}
           </p>
         </div>
         {tech && (
           <Link to={`/admin/technicians/${tech._id}`} className="text-sm text-green-700 inline-flex items-center gap-1 hover:underline">
-            Open expert page <ExternalLink className="w-3.5 h-3.5" />
+            Open Fundi page <ExternalLink className="w-3.5 h-3.5" />
           </Link>
         )}
       </div>
@@ -374,12 +374,12 @@ const UserDetail = () => {
           />
         ) : (
           <Card
-            title="Expert profile"
+            title="Fundi profile"
             icon={Wrench}
             action={
               <PermissionGate permission="technicians.edit">
                 <button onClick={() => setEditingExpert(true)} className="text-sm text-green-700 font-medium inline-flex items-center gap-1 hover:underline">
-                  <Pencil className="w-3.5 h-3.5" /> Edit expert profile
+                  <Pencil className="w-3.5 h-3.5" /> Edit Fundi profile
                 </button>
               </PermissionGate>
             }

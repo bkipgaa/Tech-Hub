@@ -207,7 +207,7 @@ const Login = () => {
                 }}
                 className="text-xs bg-gray-200 px-3 py-1.5 rounded hover:bg-gray-300 transition-colors"
               >
-                Expert
+                Fundi
               </button>
               <button
                 type="button"

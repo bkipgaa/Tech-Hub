@@ -51,7 +51,7 @@ export const assignableRoles = (actorRole) =>
 // value; people see "Expert" since both technicians and engineers use it.
 export const USER_ROLE_LABELS = {
   client: 'Client',
-  technician: 'Expert',
+  technician: 'Fundi',
   admin: 'Admin',
 };
 

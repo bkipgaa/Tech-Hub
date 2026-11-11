@@ -183,7 +183,7 @@ const Bookings = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by client, expert, category..."
+              placeholder="Search by client, Fundi, category..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
@@ -288,7 +288,7 @@ const Bookings = () => {
                 <tr>
                   <th className="px-4 py-3 text-left">Booking</th>
                   <th className="px-4 py-3 text-left">Client</th>
-                  <th className="px-4 py-3 text-left">Expert</th>
+                  <th className="px-4 py-3 text-left">Fundi</th>
                   <th className="px-4 py-3 text-left">Service</th>
                   <th className="px-4 py-3 text-left">Amount</th>
                   <th className="px-4 py-3 text-left">Status</th>

@@ -617,7 +617,7 @@ const Stays = () => {
             to="/services"
             className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-green-600 text-green-700 font-semibold hover:bg-green-50"
           >
-            Find an expert
+            Find a Fundi
           </Link>
         </div>
       </div>

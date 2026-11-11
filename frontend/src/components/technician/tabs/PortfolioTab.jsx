@@ -439,7 +439,7 @@ const PortfolioTab = ({ formData, setFormData, isEditing }) => {
           <ImageIcon className="w-12 h-12 mx-auto text-gray-300" />
           <p className="mt-3 font-medium text-gray-700">No projects yet</p>
           <p className="mt-1 text-sm text-gray-500 max-w-md mx-auto">
-            Experts with 3 or more projects in their portfolio get noticeably more bookings. Add photos of jobs you're proud of.
+            Fundis with 3 or more projects in their portfolio get noticeably more bookings. Add photos of jobs you're proud of.
           </p>
           {isEditing ? (
             <button

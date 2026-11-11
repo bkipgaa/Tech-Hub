@@ -321,7 +321,7 @@ const ProfileTab = ({ formData, setFormData, isEditing, handleInputChange }) => 
       </Section>
 
       {/* Location */}
-      <Section icon={MapPin} title="Location" description="Clients see experts near them, so keep this current.">
+      <Section icon={MapPin} title="Location" description="Clients see Fundis near them, so keep this current.">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             {hasLocation ? (

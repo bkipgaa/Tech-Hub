@@ -24,7 +24,7 @@ import { cldImage, AVATAR_WIDTH } from '../../utils/media';
 // ─────────────────────────────────────────────────────────────
 const PAGE_TITLES = {
   'dashboard':      'Dashboard',
-  'technicians':    'Experts',
+  'technicians':    'Fundis',
   'verifications':  'Verifications',
   'listings':       'Stays & Spaces',
   'subscriptions':  'Subscriptions',

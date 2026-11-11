@@ -34,7 +34,7 @@ const COMMISSION_PER_JOB = 500;
 const FREE_FEATURES = [
   'Free forever — no monthly fee',
   'Clients within 300km can find you (several counties)',
-  'When few experts are closer, clients further away may see you too',
+  'When few Fundis are closer, clients further away may see you too',
   `KES ${COMMISSION_PER_JOB} commission on each job you get through a booking`,
   'Ratings and completed jobs show on your profile once the commission is paid',
 ];
@@ -42,11 +42,11 @@ const FREE_FEATURES = [
 /** Features every paid plan shares, after its own radius line */
 const paidFeatures = (radiusLine) => [
   radiusLine,
-  'Listed above Free experts in search results',
+  'Listed above Free Fundis in search results',
   'No commission on jobs',
   'Ratings and completed jobs show on your profile immediately',
   'Pay monthly by M-Pesa or card — never charged automatically',
-  'First month free (once per expert)',
+  'First month free (once per Fundi)',
 ];
 
 const subscriptionPlans = {
@@ -351,7 +351,7 @@ async function migratePlanRadii() {
     { $max: { serviceRadius: radius, 'subscription.planDetails.visibilityRadius': radius } }
   );
   const moved = free.modifiedCount + paid.modifiedCount;
-  if (moved) console.log(`📍 Plan radius: ${moved} experts moved to ${radius} km`);
+  if (moved) console.log(`📍 Plan radius: ${moved} Fundis moved to ${radius} km`);
 }
 
 module.exports = {

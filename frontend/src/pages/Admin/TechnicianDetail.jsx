@@ -45,7 +45,7 @@ const TechnicianDetail = () => {
       const res = await adminApi.get(`/technicians/${id}`);
       setTech(res.data.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load expert.');
+      setError(err.response?.data?.message || 'Failed to load Fundi.');
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ const TechnicianDetail = () => {
 
   const handleVerify = () => {
     const note = tech.awaitingApproval ? ' Clients will be able to find them.' : '';
-    if (window.confirm(`Mark this expert as verified?${note}`)) runAction('verify');
+    if (window.confirm(`Mark this Fundi as verified?${note}`)) runAction('verify');
   };
 
   const handleReject = () => {
@@ -77,7 +77,7 @@ const TechnicianDetail = () => {
 
   const handleToggleActive = () => {
     const verb = tech.isActive ? 'suspend' : 'reactivate';
-    if (window.confirm(`Are you sure you want to ${verb} this expert?`)) {
+    if (window.confirm(`Are you sure you want to ${verb} this Fundi?`)) {
       runAction(tech.isActive ? 'suspend' : 'activate');
     }
   };
@@ -95,7 +95,7 @@ const TechnicianDetail = () => {
       <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-start gap-3">
         <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="font-medium">Unable to load expert</p>
+          <p className="font-medium">Unable to load Fundi</p>
           <p className="text-sm mt-0.5">{error}</p>
           <button onClick={() => navigate('/admin/technicians')} className="mt-3 text-sm underline">
             ← Back to list

@@ -31,7 +31,7 @@ const fail = (res, status, message) => res.status(status).json({ success: false,
 const currentUserId = (req) => req.user.userId || req.user.id || req.user._id;
 
 const respondWithBooking = async (res, booking, message, extra = {}) => {
-  await booking.populate('clientId', 'firstName lastName');
+  await booking.populate('clientId', 'firstName lastName phone');
   await booking.populate(TECHNICIAN_WITH_NAME);
   res.json({ success: true, message, data: ev.participantView(booking), ...extra });
 };
@@ -305,7 +305,7 @@ exports.confirmWork = async (req, res) => {
     const booking = await loadClientBooking(req, res);
     if (!booking) return;
     if (booking.status !== 'work_completed') {
-      return fail(res, 400, 'The expert has not marked the work as completed yet.');
+      return fail(res, 400, 'The Fundi has not marked the work as completed yet.');
     }
     if (booking.clientWorkConfirmation?.confirmedAt) {
       return fail(res, 400, 'You have already confirmed this work.');
@@ -324,7 +324,7 @@ exports.confirmWork = async (req, res) => {
 
     await booking.populate(TECHNICIAN_WITH_NAME);
     const techUser = booking.technicianId?.userId;
-    const expertName = `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || booking.technicianId?.businessName || 'the expert';
+    const expertName = `${techUser?.firstName || ''} ${techUser?.lastName || ''}`.trim() || booking.technicianId?.businessName || 'the Fundi';
     await respondWithBooking(res, booking, confirmed
       ? `Thanks — work confirmed. Rate ${expertName} to finish the booking.`
       : `Your concern has been recorded. ${expertName} can add more proof, and our team will review it.`);

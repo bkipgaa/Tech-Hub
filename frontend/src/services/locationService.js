@@ -44,7 +44,7 @@ class LocationService {
           let message = 'Unable to get your location';
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              message = 'Please enable location access to find nearby experts';
+              message = 'Please enable location access to find nearby Fundis';
               break;
             case error.POSITION_UNAVAILABLE:
               message = 'Location information is unavailable';

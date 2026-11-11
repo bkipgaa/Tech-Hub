@@ -225,7 +225,7 @@ exports.update = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Role must be client or technician' });
       }
       if (req.body.role === 'technician' && !tech) {
-        return res.status(400).json({ success: false, message: 'Create their expert profile first — that makes them an expert.' });
+        return res.status(400).json({ success: false, message: 'Create their Fundi profile first — that makes them a Fundi.' });
       }
       user.role = req.body.role;
       // A former expert's profile is kept but hidden from clients
@@ -268,7 +268,7 @@ exports.makeExpert = async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     if (await Technician.exists({ userId: user._id })) {
-      return res.status(400).json({ success: false, message: 'This user already has an expert profile.' });
+      return res.status(400).json({ success: false, message: 'This user already has a Fundi profile.' });
     }
     if (!user.address?.city || !user.address?.state) {
       return res.status(400).json({ success: false, message: "Save the user's town and county first." });
@@ -304,13 +304,13 @@ exports.makeExpert = async (req, res) => {
     user.signupIntent = user.signupIntent || 'expert';
     await user.save();
 
-    res.status(201).json({ success: true, message: 'Expert profile created. They are now an expert on the Free plan.', data: tech });
+    res.status(201).json({ success: true, message: 'Fundi profile created. They are now a Fundi on the Free plan.', data: tech });
   } catch (err) {
     if (err.name === 'ValidationError') {
       return res.status(400).json({ success: false, message: Object.values(err.errors).map((e) => e.message).join(', ') });
     }
     console.error('makeExpert error:', err);
-    res.status(500).json({ success: false, message: 'Failed to create the expert profile' });
+    res.status(500).json({ success: false, message: 'Failed to create the Fundi profile' });
   }
 };
 

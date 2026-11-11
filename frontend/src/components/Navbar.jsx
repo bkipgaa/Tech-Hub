@@ -321,7 +321,7 @@ const Navbar = () => {
                             className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                           >
                             <Wrench className="w-4 h-4 text-gray-500" />
-                            <span>Become an Expert</span>
+                            <span>Become a Fundi</span>
                           </Link>
                         )}
 
@@ -332,7 +332,7 @@ const Navbar = () => {
                             className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                           >
                             <Wrench className="w-4 h-4 text-gray-500" />
-                            <span>Create Expert Profile</span>
+                            <span>Create Fundi Profile</span>
                           </Link>
                         )}
 
@@ -344,7 +344,7 @@ const Navbar = () => {
                               className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                             >
                               <LayoutDashboard className="w-4 h-4 text-gray-500" />
-                              <span>Expert Dashboard</span>
+                              <span>Fundi Dashboard</span>
                             </Link>
                           </>
                         )}
@@ -559,7 +559,7 @@ const Navbar = () => {
                         className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
                       >
                         <Wrench className="w-5 h-5 text-gray-500" />
-                        <span>Become an Expert</span>
+                        <span>Become a Fundi</span>
                       </Link>
                     )}
 
@@ -570,7 +570,7 @@ const Navbar = () => {
                         className="flex items-center space-x-3 px-3 py-2.5 text-gray-700 hover:bg-gray-50 rounded-lg"
                       >
                         <Wrench className="w-5 h-5 text-gray-500" />
-                        <span>Create Expert Profile</span>
+                        <span>Create Fundi Profile</span>
                       </Link>
                     )}
 

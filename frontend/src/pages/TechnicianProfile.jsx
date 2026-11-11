@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   MapPin,
   Star,
@@ -44,7 +44,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { cldImage, cldVideoPoster, AVATAR_WIDTH, CARD_WIDTH, VIEWER_WIDTH } from '../utils/media';
-import { getLivePosition } from '../utils/geo';
+import BookFundiModal from '../components/booking/BookFundiModal';
 
 /**
  * TechnicianProfile Component
@@ -56,6 +56,11 @@ const TechnicianProfile = () => {
   // ─── ROUTE PARAMS & NAVIGATION ─────────────────────────────
   const { id } = useParams(); // technician ID from URL
   const navigate = useNavigate();
+  const routerLocation = useLocation();
+  // Service picked during the search; the Book Fundi button keeps it
+  const [searchParams] = useSearchParams();
+  const presetCategory = searchParams.get('serviceCategory') || '';
+  const presetSubService = searchParams.get('subService') || '';
 
   // ─── LOCAL STATE ───────────────────────────────────────────
   const [technician, setTechnician] = useState(null);
@@ -64,22 +69,6 @@ const TechnicianProfile = () => {
 
   // ─── BOOKING STATE ─────────────────────────────────────────
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [bookingForm, setBookingForm] = useState({
-    serviceCategory: '',
-    subService: '',
-    serviceDescription: '',
-    estimatedHours: 1,
-    preferredDate: '',
-    preferredTime: '',
-    location: { address: '' },
-    clientNotes: '',
-    paymentMethod: 'cash',
-  });
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingError, setBookingError] = useState('');
-  const [bookingSuccess, setBookingSuccess] = useState(false);
-  const [pinning, setPinning] = useState(false);
-  const [pinError, setPinError] = useState('');
 
   // ─── RATING STATE ───────────────────────────────────────────
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -129,7 +118,7 @@ const TechnicianProfile = () => {
       }
     } catch (err) {
       console.error('Failed to load technician profile:', err);
-      let errorMsg = 'Could not load expert profile. ';
+      let errorMsg = 'Could not load Fundi profile. ';
       if (err.response) {
         errorMsg += `Server error (${err.response.status}). `;
         if (err.response.data?.message) errorMsg += err.response.data.message;
@@ -207,172 +196,14 @@ const TechnicianProfile = () => {
     }
   };
 
-  // ─── BOOKING FUNCTIONS ──────────────────────────────────────
-
-  /**
-   * openBookingModal()
-   * ------------------
-   * Opens the booking modal, pre-fills service details,
-   * and sets default date (today) and time (09:00) so they are never empty.
-   */
+  // ─── BOOKING ───────────────────────────────────────────────
+  // Signed-out visitors log in first and come straight back here
   const openBookingModal = () => {
-    // Pre-fill service details from first category
-    if (technician.serviceCategories && technician.serviceCategories.length > 0) {
-      const firstCat = technician.serviceCategories[0];
-      setBookingForm((prev) => ({
-        ...prev,
-        serviceCategory: firstCat.categoryName || '',
-        subService: firstCat.subServices?.[0] || '',
-        serviceDescription: firstCat.description || '',
-      }));
+    if (!localStorage.getItem('user')) {
+      navigate('/login', { state: { from: routerLocation } });
+      return;
     }
-
-    // Set default date to today (YYYY-MM-DD)
-    const today = new Date().toISOString().split('T')[0];
-    // Set default time to 09:00 (you can change to current time if preferred)
-    const defaultTime = '09:00';
-
-    setBookingForm((prev) => ({
-      ...prev,
-      preferredDate: today,
-      preferredTime: defaultTime,
-    }));
-
     setShowBookingModal(true);
-    setBookingError('');
-    setBookingSuccess(false);
-  };
-
-  const closeBookingModal = () => {
-    setShowBookingModal(false);
-    setBookingError('');
-    setBookingLoading(false);
-  };
-
-  const handlePinLocation = async () => {
-    setPinning(true);
-    setPinError('');
-    try {
-      const pos = await getLivePosition();
-      setBookingForm((prev) => ({
-        ...prev,
-        location: { ...prev.location, coordinates: { lat: pos.lat, lng: pos.lng }, accuracy: pos.accuracy },
-      }));
-    } catch (err) {
-      setPinError(err.message);
-    } finally {
-      setPinning(false);
-    }
-  };
-
-  const handleBookingInputChange = (e) => {
-    const { name, value } = e.target;
-    if (name === 'address') {
-      setBookingForm((prev) => ({
-        ...prev,
-        location: { ...prev.location, address: value },
-      }));
-    } else {
-      setBookingForm((prev) => ({ ...prev, [name]: value }));
-    }
-    if (bookingError) setBookingError('');
-  };
-
-  /**
-   * handleBookingSubmit()
-   * ---------------------
-   * Submits the booking to the backend.
-   * Displays the exact error message returned from the backend.
-   */
-  const handleBookingSubmit = async (e) => {
-    e.preventDefault();
-    const {
-      serviceCategory,
-      subService,
-      serviceDescription,
-      estimatedHours,
-      preferredDate,
-      preferredTime,
-      location,
-      clientNotes,
-      paymentMethod,
-    } = bookingForm;
-
-    // ── Frontend validation ──
-    if (!serviceCategory || !subService || !serviceDescription) {
-      setBookingError('Please select a service and provide a description.');
-      return;
-    }
-    if (!preferredDate) {
-      setBookingError('Please select a preferred date.');
-      return;
-    }
-    if (!preferredTime) {
-      setBookingError('Please select a preferred time.');
-      return;
-    }
-    if (!location.address || location.address.trim() === '') {
-      setBookingError('Please provide your address.');
-      return;
-    }
-
-    const selectedDate = new Date(preferredDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (selectedDate < today) {
-      setBookingError('Preferred date must be today or in the future.');
-      return;
-    }
-
-    setBookingLoading(true);
-    setBookingError('');
-
-    try {
-      const payload = {
-        technicianId: technician._id,
-        serviceCategory,
-        subService,
-        serviceDescription,
-        hourlyRate: technician.pricing?.hourlyRate || 0,
-        estimatedHours: parseFloat(estimatedHours) || 1,
-        preferredDate,
-        preferredTime,
-        duration: parseFloat(estimatedHours) || 1,
-        location: {
-          address: location.address,
-          ...(location.coordinates && { coordinates: location.coordinates, accuracy: location.accuracy }),
-        },
-        clientNotes: clientNotes || '',
-        paymentMethod: paymentMethod || 'cash',
-      };
-
-      const response = await api.post('/bookings', payload);
-
-      if (response.data.success) {
-        setBookingSuccess(true);
-        setTimeout(() => {
-          closeBookingModal();
-          navigate('/bookings');
-        }, 2000);
-      } else {
-        // Backend returned success:false – display its message
-        setBookingError(response.data.message || 'Failed to create booking.');
-      }
-    } catch (err) {
-      console.error('Booking error:', err);
-      let errorMsg = 'Failed to create booking.';
-      if (err.response && err.response.data) {
-        // Use the message from the backend response
-        errorMsg = err.response.data.message || `Server error (${err.response.status})`;
-      } else if (err.request) {
-        errorMsg = 'No response from server. Check your connection.';
-      } else {
-        errorMsg = err.message || 'An unexpected error occurred.';
-      }
-      setBookingError(errorMsg);
-    } finally {
-      setBookingLoading(false);
-    }
   };
 
   // ─── RATING FUNCTIONS ───────────────────────────────────────
@@ -477,7 +308,7 @@ const TechnicianProfile = () => {
         <div className="text-center max-w-md mx-auto px-4">
           <div className="bg-red-100 border border-red-200 text-red-700 px-6 py-4 rounded-lg">
             <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-500" />
-            <p className="font-medium">{error || 'Expert not found'}</p>
+            <p className="font-medium">{error || 'Fundi not found'}</p>
           </div>
           <button
             onClick={handleGoBack}
@@ -573,13 +404,13 @@ const TechnicianProfile = () => {
                     <MessageCircle className="w-4 h-4" />
                     Message
                   </button>
-                  {isLoggedIn && technician.acceptingBookings !== false && (
+                  {technician.acceptingBookings !== false && (
                     <button
                       onClick={openBookingModal}
                       className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
                     >
                       <CalendarIcon className="w-4 h-4" />
-                      Book Service
+                      Book Fundi
                     </button>
                   )}
                   {isLoggedIn && technician.acceptingBookings === false && (
@@ -594,13 +425,13 @@ const TechnicianProfile = () => {
                       className="bg-yellow-500 text-white px-6 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-2 font-medium shadow-sm"
                     >
                       <Star className="w-4 h-4 fill-current" />
-                      Rate This Expert
+                      Rate This Fundi
                     </button>
                   )}
                 </div>
 
                 <p className="text-xs text-green-100 mt-3">
-                  Use Message to chat with this expert — you can share contact details there if needed.
+                  Use Message to chat with this Fundi — you can share contact details there if needed.
                 </p>
               </div>
             </div>
@@ -776,7 +607,7 @@ const TechnicianProfile = () => {
             <CheckCircle className="w-6 h-6 text-green-600" />
             <div>
               <p className="font-semibold text-green-800">Verified Professional</p>
-              <p className="text-sm text-green-700">This expert has been verified by Webafix</p>
+              <p className="text-sm text-green-700">This Fundi has been verified by Webafix</p>
             </div>
           </div>
         )}
@@ -870,237 +701,14 @@ const TechnicianProfile = () => {
 
       {/* ─── BOOKING MODAL ───────────────────────────────────── */}
       {showBookingModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
-              <h2 className="text-xl font-bold text-gray-800">Book Service</h2>
-              <button
-                onClick={closeBookingModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-                disabled={bookingLoading}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleBookingSubmit} className="p-5 space-y-4">
-              {bookingSuccess && (
-                <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <span>Booking created successfully! Redirecting...</span>
-                </div>
-              )}
-
-              {bookingError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">{bookingError}</span>
-                </div>
-              )}
-
-              {/* Service Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Service Category <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="serviceCategory"
-                  value={bookingForm.serviceCategory}
-                  onChange={handleBookingInputChange}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                >
-                  <option value="">Select a category</option>
-                  {technician.serviceCategories?.map((cat, idx) => (
-                    <option key={idx} value={cat.categoryName}>
-                      {cat.categoryName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Sub-Service */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Sub-Service <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="subService"
-                  value={bookingForm.subService}
-                  onChange={handleBookingInputChange}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                >
-                  <option value="">Select a sub-service</option>
-                  {technician.serviceCategories
-                    ?.find((cat) => cat.categoryName === bookingForm.serviceCategory)
-                    ?.subServices?.map((sub, idx) => (
-                      <option key={idx} value={sub}>
-                        {sub}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              {/* Service Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Service Description <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  name="serviceDescription"
-                  value={bookingForm.serviceDescription}
-                  onChange={handleBookingInputChange}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent h-20 resize-y"
-                  placeholder="Describe the work you need done..."
-                  required
-                />
-              </div>
-
-              {/* Estimated Hours */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Estimated Hours <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  name="estimatedHours"
-                  value={bookingForm.estimatedHours}
-                  onChange={handleBookingInputChange}
-                  min="0.5"
-                  step="0.5"
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Rate: KES {technician.pricing?.hourlyRate || 0}/hour
-                </p>
-              </div>
-
-              {/* Preferred Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Preferred Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  name="preferredDate"
-                  value={bookingForm.preferredDate}
-                  onChange={handleBookingInputChange}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              {/* Preferred Time */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Preferred Time <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="time"
-                  name="preferredTime"
-                  value={bookingForm.preferredTime}
-                  onChange={handleBookingInputChange}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              {/* Address */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Service Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="address"
-                  value={bookingForm.location.address}
-                  onChange={handleBookingInputChange}
-                  placeholder="e.g., 123 Main St, Nairobi"
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
-                {/* Pin the job location from this device (used to check the expert's proof-of-work photos) */}
-                <div className="mt-2">
-                  {bookingForm.location.coordinates ? (
-                    <p className="text-xs text-green-700 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" />
-                      Job location pinned (within about {bookingForm.location.accuracy} m).
-                      <button type="button" onClick={handlePinLocation} className="underline ml-1" disabled={pinning}>
-                        Update
-                      </button>
-                    </p>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handlePinLocation}
-                      disabled={pinning}
-                      className="text-sm text-green-700 hover:text-green-800 font-medium flex items-center gap-1 disabled:opacity-50"
-                    >
-                      {pinning ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
-                      I'm at the job address now — pin my location
-                    </button>
-                  )}
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Optional. Helps confirm the expert really did the job there. You can also pin it later from the booking page.
-                  </p>
-                  {pinError && <p className="text-xs text-red-600 mt-0.5">{pinError}</p>}
-                </div>
-              </div>
-
-              {/* Additional Notes */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
-                <textarea
-                  name="clientNotes"
-                  value={bookingForm.clientNotes}
-                  onChange={handleBookingInputChange}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent h-16 resize-y"
-                  placeholder="Any special instructions..."
-                />
-              </div>
-
-              {/* Payment Method */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                <select
-                  name="paymentMethod"
-                  value={bookingForm.paymentMethod}
-                  onChange={handleBookingInputChange}
-                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="mpesa">M-Pesa</option>
-                  <option value="card">Card</option>
-                  <option value="bank-transfer">Bank Transfer</option>
-                </select>
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={bookingLoading || bookingSuccess}
-                className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {bookingLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Creating Booking...
-                  </>
-                ) : bookingSuccess ? (
-                  <>
-                    <Check className="w-5 h-5" />
-                    Booking Created!
-                  </>
-                ) : (
-                  'Confirm Booking'
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
+        <BookFundiModal
+          technicianId={technician._id}
+          fundiName={technician.userId?.firstName || 'this Fundi'}
+          serviceCategories={technician.serviceCategories || []}
+          presetCategory={presetCategory}
+          presetSubService={presetSubService}
+          onClose={() => setShowBookingModal(false)}
+        />
       )}
 
       {/* ─── RATING MODAL ────────────────────────────────────── */}
@@ -1108,7 +716,7 @@ const TechnicianProfile = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="flex justify-between items-center p-5 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-800">Rate This Expert</h2>
+              <h2 className="text-xl font-bold text-gray-800">Rate This Fundi</h2>
               <button
                 onClick={closeRatingModal}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -1172,7 +780,7 @@ const TechnicianProfile = () => {
                   value={ratingForm.review}
                   onChange={(e) => setRatingForm((prev) => ({ ...prev, review: e.target.value }))}
                   className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 resize-y"
-                  placeholder="Share your experience with this expert..."
+                  placeholder="Share your experience with this Fundi..."
                   required
                 />
               </div>
