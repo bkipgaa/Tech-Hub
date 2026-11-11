@@ -145,7 +145,7 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
   return (
     <div className="space-y-10 mt-10">
       {/* ─── Most popular services ─── */}
-      <section>
+      <section id="popular-services" className="scroll-mt-24">
         <SectionHeading icon={TrendingUp} title="Most popular services" subtitle="Services with the most completed bookings" />
         {popular.loading ? spinner : popular.data.length === 0 ? (
           <Placeholder>Popular services will show here soon.</Placeholder>
@@ -167,7 +167,7 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
       </section>
 
       {/* ─── Top 10 experts ─── */}
-      <section>
+      <section id="top-fundis" className="scroll-mt-24">
         <SectionHeading icon={Award} title="Top 10 Fundis" subtitle="Ranked by rating, then by jobs completed" />
         {top.loading ? spinner : top.data.length === 0 ? (
           <Placeholder>Top Fundis will show here once jobs are rated.</Placeholder>
@@ -181,7 +181,7 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
       </section>
 
       {/* ─── Top 5 near you ─── */}
-      <section>
+      <section id="fundis-near-you" className="scroll-mt-24">
         <SectionHeading icon={MapPin} title="Fundis near you" subtitle={`The closest available Fundis within ${NEARBY_RADIUS_KM} km`} />
         {!userLocation ? (
           <Placeholder>
