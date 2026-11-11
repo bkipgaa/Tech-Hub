@@ -12,7 +12,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Wrench, Loader2, AlertCircle, ArrowRight, Search, ChevronRight } from 'lucide-react';
+import { Wrench, Loader2, AlertCircle, ArrowRight, Search } from 'lucide-react';
 import api from '../services/api';
 import useMyLocation from '../hooks/useMyLocation';
 import ServicesHighlights from '../components/ServicesHighlights';
@@ -20,6 +20,18 @@ import { categoryPath } from '../utils/servicePaths';
 
 // useMyLocation statuses → the ones ServicesHighlights expects
 const HIGHLIGHT_STATUS = { idle: 'idle', locating: 'loading', ready: 'success', error: 'error' };
+
+// Buttons beside the heading that jump to the sections in ServicesHighlights
+const JUMP_LINKS = [
+  { id: 'popular-services', label: 'Most popular services' },
+  { id: 'top-fundis', label: 'Top 10 Fundis' },
+  { id: 'fundis-near-you', label: 'Fundis near you' },
+];
+
+const GREEN_BUTTON =
+  'inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm';
+
+const jumpTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
 const Services = () => {
   const navigate = useNavigate();
@@ -97,49 +109,39 @@ const Services = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-8 md:py-10">
         {/* ─── Header ─────────────────────────────────── */}
-        <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="mb-6 md:mb-8 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Browse Services</h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">
               Pick a category → choose a service → set your distance → book a Fundi.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/search')}
-            className="self-start inline-flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-sm flex-shrink-0"
-          >
-            <Search className="w-4 h-4" />
-            Search
-          </button>
+          <div className="flex flex-wrap gap-2 lg:justify-end lg:max-w-xl">
+            <button type="button" onClick={() => navigate('/search')} className={GREEN_BUTTON}>
+              <Search className="w-4 h-4" />
+              Search
+            </button>
+            {/* Jump to the sections further down this page */}
+            {JUMP_LINKS.map(({ id, label }) => (
+              <button key={id} type="button" onClick={() => jumpTo(id)} className={GREEN_BUTTON}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* ─── Main categories (4 columns) ─────────────── */}
+        {/* ─── Main categories (4 columns of plain links) ─────────────── */}
         {catalog.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-            {catalog.map((cat) => {
-              const count = cat.serviceCategories?.length ?? 0;
-              return (
-                <button
-                  key={cat.mainCategory}
-                  onClick={() => navigate(categoryPath(cat.mainCategory))}
-                  className="group text-left bg-white rounded-xl border border-gray-200 p-4 hover:border-green-500 hover:shadow-md transition-all flex flex-col gap-3 min-h-[110px]"
-                >
-                  <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center group-hover:bg-green-600 transition-colors">
-                    <Wrench className="w-4 h-4 text-green-600 group-hover:text-white transition-colors" />
-                  </div>
-                  <div className="flex-1 flex items-end justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm leading-snug">{cat.mainCategory}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {count} service{count === 1 ? '' : 's'}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-green-600 flex-shrink-0" />
-                  </div>
-                </button>
-              );
-            })}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1">
+            {catalog.map((cat) => (
+              <button
+                key={cat.mainCategory}
+                onClick={() => navigate(categoryPath(cat.mainCategory))}
+                className="text-left py-2 px-2 -mx-2 rounded-md text-sm md:text-base font-medium text-gray-800 hover:text-green-700 hover:bg-green-50 transition-colors"
+              >
+                {cat.mainCategory}
+              </button>
+            ))}
           </div>
         ) : (
           <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
