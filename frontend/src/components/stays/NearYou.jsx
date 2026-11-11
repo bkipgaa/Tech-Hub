@@ -23,7 +23,7 @@ const TABS = [
   { id: 'rentals', label: 'Rentals', hint: 'Homes, hostels & rooms' },
   { id: 'business', label: 'Business spaces', hint: 'Offices & shops' },
   { id: 'entertainment', label: 'Entertainment', hint: 'Clubs, bars, casinos & more' },
-  { id: 'experts', label: 'Experts', hint: 'Fundis & professionals' },
+  { id: 'experts', label: 'Fundis', hint: 'Fundis & professionals' },
 ];
 
 const NearYou = ({ className = '' }) => {
@@ -60,7 +60,7 @@ const NearYou = ({ className = '' }) => {
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <Navigation className="w-5 h-5 text-green-600" /> Near you
           </h2>
-          <p className="text-sm text-gray-500">The closest places and experts, nearest first</p>
+          <p className="text-sm text-gray-500">The closest places and Fundis, nearest first</p>
         </div>
         {location && (
           <Link to={seeAll} className="text-sm font-semibold text-green-700 hover:text-green-800 inline-flex items-center gap-1">
@@ -75,7 +75,7 @@ const NearYou = ({ className = '' }) => {
             <LocateFixed className="w-6 h-6 text-red-600" />
           </div>
           <div className="flex-1">
-            <p className="font-semibold text-gray-800">See Airbnbs, rentals, offices, places to go out and experts around you</p>
+            <p className="font-semibold text-gray-800">See Airbnbs, rentals, offices, places to go out and Fundis around you</p>
             <p className="text-sm text-gray-500">
               We use your location only to sort results by distance. It isn't saved or shared.
             </p>
@@ -122,7 +122,7 @@ const NearYou = ({ className = '' }) => {
             </div>
           ) : result.items.length === 0 ? (
             <div className="text-center py-8 bg-white rounded-xl border border-dashed border-gray-300 text-sm text-gray-500">
-              {tab === 'experts' ? `No experts within ${NEARBY_KM} km yet.` : `Nothing listed within ${NEARBY_KM} km yet.`}{' '}
+              {tab === 'experts' ? `No Fundis within ${NEARBY_KM} km yet.` : `Nothing listed within ${NEARBY_KM} km yet.`}{' '}
               {tab === 'experts' ? (
                 <Link to="/services" className="text-green-700 font-medium hover:underline">
                   Browse all services

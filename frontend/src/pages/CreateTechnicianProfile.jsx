@@ -762,7 +762,7 @@ const CreateTechnicianProfile = () => {
             <Wrench className="w-12 h-12 text-white" />
             <div>
               <h1 className="text-3xl font-bold text-white">
-                Create Expert Profile
+                Create Fundi Profile
               </h1>
               <p className="text-green-100">
                 Complete your profile to start offering services
@@ -817,7 +817,7 @@ const CreateTechnicianProfile = () => {
                       value={formData.profileHeadline}
                       onChange={handleInputChange}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:outline-none"
-                      placeholder="e.g., Expert Electrician with 10+ years experience"
+                      placeholder="e.g., Electrician with 10+ years experience"
                     />
                   </div>
                   <div>
@@ -2030,7 +2030,7 @@ const CreateTechnicianProfile = () => {
                       Your current location <span className="text-red-500">*</span>
                     </p>
                     <p className="text-xs text-gray-600 mb-3">
-                      Clients only see experts near them, so we need your real location. Share it from where you usually work.
+                      Clients only see Fundis near them, so we need your real location. Share it from where you usually work.
                     </p>
                     {hasLocation ? (
                       <p className="text-sm text-green-800 flex items-start gap-2 mb-3">

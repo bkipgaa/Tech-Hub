@@ -226,7 +226,7 @@ const Verifications = () => {
           Verifications
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Review expert documents and approve verification requests.
+          Review Fundi documents and approve verification requests.
         </p>
       </div>
 
@@ -298,7 +298,7 @@ const Verifications = () => {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3 text-left">Expert</th>
+                  <th className="px-4 py-3 text-left">Fundi</th>
                   <th className="px-4 py-3 text-left">Category</th>
                   <th className="px-4 py-3 text-left">Documents</th>
                   <th className="px-4 py-3 text-left">Submitted</th>
@@ -617,7 +617,7 @@ const Verifications = () => {
             </h3>
             <p className="text-sm text-gray-600 mb-4">
               {promptModal.type === 'reject'
-                ? 'Explain why this verification is being rejected. The expert will see this message.'
+                ? 'Explain why this verification is being rejected. The Fundi will see this message.'
                 : 'Describe what additional information or documents are needed.'}
             </p>
             <textarea

@@ -357,14 +357,14 @@ const BookingDetails = () => {
   };
 
   const getTechnicianName = (booking) => {
-    if (!booking?.technicianId) return 'Expert';
+    if (!booking?.technicianId) return 'Fundi';
     const tech = booking.technicianId;
     // Person's name first (business name is shown underneath)
     if (tech.userId?.firstName) {
       return `${tech.userId.firstName} ${tech.userId.lastName || ''}`.trim();
     }
     if (tech.businessName?.trim()) return tech.businessName.trim();
-    return 'Expert';
+    return 'Fundi';
   };
 
   /**
@@ -888,6 +888,16 @@ const BookingDetails = () => {
                     : `${getClientName(booking)} booked you for this job`}
                 </p>
               )}
+              {/* The Fundi calls the client to understand the work and agree on a quotation */}
+              {isTechnician && booking.clientId?.phone && (
+                <a
+                  href={`tel:${booking.clientId.phone}`}
+                  className="mt-2 inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors"
+                >
+                  <Phone className="w-4 h-4" />
+                  Call client · {booking.clientId.phone}
+                </a>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -1320,9 +1330,15 @@ const BookingDetails = () => {
                     {getClientName(booking)}
                     {isClient && <span className="text-[10px] font-semibold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded">You</span>}
                   </p>
+                  {isTechnician && booking.clientId?.phone && (
+                    <a href={`tel:${booking.clientId.phone}`} className="text-sm text-green-700 hover:underline flex items-center gap-1 mt-0.5">
+                      <Phone className="w-3.5 h-3.5" />
+                      {booking.clientId.phone}
+                    </a>
+                  )}
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Expert (doing the work)</p>
+                  <p className="text-sm text-gray-500">Fundi (doing the work)</p>
                   <p className="font-medium text-gray-800 flex items-center gap-2">
                     {getTechnicianName(booking)}
                     {isTechnician && <span className="text-[10px] font-semibold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded">You</span>}

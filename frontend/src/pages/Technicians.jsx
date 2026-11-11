@@ -102,7 +102,7 @@ const Technicians = () => {
         console.error('Location error:', error);
         if (error.code === error.PERMISSION_DENIED) {
           setLocationPermissionDenied(true);
-          setError('Location access denied. Please enable location services to find nearby experts.');
+          setError('Location access denied. Please enable location services to find nearby Fundis.');
         } else {
           setError('Unable to get your location. Please check your device settings.');
         }
@@ -200,11 +200,12 @@ const Technicians = () => {
         return tech;
       });
 
-      // Sort by distance (closest first)
+      // Paid plans first, then Free, then experts further than usual; closest first within each
+      const group = (t) => (t.extendedReach ? 2 : t.paidPlan ? 0 : 1);
       techniciansWithDistance.sort((a, b) => {
         const distA = a.distance ? parseFloat(a.distance) : Infinity;
         const distB = b.distance ? parseFloat(b.distance) : Infinity;
-        return distA - distB;
+        return group(a) - group(b) || distA - distB;
       });
 
       setTechnicians(techniciansWithDistance);
@@ -228,7 +229,7 @@ const Technicians = () => {
     } catch (err) {
       console.error('Search failed:', err);
       // Display user-friendly error message
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to find experts. Please try again.';
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to find Fundis. Please try again.';
       setError(errorMsg);
       setLoading(false);
     }
@@ -379,7 +380,7 @@ const Technicians = () => {
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Finding experts near you...</p>
+          <p className="mt-4 text-gray-600">Finding Fundis near you...</p>
         </div>
       </div>
     );
@@ -391,7 +392,7 @@ const Technicians = () => {
         {/* ===== PAGE HEADER ===== */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
-            {subService || serviceCategory || mainCategory || 'Experts'} Near You
+            {subService || serviceCategory || mainCategory || 'Fundis'} Near You
           </h1>
           {/* Display selected categories as badges */}
           {mainCategory && (
@@ -412,7 +413,7 @@ const Technicians = () => {
           {userLocation && (
             <p className="text-gray-500 text-sm flex items-center gap-1 mt-2">
               <MapPin className="w-3 h-3" />
-              Showing experts within your search radius of {radius}km (subject to their plan limits)
+              Showing Fundis within your search radius of {radius}km (subject to their plan limits)
             </p>
           )}
         </div>
@@ -423,7 +424,7 @@ const Technicians = () => {
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <Navigation className="w-5 h-5 text-blue-600" />
-                <span className="text-blue-800 text-sm">Enable location to find experts near you</span>
+                <span className="text-blue-800 text-sm">Enable location to find Fundis near you</span>
               </div>
               <button
                 onClick={getCurrentLocation}
@@ -443,7 +444,7 @@ const Technicians = () => {
               <span className="text-yellow-800 font-medium">Location access denied</span>
             </div>
             <p className="text-yellow-700 text-sm mb-3">
-              Please enable location access in your browser settings to find experts near you.
+              Please enable location access in your browser settings to find Fundis near you.
             </p>
             <button
               onClick={getCurrentLocation}
@@ -467,14 +468,15 @@ const Technicians = () => {
             <div className="flex items-start gap-2">
               <Info className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
               <div className="text-xs text-gray-600">
-                <p className="font-medium mb-1">How expert visibility works:</p>
+                <p className="font-medium mb-1">How Fundi visibility works:</p>
                 <ul className="space-y-0.5">
                   {PLAN_TIERS.map((tier) => (
                     <li key={tier.id}>
-                      • <span className="font-medium">{tier.name} plan</span> experts: Visible within{' '}
+                      • <span className="font-medium">{tier.name} plan</span> Fundis: Visible within{' '}
                       <span className="font-bold">{tier.radius.toLocaleString()}km</span>
                     </li>
                   ))}
+                  <li>• When few Fundis are nearby, Fundis further away are shown too.</li>
                 </ul>
               </div>
             </div>
@@ -579,9 +581,9 @@ const Technicians = () => {
         {technicians.length === 0 && !loading && userLocation && !error && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Experts Found</h3>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Fundis Found</h3>
             <p className="text-gray-500 text-sm max-w-md mx-auto">
-              No experts found for {subService || 'this service'} within your search radius of {radius}km.
+              No Fundis found for {subService || 'this service'} within your search radius of {radius}km.
             </p>
             {radius < 1000 && (
               <button
@@ -692,7 +694,7 @@ const Technicians = () => {
 
                       {/* ✅ FIX: use tech.aboutMe (not bio) */}
                       <p className="text-gray-600 text-sm mt-2 line-clamp-2">
-                        {tech.aboutMe || 'Professional expert ready to help with your service needs.'}
+                        {tech.aboutMe || 'Professional Fundi ready to help with your service needs.'}
                       </p>
 
                       {/* Service categories and sub-services */}
@@ -716,11 +718,13 @@ const Technicians = () => {
                       )}
 
                       <div className="mt-2 text-xs text-gray-400">
-                        {getVisibilityDescription(
-                          tech.subscriptionPlan,
-                          tech.visibilityRadius,
-                          tech.isTrial
-                        )}
+                        {tech.extendedReach
+                          ? 'Further away: shown because few Fundis are closer'
+                          : getVisibilityDescription(
+                              tech.subscriptionPlan,
+                              tech.visibilityRadius,
+                              tech.isTrial
+                            )}
                       </div>
 
                       <div className="flex gap-3 mt-4">

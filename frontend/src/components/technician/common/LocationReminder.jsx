@@ -124,7 +124,7 @@ const LocationReminder = ({ profile }) => {
           {hasLocation ? 'Is your location still correct?' : 'Add your location'}
         </p>
         <p className="text-sm text-amber-800 mt-0.5">
-          Clients only see experts near them, so make sure your location is where you work now.
+          Clients only see Fundis near them, so make sure your location is where you work now.
           {hasLocation && days !== null && ` You last updated it ${describeAge(days)}.`}
         </p>
       </div>

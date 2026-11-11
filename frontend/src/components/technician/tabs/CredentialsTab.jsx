@@ -364,7 +364,7 @@ const CredentialsTab = ({ formData, setFormData, isEditing, handleInputChange, c
         action={isEditing && <AddButton onClick={() => openEditor('experience')} disabled={saving}>Add experience</AddButton>}>
         {(formData.experience || []).length === 0 ? (
           <EmptyState icon={Briefcase} title="No work experience yet"
-            text="Clients trust experts who show where they've worked — including self-employed work." />
+            text="Clients trust Fundis who show where they've worked — including self-employed work." />
         ) : (
           <ol className="space-y-4">
             {sorted('experience', 'startDate').map(({ item: exp, index }) => (

@@ -47,7 +47,7 @@ const MyLocation = () => {
       <p className="text-sm text-gray-500 mt-1">
         {user.role === 'technician'
           ? 'Clients near this location can find you. Update it if you move to a new work area.'
-          : 'We use this to show you experts and places near you.'}
+          : 'We use this to show you Fundis and places near you.'}
       </p>
       <p className="mt-3 text-gray-800">
         {user.location

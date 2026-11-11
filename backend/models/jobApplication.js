@@ -407,7 +407,7 @@ jobApplicationSchema.methods.accept = async function(bookingData = {}) {
   const Technician = mongoose.model('Technician');
   const profile = await Technician.findOne({ userId: this.technicianId }).select('_id');
   if (!profile) {
-    throw new Error('This expert has no expert profile yet, so a booking cannot be created.');
+    throw new Error('This Fundi has no Fundi profile yet, so a booking cannot be created.');
   }
 
   // Create booking from the application

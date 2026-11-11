@@ -96,12 +96,14 @@ exports.technicianNewBooking = (data) => ({
       <p>You've received a new booking request:</p>
       <div style="background:#f9fafb;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid ${BRAND.color};">
         <p style="margin:4px 0;"><strong>Client:</strong> ${data.clientName}</p>
+        ${data.clientPhone ? `<p style="margin:4px 0;"><strong>Client phone:</strong> <a href="tel:${data.clientPhone}">${data.clientPhone}</a></p>` : ''}
         <p style="margin:4px 0;"><strong>Service:</strong> ${data.serviceCategory} → ${data.subService}</p>
+        ${data.serviceDescription ? `<p style="margin:4px 0;"><strong>Details:</strong> ${data.serviceDescription}</p>` : ''}
         <p style="margin:4px 0;"><strong>Preferred Date:</strong> ${data.preferredDate}</p>
         <p style="margin:4px 0;"><strong>Time:</strong> ${data.preferredTime}</p>
         <p style="margin:4px 0;"><strong>Location:</strong> ${data.address || 'Provided in app'}</p>
       </div>
-      <p>Log in to your dashboard to review the request and send a quotation.</p>
+      <p>Call the client to understand the work and agree on a price, then send your quotation from your dashboard so the job is tracked and counts towards your rating.</p>
     `,
     `${BRAND.url}/technician-dashboard/bookings`,
     'View Booking'
@@ -112,31 +114,31 @@ exports.technicianNewBooking = (data) => ({
 exports.technicianSubscriptionExpiring = (data) => {
   const when = data.daysLeft === 1 ? 'tomorrow' : `in ${data.daysLeft} days`;
   const kind = data.isTrial ? 'trial' : data.isFreeMonth ? 'freeMonth' : 'paid';
-  // Free reaches 1,000 km, so only a wider plan has any reach to lose
-  const keepReach = Number(data.currentRadius) > 1000 ? `keep your ${data.currentRadius} km visibility and ` : '';
+  // Free reaches 300 km, so only a wider plan has any reach to lose
+  const keepReach = Number(data.currentRadius) > 300 ? `keep your ${data.currentRadius} km visibility, ` : '';
   const copy = {
     trial: {
       subject: `⏰ Your free trial ends ${when}`,
       title: `Your free trial ends ${when}`,
       ends: `Your <strong>${data.planName}</strong> ends on <strong>${data.endDate}</strong>.`,
-      note: `<strong>Good to know:</strong> after your trial you stay on the Free plan, visible to clients within 1,000 km with no monthly fee
-             (KES 500 commission per job). Paid plans charge no commission, and Platinum reaches clients up to 5,000 km away.`,
+      note: `<strong>Good to know:</strong> after your trial you stay on the Free plan, visible to clients within 300 km with no monthly fee
+             (KES 500 commission per job). Paid plans charge no commission and list you above Free Fundis, and Business and above reach further.`,
       cta: 'See Plans',
     },
     freeMonth: {
       subject: `⏰ Your free month of ${data.planName} ends ${when}`,
       title: `Your free month of ${data.planName} ends ${when}`,
       ends: `Your free month of <strong>${data.planName}</strong> ends on <strong>${data.endDate}</strong>.`,
-      note: `<strong>Nothing will be charged.</strong> After it ends you go back to the Free plan: visible within 1,000 km, with a
-             KES 500 commission on each job. Subscribe to ${data.planName} to ${keepReach}pay no commission.`,
+      note: `<strong>Nothing will be charged.</strong> After it ends you go back to the Free plan: visible within 300 km, with a
+             KES 500 commission on each job. Subscribe to ${data.planName} to ${keepReach}stay listed above Free Fundis and pay no commission.`,
       cta: `Subscribe to ${data.planName}`,
     },
     paid: {
       subject: data.daysLeft === 1 ? '⚠️ Your subscription expires TOMORROW' : `⚠️ Your subscription expires ${when}`,
       title: `Your subscription expires ${when}`,
       ends: `Your <strong>${data.planName}</strong> subscription will expire on <strong>${data.endDate}</strong>.`,
-      note: `<strong>Important:</strong> When your subscription expires, you'll be moved to the Free plan: visible within 1,000 km, with a
-             KES 500 commission on each job and ratings shown only once it is paid. Renew now to ${keepReach}pay no commission.`,
+      note: `<strong>Important:</strong> When your subscription expires, you'll be moved to the Free plan: visible within 300 km, with a
+             KES 500 commission on each job and ratings shown only once it is paid. Renew now to ${keepReach}stay listed above Free Fundis and pay no commission.`,
       cta: 'Renew Subscription',
     },
   }[kind];
@@ -357,7 +359,7 @@ exports.jobApproved = (data) => ({
   html: layout(
     'Your job post is approved',
     `<p>Hi <strong>${data.name}</strong>,</p>
-     <p><strong>${data.title}</strong> is now in Available Jobs, where experts can see it and apply.</p>
+     <p><strong>${data.title}</strong> is now in Available Jobs, where Fundis can see it and apply.</p>
      <p>It stays open for 30 days. You'll see applications under My Jobs.</p>`,
     `${BRAND.url}/jobs/${data.jobId}`,
     'View job'
@@ -425,7 +427,7 @@ exports.clientWorkCompleted = (data) => ({
       <p>Hi <strong>${data.clientName}</strong>,</p>
       <p><strong>${data.technicianName}</strong> has marked your job as complete and added proof of the finished work.</p>
       <p>Please open the booking, check the photos (or link), and confirm the work is done — or tell us if something is wrong.</p>
-      <p>Once you confirm, pay the expert for the labor. You'll then be able to rate them and complete the booking.</p>
+      <p>Once you confirm, pay the Fundi for the labor. You'll then be able to rate them and complete the booking.</p>
     `,
     `${BRAND.url}/bookings/${data.bookingId}`,
     'Check & Confirm'

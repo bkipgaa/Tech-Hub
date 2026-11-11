@@ -44,7 +44,7 @@ class LocationService {
           let message = 'Unable to get your location';
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              message = 'Please enable location access to find nearby experts';
+              message = 'Please enable location access to find nearby Fundis';
               break;
             case error.POSITION_UNAVAILABLE:
               message = 'Location information is unavailable';
@@ -98,17 +98,17 @@ class LocationService {
   getVisibilityDescription(plan) {
     // Matches backend/utils/subscriptionPlans.js (the old trial is now Free)
     const visibilityRadii = {
-      free: 'Visible up to 1000km',
-      trial: 'Visible up to 1000km',
-      basic: 'Visible up to 100km',
-      basicPlus: 'Visible up to 250km',
-      premium: 'Visible up to 250km',
+      free: 'Visible up to 300km',
+      trial: 'Visible up to 300km',
+      basic: 'Visible up to 300km',
+      basicPlus: 'Visible up to 300km',
+      premium: 'Visible up to 300km',
       business: 'Visible up to 500km',
       enterprise: 'Visible up to 1000km',
       unlimited: 'Visible up to 5000km'
     };
 
-    return visibilityRadii[plan] || 'Free: Visible up to 1000km';
+    return visibilityRadii[plan] || 'Free: Visible up to 300km';
   }
 
   getCachedLocation() {

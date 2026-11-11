@@ -84,7 +84,7 @@ const Technicians = () => {
       setTechnicians(res.data.data || []);
       setPagination(res.data.pagination);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load experts.');
+      setError(err.response?.data?.message || 'Failed to load Fundis.');
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ const Technicians = () => {
 
   // Action handlers
   const handleVerify = async (id) => {
-    if (!window.confirm('Mark this expert as verified?')) return;
+    if (!window.confirm('Mark this Fundi as verified?')) return;
     try {
       await adminApi.patch(`/technicians/${id}/verify`);
       fetchTechnicians(pagination.page);
@@ -136,7 +136,7 @@ const Technicians = () => {
 
   const handleSuspend = async (id, isActive) => {
     const verb = isActive ? 'suspend' : 'reactivate';
-    if (!window.confirm(`Are you sure you want to ${verb} this expert?`)) return;
+    if (!window.confirm(`Are you sure you want to ${verb} this Fundi?`)) return;
     try {
       await adminApi.patch(`/technicians/${id}/${isActive ? 'suspend' : 'activate'}`);
       fetchTechnicians(pagination.page);
@@ -164,10 +164,10 @@ const Technicians = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <Wrench className="w-6 h-6 text-blue-600" />
-            Experts
+            Fundis
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Manage expert profiles, verifications, and account status.
+            Manage Fundi profiles, verifications, and account status.
           </p>
         </div>
       </div>
@@ -277,14 +277,14 @@ const Technicians = () => {
         ) : technicians.length === 0 ? (
           <div className="py-16 text-center">
             <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No experts match your filters.</p>
+            <p className="text-gray-500">No Fundis match your filters.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3 text-left">Expert</th>
+                  <th className="px-4 py-3 text-left">Fundi</th>
                   <th className="px-4 py-3 text-left">Category</th>
                   <th className="px-4 py-3 text-left">Plan</th>
                   <th className="px-4 py-3 text-left">Rating</th>

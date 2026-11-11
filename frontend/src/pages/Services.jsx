@@ -1,94 +1,47 @@
 /**
- * Services Page Component
- * ========================
- * Progressive-disclosure service catalog:
- *   1. Pick a main category   (compact horizontal chips)
- *   2. Pick a service category (compact horizontal chips)
- *   3. Set your search radius  (with location)
- *   4. Browse sub-services & book a technician
- * Below the catalog: popular services, top experts and experts nearby.
- * The Search button in the header opens the Search page (the navbar no
- * longer has its own Search link).
+ * Services Page
+ * =============
+ * Main categories in a 4-column grid. Picking one opens its own page
+ * (/services/:mainCategory) to choose a service category, then a distance,
+ * then the Fundis for a service (see ServiceCategory.jsx).
+ * Below the grid: popular services, top Fundis and Fundis nearby.
  *
- * @version 4.1.0 – Compact chips (no icon, ~7 per row)
+ * @version 5.0.0 – Category grid; each step on its own page
  * @author Webafix Team
  */
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Wrench,
-  Clock,
-  DollarSign,
-  MapPin,
-  Loader2,
-  AlertCircle,
-  Navigation,
-  Sparkles,
-  ArrowRight,
-  Search,
-} from 'lucide-react';
+import { Wrench, Loader2, AlertCircle, ArrowRight, Search, ChevronRight } from 'lucide-react';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
-import RadiusPicker from '../components/RadiusPicker';
+import useMyLocation from '../hooks/useMyLocation';
 import ServicesHighlights from '../components/ServicesHighlights';
+import { categoryPath } from '../utils/servicePaths';
+
+// useMyLocation statuses → the ones ServicesHighlights expects
+const HIGHLIGHT_STATUS = { idle: 'idle', locating: 'loading', ready: 'success', error: 'error' };
 
 const Services = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  // ?category= preselects a main category (new clients land here after signup)
+  // ?category= (new clients land here after signup) opens that category's page
   const [searchParams] = useSearchParams();
   const categoryParam = searchParams.get('category');
-  // Location saved on the account; used instead of asking the device
-  const savedLocation = user?.location?.lat != null ? { lat: user.location.lat, lng: user.location.lng } : null;
 
-  // ── Catalog ───────────────────────────────────────────
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // ── Progressive selection ─────────────────────────────
-  const [selectedMainCategory, setSelectedMainCategory] = useState(null);
-  const [selectedServiceCategory, setSelectedServiceCategory] = useState(null);
+  const { location: userLocation, status, locate } = useMyLocation({ autoIfGranted: true });
 
-  // ── Sub-services cache (per main||service pair) ───────
-  const [subServicesData, setSubServicesData] = useState({});
-  const [subServicesLoading, setSubServicesLoading] = useState({});
-
-  // ── Location & distance ───────────────────────────────
-  const [maxDistance, setMaxDistance] = useState('');
-  const [userLocation, setUserLocation] = useState(null);
-  const [locationStatus, setLocationStatus] = useState('idle');
-  const [locationMessage, setLocationMessage] = useState('');
-
-  // ═══════════════════════════════════════════════════════
-  // EFFECTS
-  // ═══════════════════════════════════════════════════════
   useEffect(() => {
+    if (categoryParam) {
+      navigate(categoryPath(categoryParam), { replace: true });
+      return;
+    }
     fetchServiceCatalog();
-    if (!savedLocation) requestUserLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [categoryParam]);
 
-  // The signed-in user's saved location (it may load after the page does)
-  useEffect(() => {
-    if (!savedLocation || userLocation) return;
-    setUserLocation(savedLocation);
-    setLocationStatus('success');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedLocation?.lat, savedLocation?.lng]);
-
-  // Preselect the category from the URL once the catalog is in
-  useEffect(() => {
-    if (!categoryParam || selectedMainCategory) return;
-    const match = catalog.find((c) => c.mainCategory === categoryParam);
-    if (match) setSelectedMainCategory(match);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalog, categoryParam]);
-
-  // ═══════════════════════════════════════════════════════
-  // FETCHING
-  // ═══════════════════════════════════════════════════════
   const fetchServiceCatalog = async () => {
     setLoading(true);
     setError('');
@@ -109,124 +62,6 @@ const Services = () => {
     }
   };
 
-  const fetchSubServices = async (mainCat, serviceCat) => {
-    const key = `${mainCat}||${serviceCat}`;
-    if (subServicesData[key]) return;
-
-    setSubServicesLoading((prev) => ({ ...prev, [key]: true }));
-    try {
-      const response = await api.get(
-        `/service-catalog/${encodeURIComponent(mainCat)}/${encodeURIComponent(serviceCat)}/sub-services/detailed`
-      );
-      const payload = response.data ?? response;
-      const data = payload.data ?? payload ?? { subServices: [] };
-      setSubServicesData((prev) => ({ ...prev, [key]: data }));
-    } catch (err) {
-      console.error('Failed to load sub-services:', err);
-      setSubServicesData((prev) => ({ ...prev, [key]: { subServices: [] } }));
-    } finally {
-      setSubServicesLoading((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
-  // ═══════════════════════════════════════════════════════
-  // LOCATION
-  // ═══════════════════════════════════════════════════════
-  const requestUserLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus('error');
-      setLocationMessage('Geolocation not supported');
-      return;
-    }
-    setLocationStatus('loading');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationStatus('success');
-      },
-      (err) => {
-        let msg = 'Location unavailable';
-        if (err.code === 1) msg = 'Location denied';
-        else if (err.code === 2) msg = 'Location unavailable';
-        else if (err.code === 3) msg = 'Location timed out';
-        setLocationStatus('error');
-        setLocationMessage(msg);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
-  };
-
-  // ═══════════════════════════════════════════════════════
-  // HANDLERS
-  // ═══════════════════════════════════════════════════════
-  const handleMainCategoryClick = (category) => {
-    if (selectedMainCategory?.mainCategory === category.mainCategory) {
-      setSelectedMainCategory(null);
-      setSelectedServiceCategory(null);
-      return;
-    }
-    setSelectedMainCategory(category);
-    setSelectedServiceCategory(null);
-  };
-
-  const handleServiceCategoryClick = async (serviceCat) => {
-    if (selectedServiceCategory?.name === serviceCat.name) {
-      setSelectedServiceCategory(null);
-      return;
-    }
-    setSelectedServiceCategory(serviceCat);
-
-    const key = `${selectedMainCategory.mainCategory}||${serviceCat.name}`;
-    if (!subServicesData[key]) {
-      await fetchSubServices(selectedMainCategory.mainCategory, serviceCat.name);
-    }
-  };
-
-  const handleViewTechnicians = (subService) => {
-    if (!maxDistance) {
-      alert('Please select a maximum distance first.');
-      return;
-    }
-    if (!userLocation) {
-      alert('Please allow location access to find nearby experts.');
-      requestUserLocation();
-      return;
-    }
-
-    const params = new URLSearchParams({
-      mainCategory: selectedMainCategory.mainCategory,
-      serviceCategory: selectedServiceCategory.name,
-      subService: subService.name,
-      radius: maxDistance,
-      lat: userLocation.lat,
-      lng: userLocation.lng,
-    });
-
-    navigate(`/technicians/search?${params.toString()}`);
-  };
-
-  const handleRetry = () => {
-    fetchServiceCatalog();
-  };
-
-  // ═══════════════════════════════════════════════════════
-  // DERIVED
-  // ═══════════════════════════════════════════════════════
-  const canSearch = Boolean(maxDistance && userLocation);
-  const subServicesKey =
-    selectedMainCategory && selectedServiceCategory
-      ? `${selectedMainCategory.mainCategory}||${selectedServiceCategory.name}`
-      : null;
-  const subServices = subServicesKey
-    ? subServicesData[subServicesKey]?.subServices ?? []
-    : [];
-  const subServicesIsLoading = subServicesKey
-    ? subServicesLoading[subServicesKey]
-    : false;
-
-  // ═══════════════════════════════════════════════════════
-  // RENDER: LOADING
-  // ═══════════════════════════════════════════════════════
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -238,9 +73,6 @@ const Services = () => {
     );
   }
 
-  // ═══════════════════════════════════════════════════════
-  // RENDER: ERROR
-  // ═══════════════════════════════════════════════════════
   if (error) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -250,7 +82,7 @@ const Services = () => {
             <p className="font-semibold mb-1">Unable to load services</p>
             <p className="text-sm text-red-600 mb-4">{error}</p>
             <button
-              onClick={handleRetry}
+              onClick={fetchServiceCatalog}
               className="bg-red-600 text-white px-5 py-2 rounded-lg hover:bg-red-700 transition-colors font-medium"
             >
               Try Again
@@ -261,44 +93,15 @@ const Services = () => {
     );
   }
 
-  // ═══════════════════════════════════════════════════════
-  // RENDER: EMPTY CATALOG
-  // ═══════════════════════════════════════════════════════
-  if (catalog.length === 0) {
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-gray-50">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-6 rounded-xl">
-            <Wrench className="w-10 h-10 mx-auto mb-3 text-yellow-500" />
-            <p className="font-semibold mb-1">No services available</p>
-            <p className="text-sm mb-4">Please check back later.</p>
-            <button
-              onClick={handleRetry}
-              className="bg-yellow-600 text-white px-5 py-2 rounded-lg hover:bg-yellow-700 transition-colors font-medium"
-            >
-              Refresh
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // RENDER: MAIN
-  // ═══════════════════════════════════════════════════════
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-8 md:py-10">
-
         {/* ─── Header ─────────────────────────────────── */}
         <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-              Browse Services
-            </h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Browse Services</h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">
-              Pick a category → choose a service → set your distance → book an expert.
+              Pick a category → choose a service → set your distance → book a Fundi.
             </p>
           </div>
           <button
@@ -311,307 +114,54 @@ const Services = () => {
           </button>
         </div>
 
-        {/* ═══════════════════════════════════════════════
-            STEP 1 — MAIN CATEGORIES (compact chips)
-            ═══════════════════════════════════════════════ */}
-        <section className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-              1
-            </span>
-            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
-              Choose a main category
-            </h2>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
+        {/* ─── Main categories (4 columns) ─────────────── */}
+        {catalog.length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             {catalog.map((cat) => {
-              const isActive =
-                selectedMainCategory?.mainCategory === cat.mainCategory;
-
+              const count = cat.serviceCategories?.length ?? 0;
               return (
                 <button
                   key={cat.mainCategory}
-                  onClick={() => handleMainCategoryClick(cat)}
-                  aria-pressed={isActive}
-                  className={`group inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-all duration-150 ${
-                    isActive
-                      ? 'bg-green-600 text-white border-green-600 shadow-sm'
-                      : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-700 hover:border-green-500 hover:shadow-sm'
-                  }`}
+                  onClick={() => navigate(categoryPath(cat.mainCategory))}
+                  className="group text-left bg-white rounded-xl border border-gray-200 p-4 hover:border-green-500 hover:shadow-md transition-all flex flex-col gap-3 min-h-[110px]"
                 >
-                  <span>{cat.mainCategory}</span>
-                  <span
-                    className={`text-[9px] font-bold px-1 py-0.5 rounded-full leading-none transition-colors ${
-                      isActive
-                        ? 'bg-white/25 text-white'
-                        : 'bg-gray-100 text-gray-500 group-hover:bg-green-100 group-hover:text-green-700'
-                    }`}
-                  >
-                    {cat.serviceCategories?.length ?? 0}
-                  </span>
+                  <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center group-hover:bg-green-600 transition-colors">
+                    <Wrench className="w-4 h-4 text-green-600 group-hover:text-white transition-colors" />
+                  </div>
+                  <div className="flex-1 flex items-end justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-800 text-sm leading-snug">{cat.mainCategory}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {count} service{count === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-green-600 flex-shrink-0" />
+                  </div>
                 </button>
               );
             })}
           </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════════
-            STEP 2 — SERVICE CATEGORIES
-            ═══════════════════════════════════════════════ */}
-        {selectedMainCategory && (
-          <section className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                2
-              </span>
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
-                Choose a service category
-                <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
-                  in {selectedMainCategory.mainCategory}
-                </span>
-              </h2>
-            </div>
-
-            {selectedMainCategory.serviceCategories?.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {selectedMainCategory.serviceCategories.map((sc) => {
-                  const isActive = selectedServiceCategory?.name === sc.name;
-
-                  return (
-                    <button
-                      key={sc.name}
-                      onClick={() => handleServiceCategoryClick(sc)}
-                      aria-pressed={isActive}
-                      className={`group inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-all duration-150 ${
-                        isActive
-                          ? 'bg-green-600 text-white border-green-600 shadow-sm'
-                          : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:text-green-700 hover:border-green-500 hover:shadow-sm'
-                      }`}
-                    >
-                      <span>{sc.name}</span>
-                      {sc.subServiceCount != null && (
-                        <span
-                          className={`text-[9px] font-bold px-1 py-0.5 rounded-full leading-none transition-colors ${
-                            isActive
-                              ? 'bg-white/25 text-white'
-                              : 'bg-gray-100 text-gray-500 group-hover:bg-green-100 group-hover:text-green-700'
-                          }`}
-                        >
-                          {sc.subServiceCount}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400 italic">
-                No service categories in this main category.
-              </p>
-            )}
-          </section>
-        )}
-
-        {/* ═══════════════════════════════════════════════
-            STEP 3 — DISTANCE & LOCATION
-            ═══════════════════════════════════════════════ */}
-        {selectedServiceCategory && (
-          <section className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                3
-              </span>
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
-                Set your search distance
-              </h2>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
-              <div className="flex flex-col md:flex-row md:items-end gap-4">
-                {/* Distance selector */}
-                <div className="flex-1">
-                  <label
-                    htmlFor="distanceInput"
-                    className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"
-                  >
-                    Search Radius
-                  </label>
-                  <RadiusPicker
-                    id="distanceInput"
-                    value={maxDistance === '' ? '' : Number(maxDistance)}
-                    onChange={(km) => setMaxDistance(String(km))}
-                  />
-                </div>
-
-                {/* Location status */}
-                <div className="md:w-auto">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Your Location
-                  </label>
-
-                  {locationStatus === 'loading' && (
-                    <div className="inline-flex items-center gap-2 px-4 py-3 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-yellow-700 text-sm font-medium">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Detecting…
-                    </div>
-                  )}
-
-                  {locationStatus === 'error' && (
-                    <button
-                      onClick={requestUserLocation}
-                      className="inline-flex items-center gap-2 px-4 py-3 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm font-medium hover:bg-red-100 transition-colors"
-                    >
-                      <Navigation className="w-4 h-4" />
-                      {locationMessage} · Retry
-                    </button>
-                  )}
-
-                  {locationStatus === 'success' && (
-                    <div className="inline-flex items-center gap-2 px-4 py-3 bg-green-50 border-2 border-green-200 rounded-xl text-green-700 text-sm font-medium">
-                      <MapPin className="w-4 h-4" />
-                      {savedLocation && userLocation?.lat === savedLocation.lat
-                        ? `Your saved location${user.address?.city ? ` · ${user.address.city}` : ''}`
-                        : 'Location active'}
-                    </div>
-                  )}
-
-                  {locationStatus === 'idle' && (
-                    <button
-                      onClick={requestUserLocation}
-                      className="inline-flex items-center gap-2 px-4 py-3 bg-gray-100 border-2 border-gray-200 rounded-xl text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors"
-                    >
-                      <Navigation className="w-4 h-4" />
-                      Enable location
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Help text */}
-              <p className="text-xs text-gray-500 mt-3">
-                {!maxDistance &&
-                  locationStatus === 'success' &&
-                  '👉 Pick a distance to unlock the "View Experts" buttons'}
-                {maxDistance &&
-                  locationStatus !== 'success' &&
-                  '👉 Enable location so we can find experts near you'}
-                {maxDistance &&
-                  locationStatus === 'success' &&
-                  '✅ Ready! Pick a service below to see experts'}
-              </p>
-            </div>
-          </section>
-        )}
-
-        {/* ═══════════════════════════════════════════════
-            STEP 4 — SUB-SERVICES
-            ═══════════════════════════════════════════════ */}
-        {selectedServiceCategory && (
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                4
-              </span>
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
-                Pick a service
-                <span className="ml-2 text-xs font-normal text-gray-400 normal-case">
-                  {selectedMainCategory.mainCategory} › {selectedServiceCategory.name}
-                </span>
-              </h2>
-            </div>
-
-            {subServicesIsLoading ? (
-              <div className="flex justify-center items-center py-16 bg-white rounded-xl border border-gray-200">
-                <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
-                <span className="ml-2 text-gray-500 text-sm font-medium">
-                  Loading services…
-                </span>
-              </div>
-            ) : subServices.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {subServices.map((sub, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white p-5 rounded-xl border border-gray-200 hover:border-green-400 hover:shadow-lg transition-all flex flex-col"
-                  >
-                    <div className="flex items-start gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
-                        <Sparkles className="w-4 h-4 text-green-600" />
-                      </div>
-                      <h3 className="font-bold text-gray-800 text-sm leading-tight pt-1">
-                        {sub.name}
-                      </h3>
-                    </div>
-
-                    {sub.description && (
-  <p className="text-xs text-gray-600 leading-relaxed mb-4 flex-grow">
-    {sub.description}
-  </p>
-)}
-
-                    {/* CTA */}
-                    <button
-                      onClick={() => handleViewTechnicians(sub)}
-                      disabled={!canSearch}
-                      className={`w-full mt-auto px-4 py-2.5 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1.5 ${
-                        canSearch
-                          ? 'bg-gray-800 text-white hover:bg-green-600 shadow-sm hover:shadow-md'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {!maxDistance ? (
-                        'Select distance first'
-                      ) : !userLocation ? (
-                        'Enable location'
-                      ) : (
-                        <>
-                          View Experts
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-                <Wrench className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                <p className="text-sm text-gray-500">
-                  No sub-services available for this category.
-                </p>
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* ── Idle hint ─────────────────────────────── */}
-        {!selectedMainCategory && (
-          <div className="mt-4 text-center py-6 bg-white rounded-xl border border-dashed border-gray-300">
-            <Wrench className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-gray-500">Click a category above to get started</p>
-            <p className="text-xs text-gray-400 mt-1">
-              {catalog.length} categor{catalog.length !== 1 ? 'ies' : 'y'} available
-            </p>
+        ) : (
+          <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
+            <Wrench className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm text-gray-500">No services available. Please check back later.</p>
           </div>
         )}
 
-        {/* ── Popular services, top experts, experts nearby ── */}
+        {/* ── Popular services, top Fundis, Fundis nearby ── */}
         <ServicesHighlights
           userLocation={userLocation}
-          locationStatus={locationStatus}
-          onEnableLocation={requestUserLocation}
+          locationStatus={HIGHLIGHT_STATUS[status] || 'idle'}
+          onEnableLocation={locate}
         />
       </div>
 
-      {/* ── Footer CTA (kept) ─────────────────────────── */}
+      {/* ── Footer CTA ─────────────────────────────────── */}
       <div className="max-w-6xl mx-auto px-4 pb-12">
         <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
-          <h3 className="text-lg font-bold text-gray-800 mb-2">
-            Need a specific service not listed?
-          </h3>
+          <h3 className="text-lg font-bold text-gray-800 mb-2">Need a specific service not listed?</h3>
           <p className="text-gray-600 text-sm mb-5">
-            Contact us and we'll connect you with the right professional.
+            Contact us and we'll connect you with the right Fundi.
           </p>
           <button className="bg-gray-800 text-white px-6 py-3 rounded-xl font-semibold hover:bg-red-600 transition-colors inline-flex items-center gap-2">
             Contact Us

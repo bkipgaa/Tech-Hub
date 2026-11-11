@@ -296,7 +296,7 @@ const ListingDetails = () => {
                 Movers, cleaners, plumbers and electricians near {listing.estate || listing.town || listing.area}.
               </p>
               <Link to="/services" className="inline-block mt-3 text-sm font-semibold text-green-700 hover:underline">
-                Find an expert →
+                Find a Fundi →
               </Link>
             </div>
           </div>

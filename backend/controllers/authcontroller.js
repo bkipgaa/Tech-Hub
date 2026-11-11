@@ -110,7 +110,7 @@ exports.register = async (req, res) => {
     if (!SIGNUP_INTENTS.includes(signupIntent)) {
       return res.status(400).json({
         success: false,
-        message: 'Tell us how you will use Webafix (expert, client, list a property or find a stay).',
+        message: 'Tell us how you will use Webafix (Fundi, client, list a property or find a stay).',
       });
     }
     const role = signupIntent === 'expert' ? 'technician' : 'client';
@@ -147,7 +147,7 @@ exports.register = async (req, res) => {
       const mainCategory = String(req.body.mainCategory || '').trim();
       const exists = mainCategory && await ServiceCatalog.exists({ mainCategory, isActive: true });
       if (!exists) {
-        return res.status(400).json({ success: false, message: 'Pick the kind of expert you are looking for.' });
+        return res.status(400).json({ success: false, message: 'Pick the kind of Fundi you are looking for.' });
       }
       preferences.mainCategory = mainCategory;
     } else {

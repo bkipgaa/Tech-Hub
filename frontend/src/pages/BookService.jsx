@@ -509,19 +509,19 @@ const MyBookings = () => {
    * @returns {string} - Technician's display name
    */
   const getTechnicianName = (booking) => {
-    if (!booking?.technicianId) return 'Expert';
+    if (!booking?.technicianId) return 'Fundi';
     const tech = booking.technicianId;
     // Person's name first, like the booking page (business name as a fallback)
     if (tech.userId?.firstName) {
       return `${tech.userId.firstName} ${tech.userId.lastName || ''}`.trim();
     }
     if (tech.businessName?.trim()) return tech.businessName.trim();
-    return 'Expert';
+    return 'Fundi';
   };
 
   // Name of the expert on the booking a modal (cancel / rate) is open for
   const selectedBooking = bookings.find((b) => b._id === selectedBookingId);
-  const selectedExpertName = selectedBooking ? getTechnicianName(selectedBooking) : 'the expert';
+  const selectedExpertName = selectedBooking ? getTechnicianName(selectedBooking) : 'the Fundi';
 
   /**
    * getTechnicianId()
@@ -637,7 +637,7 @@ const MyBookings = () => {
           <div className="flex gap-2 mb-6 border-b border-gray-200">
             {[
               { id: 'technician', label: 'Requests for me', hint: 'Clients who booked you' },
-              { id: 'client', label: 'Booked by me', hint: 'Services you booked from other experts' },
+              { id: 'client', label: 'Booked by me', hint: 'Services you booked from other Fundis' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -685,7 +685,7 @@ const MyBookings = () => {
                 ? `You have no ${statusFilter} bookings. Try changing the filter.`
                 : viewAs === 'technician'
                 ? 'No clients have booked you yet. Bookings made with you will appear here.'
-                : 'You haven\'t made any bookings yet. Find an expert to get started!'}
+                : 'You haven\'t made any bookings yet. Find a Fundi to get started!'}
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-3">
               {statusFilter && (
@@ -701,7 +701,7 @@ const MyBookings = () => {
                   onClick={() => navigate('/search')}
                   className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
                 >
-                  Find an Expert
+                  Find a Fundi
                 </button>
               )}
             </div>
@@ -746,6 +746,12 @@ const MyBookings = () => {
                               ? getTechnicianName(booking)
                               : `Client: ${`${booking.clientId?.firstName || ''} ${booking.clientId?.lastName || ''}`.trim() || 'Client'}`}
                           </span>
+                          {!asClient && booking.clientId?.phone && (
+                            <a href={`tel:${booking.clientId.phone}`} className="flex items-center gap-1 text-green-700 font-medium hover:underline">
+                              <Phone className="w-4 h-4" />
+                              {booking.clientId.phone}
+                            </a>
+                          )}
                           <span className="flex items-center gap-1">
                             <Calendar className="w-4 h-4 text-gray-400" />
                             {formatDate(booking.preferredDate)}

@@ -60,7 +60,7 @@ const bookingSchema = new mongoose.Schema({
   // ── Service details ──
   serviceCategory: { type: String, required: true },
   subService: { type: String, required: true },
-  serviceDescription: { type: String, required: true },
+  serviceDescription: { type: String, default: '' }, // optional
 
   // ── Pricing (optional) ──
   hourlyRate: { type: Number, min: 0, default: 0 },
@@ -68,13 +68,13 @@ const bookingSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true, min: 0 },
 
   // ── Scheduling ──
-  preferredDate: { type: Date, required: true },
-  preferredTime: { type: String, required: true },
+  preferredDate: { type: Date, default: Date.now },
+  preferredTime: { type: String, default: 'To be agreed' },
   duration: { type: Number, default: 1 },
 
   // ── Location ──
   location: {
-    address: { type: String, required: true },
+    address: { type: String, default: 'To be agreed with the Fundi' },
     // Pinned by the client from their device ("use my location"); the expert's
     // evidence photo GPS is checked against it
     coordinates: {

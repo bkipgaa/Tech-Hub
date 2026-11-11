@@ -12,7 +12,7 @@ import NearYou from '../components/stays/NearYou';
 
 const CLIENT_STEPS = [
   { title: 'Search for a Service', text: 'Browse categories or search for specific services you need' },
-  { title: 'Choose an Expert', text: 'Compare profiles, ratings, and prices from verified professionals' },
+  { title: 'Choose a Fundi', text: 'Compare profiles, ratings, and prices from verified professionals' },
   { title: 'Book & Get Service', text: 'Schedule your service and get quality work done' },
 ];
 
@@ -140,7 +140,7 @@ const Home = () => {
                   Here's how your business on <Wordmark className="" onDark /> is doing
                 </p>
                 <p className="mt-2 text-base sm:text-lg font-bold text-white leading-relaxed">
-                  Need a job done outside your skills? You can find and book other experts too.
+                  Need a job done outside your skills? You can find and book other Fundis too.
                 </p>
               </div>
             </>
@@ -151,7 +151,7 @@ const Home = () => {
               </h1>
               <div className="max-w-3xl mx-auto px-5 py-4 animate-fadeInUp">
                 <p className="text-xl sm:text-2xl font-extrabold text-white">
-                  Your trusted marketplace for experts, stays and places to go
+                  Your trusted marketplace for Fundis, stays and places to go
                 </p>
                 <p className="mt-2 text-base sm:text-lg font-bold text-white leading-relaxed">
                   Hire verified professionals, from IT solutions to home repairs. Find Airbnbs, hotels,
@@ -167,7 +167,7 @@ const Home = () => {
               onClick={() => navigate('/search')}
               className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors flex items-center gap-2"
             >
-              Find an Expert
+              Find a Fundi
               <ArrowRight className="w-5 h-5" />
             </button>
             <button
@@ -188,7 +188,7 @@ const Home = () => {
                 onClick={() => navigate('/become-technician')}
                 className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors"
               >
-                Become an Expert
+                Become a Fundi
               </button>
             )}
           </div>
@@ -216,7 +216,7 @@ const Home = () => {
           </h2>
           <p className="text-gray-500 text-sm">
             {isTechnician
-              ? 'Find an expert for jobs outside your skills — most requested categories'
+              ? 'Find a Fundi for jobs outside your skills — most requested categories'
               : 'Categories with the most completed bookings'}
           </p>
         </div>
@@ -329,7 +329,7 @@ const Home = () => {
             onClick={() => navigate('/become-technician')}
             className="bg-white text-green-700 px-6 py-2.5 rounded-md font-semibold hover:bg-gray-100 transition-colors text-sm"
           >
-            Become an Expert Today
+            Become a Fundi Today
           </button>
         </div>
       </div>

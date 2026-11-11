@@ -177,7 +177,7 @@ export default function Users() {
             <UsersIcon className="w-6 h-6 text-blue-600" /> Users
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            All clients and experts registered on the platform.
+            All clients and Fundis registered on the platform.
           </p>
         </div>
         <button
@@ -209,7 +209,7 @@ export default function Users() {
           <StatCard icon={UserCheck} label="Active"         value={stats.active}       tint="bg-green-50 text-green-600" />
           <StatCard icon={UserX}     label="Suspended"      value={stats.suspended ?? stats.inactive} tint="bg-red-50 text-red-600" />
           <StatCard icon={UsersIcon} label="Clients"        value={stats.clients}      tint="bg-gray-100 text-gray-600" />
-          <StatCard icon={UsersIcon} label="Experts"    value={stats.technicians}  tint="bg-indigo-50 text-indigo-600" />
+          <StatCard icon={UsersIcon} label="Fundis"    value={stats.technicians}  tint="bg-indigo-50 text-indigo-600" />
           <StatCard icon={UserPlus}  label="New This Month" value={stats.newThisMonth} tint="bg-amber-50 text-amber-600" />
         </div>
       )}
@@ -234,7 +234,7 @@ export default function Users() {
         >
           <option value="all">All roles</option>
           <option value="client">Clients</option>
-          <option value="technician">Experts</option>
+          <option value="technician">Fundis</option>
           <option value="admin">Admins</option>
         </select>
 

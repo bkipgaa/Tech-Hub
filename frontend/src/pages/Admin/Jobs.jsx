@@ -24,7 +24,7 @@ const TABS = [
 const fmt = (d) =>
   d ? new Date(d).toLocaleString('en-KE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const kes = (n, c = 'KES') => `${c} ${Number(n || 0).toLocaleString('en-KE')}`;
-const roleLabel = (r) => (r === 'technician' ? 'Expert' : 'Client');
+const roleLabel = (r) => (r === 'technician' ? 'Fundi' : 'Client');
 
 const JobCard = ({ job, tab, onDone }) => {
   const [mode, setMode] = useState(null); // 'reject' | 'takedown'

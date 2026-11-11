@@ -41,7 +41,7 @@ const Placeholder = ({ children }) => (
 );
 
 export const ExpertCard = ({ tech, rank, onClick }) => {
-  const name = [tech.user?.firstName, tech.user?.lastName].filter(Boolean).join(' ') || tech.businessName || 'Expert';
+  const name = [tech.user?.firstName, tech.user?.lastName].filter(Boolean).join(' ') || tech.businessName || 'Fundi';
   const initials = `${tech.user?.firstName?.[0] || ''}${tech.user?.lastName?.[0] || ''}` || 'E';
   const rating = tech.rating?.average || 0;
 
@@ -168,9 +168,9 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
 
       {/* ─── Top 10 experts ─── */}
       <section>
-        <SectionHeading icon={Award} title="Top 10 experts" subtitle="Ranked by rating, then by jobs completed" />
+        <SectionHeading icon={Award} title="Top 10 Fundis" subtitle="Ranked by rating, then by jobs completed" />
         {top.loading ? spinner : top.data.length === 0 ? (
-          <Placeholder>Top experts will show here once jobs are rated.</Placeholder>
+          <Placeholder>Top Fundis will show here once jobs are rated.</Placeholder>
         ) : (
           <div className={GRID}>
             {top.data.map((tech, i) => (
@@ -182,14 +182,14 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
 
       {/* ─── Top 5 near you ─── */}
       <section>
-        <SectionHeading icon={MapPin} title="Experts near you" subtitle={`The closest available experts within ${NEARBY_RADIUS_KM} km`} />
+        <SectionHeading icon={MapPin} title="Fundis near you" subtitle={`The closest available Fundis within ${NEARBY_RADIUS_KM} km`} />
         {!userLocation ? (
           <Placeholder>
             {locationStatus === 'loading' ? (
               'Finding your location…'
             ) : (
               <>
-                <p className="mb-3">Allow location access to see experts near you.</p>
+                <p className="mb-3">Allow location access to see Fundis near you.</p>
                 <button
                   type="button"
                   onClick={onEnableLocation}
@@ -202,7 +202,7 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
             )}
           </Placeholder>
         ) : nearby.loading || !nearby.loaded ? spinner : nearby.data.length === 0 ? (
-          <Placeholder>No experts within {NEARBY_RADIUS_KM} km yet. Try Search with a wider radius.</Placeholder>
+          <Placeholder>No Fundis within {NEARBY_RADIUS_KM} km yet. Try Search with a wider radius.</Placeholder>
         ) : (
           <div className={GRID}>
             {nearby.data.map((tech) => (

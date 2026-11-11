@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Wrench,
   MapPin,
@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
+import BookFundiModal from '../components/booking/BookFundiModal';
+import { categoryPath } from '../utils/servicePaths';
 
 const TechnicianSearchResults = () => {
   const navigate = useNavigate();
@@ -38,6 +40,20 @@ const TechnicianSearchResults = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sortBy, setSortBy] = useState('recommended'); // recommended | distance | rating | price | experience
+  const routerLocation = useLocation();
+  const [bookingFundi, setBookingFundi] = useState(null); // Fundi the Book Fundi form is open for
+
+  // The service picked in the search goes with the client to the profile
+  const profileLink = (tech) =>
+    `/technician/${tech._id ?? tech.id}?${new URLSearchParams({ serviceCategory, subService })}`;
+
+  const handleBook = (tech) => {
+    if (!localStorage.getItem('user')) {
+      navigate('/login', { state: { from: routerLocation } });
+      return;
+    }
+    setBookingFundi(tech);
+  };
 
   // Fetch technicians on mount — location is required, so ask for it first
   // when the link didn't include it
@@ -56,7 +72,7 @@ const TechnicianSearchResults = () => {
   }, [lat, lng]);
 
   const requestLocation = () => {
-    const required = 'Please allow location access. We need your location to show experts near you.';
+    const required = 'Please allow location access. We need your location to show Fundis near you.';
     if (!navigator.geolocation) {
       setError(required);
       setLoading(false);
@@ -102,14 +118,14 @@ const TechnicianSearchResults = () => {
       if (payload.success) {
         setTechnicians(Array.isArray(data) ? data : []);
         if (data.length === 0) {
-          setError('No experts found for this service within the selected distance.');
+          setError('No Fundis found for this service within the selected distance.');
         }
       } else {
-        setError(payload.message || 'Failed to fetch experts.');
+        setError(payload.message || 'Failed to fetch Fundis.');
       }
     } catch (err) {
       console.error('Search error:', err);
-      setError('Could not load experts. Please try again.');
+      setError('Could not load Fundis. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -136,14 +152,14 @@ const TechnicianSearchResults = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <button
-                onClick={() => navigate('/services')}
+                onClick={() => navigate(mainCategory && serviceCategory ? categoryPath(mainCategory, serviceCategory) : '/services')}
                 className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-2"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Back to Services
+                Back to {serviceCategory || 'Services'}
               </button>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
-                Experts for {subService}
+                Fundis for {subService}
               </h1>
               <p className="text-sm text-gray-500 mt-1">
                 {mainCategory} &rsaquo; {serviceCategory} &rsaquo; {subService}
@@ -178,7 +194,7 @@ const TechnicianSearchResults = () => {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-10 h-10 text-green-600 animate-spin mb-4" />
-            <p className="text-gray-600">Finding experts near you...</p>
+            <p className="text-gray-600">Finding Fundis near you...</p>
           </div>
         ) : error ? (
           <div className="max-w-xl mx-auto text-center py-16">
@@ -210,7 +226,7 @@ const TechnicianSearchResults = () => {
               <span className="font-semibold text-gray-800">
                 {technicians.length}
               </span>{' '}
-              technician{technicians.length !== 1 ? 's' : ''}
+              Fundi{technicians.length !== 1 ? 's' : ''}
             </p>
 
             {technicians.map((tech) => (
@@ -224,7 +240,7 @@ const TechnicianSearchResults = () => {
                     {tech.user?.profileImage ? (
                       <img
                         src={cldImage(tech.user.profileImage, AVATAR_WIDTH)}
-                        alt={`${tech.user?.firstName ?? 'Expert'} profile`}
+                        alt={`${tech.user?.firstName ?? 'Fundi'} profile`}
                         className="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
                         onError={(e) => {
                           e.target.style.display = 'none';
@@ -261,7 +277,7 @@ const TechnicianSearchResults = () => {
                         <p className="text-sm text-gray-600">
                           {tech.profileHeadline ||
                             tech.businessName ||
-                            'Expert'}
+                            'Fundi'}
                         </p>
                       </div>
 
@@ -331,15 +347,21 @@ const TechnicianSearchResults = () => {
                     )}
 
                     {/* Action */}
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap justify-end gap-2">
                       <button
-                        onClick={() =>
-                          navigate(`/technician/${tech._id ?? tech.id}`)
-                        }
-                        className="bg-gray-800 text-white px-6 py-2 rounded-lg font-medium hover:bg-green-600 transition-colors"
+                        onClick={() => navigate(profileLink(tech))}
+                        className="border border-gray-300 text-gray-700 px-5 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                       >
-                        View Profile &amp; Book
+                        View Profile
                       </button>
+                      {tech.acceptingBookings !== false && (
+                        <button
+                          onClick={() => handleBook(tech)}
+                          className="bg-green-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+                        >
+                          Book Fundi
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -348,6 +370,16 @@ const TechnicianSearchResults = () => {
           </div>
         )}
       </div>
+
+      {bookingFundi && (
+        <BookFundiModal
+          technicianId={bookingFundi._id ?? bookingFundi.id}
+          fundiName={bookingFundi.user?.firstName || 'this Fundi'}
+          presetCategory={serviceCategory}
+          presetSubService={subService}
+          onClose={() => setBookingFundi(null)}
+        />
+      )}
     </div>
   );
 };

@@ -482,7 +482,7 @@ const BookingDetail = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <Detail
                   label="Provided by"
-                  value={booking.materials.providedByClient ? 'Client' : 'Expert'}
+                  value={booking.materials.providedByClient ? 'Client' : 'Fundi'}
                 />
                 {booking.materials.moneyReceivedAt && (
                   <Detail label="Money received" value={formatDateTime(booking.materials.moneyReceivedAt)} />
@@ -571,7 +571,7 @@ const BookingDetail = () => {
               )}
               {booking.technicianNotes && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Expert</p>
+                  <p className="text-xs text-gray-500 mb-0.5">Fundi</p>
                   <p className="text-sm text-gray-700">{booking.technicianNotes}</p>
                 </div>
               )}
@@ -623,10 +623,10 @@ const BookingDetail = () => {
           </Card>
 
           {/* Technician */}
-          <Card title="Expert" icon={Wrench}>
+          <Card title="Fundi" icon={Wrench}>
             <PersonCard
               user={techUser}
-              subtitle={tech.businessName || tech.mainCategory || 'Expert'}
+              subtitle={tech.businessName || tech.mainCategory || 'Fundi'}
               extra={tech.mainCategory}
             />
           </Card>
@@ -691,8 +691,8 @@ const BookingDetail = () => {
         >
           <p className="text-sm text-gray-600 mb-3">
             {reviewModal.decision === 'admin_ok'
-              ? 'Approving lets the expert record the labor payment even if the client disputed or has not answered.'
-              : 'Rejecting stops the expert from recording payment and stops the client from rating this job.'}
+              ? 'Approving lets the Fundi record the labor payment even if the client disputed or has not answered.'
+              : 'Rejecting stops the Fundi from recording payment and stops the client from rating this job.'}
           </p>
           <textarea
             value={reviewModal.note}
@@ -797,14 +797,14 @@ const RatingTiming = ({ booking }) => {
       </p>
       {check && (
         <p>
-          <span className="text-gray-400">Since this expert's previous rating:</span> {formatGap(check.minutesSincePreviousRating)}
+          <span className="text-gray-400">Since this Fundi's previous rating:</span> {formatGap(check.minutesSincePreviousRating)}
           {' · '}<span className="text-gray-400">counted ratings in the 24 h before:</span> {check.ratingsInPrevious24h ?? 0}
         </p>
       )}
       {status && <span className={`inline-flex px-2 py-0.5 rounded-full font-medium ${status.color}`}>{status.label}</span>}
       {check?.flags?.includes('short_gap') && (
         <p className="text-yellow-800 flex items-center gap-1">
-          <AlertTriangle className="w-3.5 h-3.5" /> Rated soon after the expert's previous rating
+          <AlertTriangle className="w-3.5 h-3.5" /> Rated soon after the Fundi's previous rating
         </p>
       )}
       {check?.reviewedAt && (

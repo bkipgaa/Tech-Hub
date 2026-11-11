@@ -31,6 +31,7 @@ import {
   ChevronUp,
   Eye,
   User,
+  Phone,
   Briefcase,
   Calendar as CalendarIcon,
   X,
@@ -417,7 +418,7 @@ const TechnicianBookings = () => {
       <div className="min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Expert Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Fundi Dashboard</h1>
           </div>
           <SkeletonLoader />
         </div>
@@ -433,7 +434,7 @@ const TechnicianBookings = () => {
         {/* ─── HEADER ─────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Expert Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Fundi Dashboard</h1>
             {!loading && bookings.length > 0 && (
               <p className="text-sm text-gray-500 mt-1">
                 Showing {bookings.length} booking{bookings.length > 1 ? 's' : ''}
@@ -567,6 +568,12 @@ const TechnicianBookings = () => {
                             <User className="w-4 h-4 text-gray-400" />
                             {getClientName(booking)}
                           </span>
+                          {booking.clientId?.phone && (
+                            <a href={`tel:${booking.clientId.phone}`} className="flex items-center gap-1 text-green-700 font-medium hover:underline">
+                              <Phone className="w-4 h-4" />
+                              {booking.clientId.phone}
+                            </a>
+                          )}
                           <span className="flex items-center gap-1">
                             <Calendar className="w-4 h-4 text-gray-400" />
                             {formatDate(booking.preferredDate)}

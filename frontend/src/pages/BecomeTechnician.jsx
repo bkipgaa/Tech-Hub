@@ -38,7 +38,7 @@ const BecomeTechnician = () => {
           navigate('/create-technician-profile');
         }, 2000);
       } else {
-        setError(result.error || 'Failed to become expert');
+        setError(result.error || 'Failed to become Fundi');
       }
     } catch (err) {
       console.error('Become technician error:', err);
@@ -55,7 +55,7 @@ const BecomeTechnician = () => {
           <div className="bg-red-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
             <Wrench className="w-10 h-10 text-red-600" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800">Become an Expert</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Become a Fundi</h1>
           <p className="text-gray-600 mt-2">
             Upgrade your account to start offering services and earning money
           </p>
@@ -72,7 +72,7 @@ const BecomeTechnician = () => {
           <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-6 rounded text-center">
             <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-600" />
             <h3 className="text-xl font-bold mb-2">Success!</h3>
-            <p>You are now an expert. Redirecting to profile creation...</p>
+            <p>You are now a Fundi. Redirecting to profile creation...</p>
           </div>
         ) : (
           <>
@@ -81,7 +81,7 @@ const BecomeTechnician = () => {
               <ul className="space-y-2 text-gray-600">
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <span>Create your professional expert profile</span>
+                  <span>Create your professional Fundi profile</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -105,7 +105,7 @@ const BecomeTechnician = () => {
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
               <p className="text-sm text-yellow-800">
                 <strong>Note:</strong> Your current role is <strong>{userRoleLabel(user.role)}</strong>. 
-                After upgrading, you'll be able to create your expert profile.
+                After upgrading, you'll be able to create your Fundi profile.
               </p>
             </div>
 
@@ -121,7 +121,7 @@ const BecomeTechnician = () => {
                 </>
               ) : (
                 <>
-                  <span>Upgrade to Expert</span>
+                  <span>Upgrade to Fundi</span>
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}

@@ -34,6 +34,7 @@ import Services from './pages/Services';
 import Technicians from './pages/Technicians';
 import TechnicianProfile from './pages/TechnicianProfile';
 import TechnicianSearchResults from './pages/TechnicianSearchResults';
+import ServiceCategory from './pages/ServiceCategory';
 import Search from './pages/Search';
 import SignUp from './pages/SignUp';
 import Login from './pages/Login';
@@ -97,6 +98,8 @@ function App() {
           {/* ── Public routes ─────────────────────────────── */}
           <Route index element={<Home />} />
           <Route path="services" element={<Services />} />
+          <Route path="services/:mainCategory" element={<ServiceCategory />} />
+          <Route path="services/:mainCategory/:serviceCategory" element={<ServiceCategory />} />
           <Route path="terms" element={<Terms />} />
 <Route path="privacy" element={<Privacy />} />      
           <Route path="technicians" element={<Technicians />} />

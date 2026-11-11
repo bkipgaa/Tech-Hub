@@ -317,7 +317,7 @@ const SearchPage = () => {
             errorMessage += 'Please check your location settings.';
         }
         // Location is required to search — don't fall back to a search without it
-        setSearchError(`${errorMessage} Your location is needed to show experts near you.`);
+        setSearchError(`${errorMessage} Your location is needed to show Fundis near you.`);
         setGettingLocation(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
@@ -361,7 +361,7 @@ const SearchPage = () => {
       if (response.data.success) {
         setTechnicians(response.data.data || []);
         if (response.data.data?.length === 0) {
-          setSearchError('No experts match your criteria. Try broadening your search.');
+          setSearchError('No Fundis match your criteria. Try broadening your search.');
         }
       } else {
         setTechnicians([]);
@@ -494,7 +494,7 @@ const SearchPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Find an Expert</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-6">Find a Fundi</h1>
 
         {/* ===== CATALOG FALLBACK WARNING ===== */}
         {usingDefaultCatalog && (
@@ -748,7 +748,7 @@ const SearchPage = () => {
           <div className="mb-4 text-sm text-gray-500 flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200">
             <MapPin className="w-4 h-4 text-green-600" />
             <span>
-              Showing experts within <strong>{filters.radius} km</strong> of your location
+              Showing Fundis within <strong>{filters.radius} km</strong> of your location
             </span>
             {filters.radius > 100 && (
               <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
@@ -762,7 +762,7 @@ const SearchPage = () => {
         {technicians.length === 0 && !loading && !searchError && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No experts found matching your criteria</p>
+            <p className="text-gray-500">No Fundis found matching your criteria</p>
             <p className="text-sm text-gray-400 mt-2">
               Try adjusting your filters or increasing the search radius
             </p>
@@ -849,7 +849,7 @@ const SearchPage = () => {
                               )}
                             </div>
                             <p className="text-gray-600 mt-1">
-                              {tech.profileHeadline || tech.businessName || 'Expert'}
+                              {tech.profileHeadline || tech.businessName || 'Fundi'}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 bg-yellow-50 px-3 py-1 rounded-full">
@@ -877,7 +877,11 @@ const SearchPage = () => {
                           {tech.visibilityRadius && (
                             <div className="flex items-center gap-1 text-sm text-gray-500">
                               <Globe className="w-4 h-4" />
-                              <span>Visible up to {tech.visibilityRadius} km</span>
+                              <span>
+                                {tech.extendedReach
+                                  ? 'Further away: shown because few Fundis are closer'
+                                  : `Visible up to ${tech.visibilityRadius} km`}
+                              </span>
                             </div>
                           )}
                           <div className="flex items-center gap-1 text-sm text-gray-500">

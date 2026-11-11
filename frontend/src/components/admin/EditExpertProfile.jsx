@@ -84,7 +84,7 @@ const EditExpertProfile = ({ tech, onSaved, onCancel }) => {
   return (
     <form onSubmit={save} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-gray-800">Edit expert profile</h2>
+        <h2 className="text-base font-semibold text-gray-800">Edit Fundi profile</h2>
         <button type="button" onClick={onCancel} className="p-1 text-gray-400 hover:text-gray-700" aria-label="Close">
           <X className="w-5 h-5" />
         </button>

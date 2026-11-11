@@ -23,7 +23,7 @@ const CONTENT = {
       {
         icon: TrendingUp,
         title: 'Higher ratings, more visibility',
-        text: 'Search results rank well-rated experts first, putting you above most other experts.',
+        text: 'Search results rank well-rated Fundis first, putting you above most other Fundis.',
       },
       {
         icon: Briefcase,
@@ -38,12 +38,12 @@ const CONTENT = {
       {
         icon: ShieldCheck,
         title: 'Accountability',
-        text: 'Every booking is recorded with Webafix, so the expert is accountable for the work they agreed to do.',
+        text: 'Every booking is recorded with Webafix, so the Fundi is accountable for the work they agreed to do.',
       },
       {
         icon: Star,
-        title: 'Rate your expert',
-        text: 'Only booked jobs can be rated. Your rating boosts good experts and their place in search, and helps other clients choose well.',
+        title: 'Rate your Fundi',
+        text: 'Only booked jobs can be rated. Your rating boosts good Fundis and their place in search, and helps other clients choose well.',
       },
       {
         icon: FileText,

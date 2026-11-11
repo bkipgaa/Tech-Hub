@@ -303,7 +303,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Become technician error:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to upgrade to expert',
+        error: error.response?.data?.message || 'Failed to upgrade to Fundi',
       };
     }
   };
@@ -365,7 +365,7 @@ export const AuthProvider = ({ children }) => {
       if (!user) {
         return {
           success: false,
-          error: 'Please login first to create an expert profile'
+          error: 'Please login first to create a Fundi profile'
         };
       }
 
@@ -387,7 +387,7 @@ export const AuthProvider = ({ children }) => {
       
       return { 
         success: false, 
-        error: response.data.message || 'Failed to create expert profile' 
+        error: response.data.message || 'Failed to create Fundi profile' 
       };
     } catch (error) {
       console.error('Create profile error:', error);
@@ -401,7 +401,7 @@ export const AuthProvider = ({ children }) => {
       
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to create expert profile',
+        error: error.response?.data?.message || 'Failed to create Fundi profile',
       };
     }
   };
@@ -422,13 +422,13 @@ export const AuthProvider = ({ children }) => {
       
       return { 
         success: false, 
-        error: response.data.message || 'Failed to update expert profile' 
+        error: response.data.message || 'Failed to update Fundi profile' 
       };
     } catch (error) {
       console.error('Update profile error:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to update expert profile',
+        error: error.response?.data?.message || 'Failed to update Fundi profile',
       };
     }
   };
@@ -448,13 +448,13 @@ export const AuthProvider = ({ children }) => {
       
       return { 
         success: false, 
-        error: response.data.message || 'Expert not found' 
+        error: response.data.message || 'Fundi not found' 
       };
     } catch (error) {
       console.error('Error fetching technician:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to fetch expert',
+        error: error.response?.data?.message || 'Failed to fetch Fundi',
       };
     }
   };
@@ -683,7 +683,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to fetch experts',
+        error: error.response?.data?.message || 'Failed to fetch Fundis',
       };
     }
   };
@@ -701,7 +701,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to verify expert',
+        error: error.response?.data?.message || 'Failed to verify Fundi',
       };
     }
   };
@@ -719,7 +719,7 @@ const removeServiceCategory = async (categoryName, mainCategory) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to reject expert',
+        error: error.response?.data?.message || 'Failed to reject Fundi',
       };
     }
   };
