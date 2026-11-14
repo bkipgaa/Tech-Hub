@@ -20,6 +20,7 @@ const mongoose = require('mongoose');
 const jobEvidence = require('../utils/jobEvidence');
 const { checkNewRating, commissionOwed, countRatingIfReady } = require('../utils/ratingChecks');
 const { getEffectivePlan } = require('../utils/subscriptionPlans');
+const { isTechnicalCategory } = require('../data/serviceBuckets');
 const { uploadQuotationToCloudinary } = require('../config/cloudinary');
 
 // Technician business name plus the person's name (no contact details)
@@ -225,9 +226,13 @@ exports.createBooking = async (req, res) => {
       bookingLocation.pinnedAt = new Date();
     }
 
-    // On the Free plan the expert owes a commission on this job once it's done
+    // On the Free plan the expert owes a commission on this job once it's done.
+    // Non-technical services are free for now: no commission.
     const effectivePlan = getEffectivePlan(technician.subscription);
-    const commission = effectivePlan.commissionPerJob > 0
+    const bookedMain = (technician.serviceCategories || [])
+      .find((sc) => String(sc.categoryName || '').toLowerCase() === String(serviceCategory || '').toLowerCase())
+      ?.mainCategory || technician.mainCategory;
+    const commission = effectivePlan.commissionPerJob > 0 && isTechnicalCategory(bookedMain)
       ? { amount: effectivePlan.commissionPerJob, plan: effectivePlan.plan, status: 'unpaid' }
       : { amount: 0, plan: effectivePlan.plan };
 

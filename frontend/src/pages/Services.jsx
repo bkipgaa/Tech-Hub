@@ -1,19 +1,20 @@
 /**
  * Services Page
  * =============
- * Main categories in a 4-column grid. Picking one opens its own page
- * (/services/:mainCategory) to choose a service category, then a distance,
- * then the Fundis for a service (see ServiceCategory.jsx).
- * Below the grid: popular services, top Fundis and Fundis nearby.
+ * The service buckets first (Technical Services, Personal Care & Appearance,
+ * …). Picking one (/services?bucket=<id>) lists its main categories; a
+ * category opens its own page (/services/:mainCategory) to choose a service
+ * category, then a distance, then the Fundis (see ServiceCategory.jsx).
+ * Below: popular services, top Fundis and Fundis nearby.
  *
- * @version 5.0.0 – Category grid; each step on its own page
+ * @version 6.0.0 – Buckets first, then their categories
  * @author Webafix Team
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Wrench, Loader2, AlertCircle, ArrowRight, Search } from 'lucide-react';
-import api from '../services/api';
+import { Wrench, Loader2, AlertCircle, ArrowRight, ArrowLeft, Search, ChevronRight } from 'lucide-react';
+import useServiceBuckets from '../hooks/useServiceBuckets';
 import useMyLocation from '../hooks/useMyLocation';
 import ServicesHighlights from '../components/ServicesHighlights';
 import { categoryPath } from '../utils/servicePaths';
@@ -38,41 +39,16 @@ const Services = () => {
   // ?category= (new clients land here after signup) opens that category's page
   const [searchParams] = useSearchParams();
   const categoryParam = searchParams.get('category');
+  const bucketParam = searchParams.get('bucket');
 
-  const [catalog, setCatalog] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { buckets, loading, error, retry } = useServiceBuckets();
+  const bucket = buckets.find((b) => b.id === bucketParam);
 
   const { location: userLocation, status, locate } = useMyLocation({ autoIfGranted: true });
 
   useEffect(() => {
-    if (categoryParam) {
-      navigate(categoryPath(categoryParam), { replace: true });
-      return;
-    }
-    fetchServiceCatalog();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryParam]);
-
-  const fetchServiceCatalog = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await api.get('/service-catalog/categories-with-counts');
-      const payload = response.data ?? response;
-      const data = payload.data ?? payload ?? [];
-      setCatalog(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to load services:', err);
-      let msg = 'Could not load services. ';
-      if (err.response) msg += `Server error (${err.response.status}). `;
-      else if (err.request) msg += 'No response from server. Check your internet connection. ';
-      else msg += 'An unexpected error occurred. ';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (categoryParam) navigate(categoryPath(categoryParam), { replace: true });
+  }, [categoryParam, navigate]);
 
   if (loading) {
     return (
@@ -94,7 +70,7 @@ const Services = () => {
             <p className="font-semibold mb-1">Unable to load services</p>
             <p className="text-sm text-red-600 mb-4">{error}</p>
             <button
-              onClick={fetchServiceCatalog}
+              onClick={retry}
               className="bg-red-600 text-white px-5 py-2 rounded-lg hover:bg-red-700 transition-colors font-medium"
             >
               Try Again
@@ -111,9 +87,11 @@ const Services = () => {
         {/* ─── Header ─────────────────────────────────── */}
         <div className="mb-6 md:mb-8 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Browse Services</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{bucket ? bucket.name : 'Browse Services'}</h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">
-              Pick a category → choose a service → set your distance → book a Fundi.
+              {bucket
+                ? 'Pick a category → choose a service → set your distance → book a Fundi.'
+                : 'Pick a group of services to see its categories.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end lg:max-w-xl">
@@ -130,16 +108,26 @@ const Services = () => {
           </div>
         </div>
 
-        {/* ─── Main categories (4 columns of plain links) ─────────────── */}
-        {catalog.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1">
-            {catalog.map((cat) => (
+        {bucket ? (
+          <BucketCategories bucket={bucket} onBack={() => navigate('/services')} onPick={(name) => navigate(categoryPath(name))} />
+        ) : buckets.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {buckets.map((b) => (
               <button
-                key={cat.mainCategory}
-                onClick={() => navigate(categoryPath(cat.mainCategory))}
-                className="text-left py-2 px-2 -mx-2 rounded-md text-sm md:text-base font-medium text-gray-800 hover:text-green-700 hover:bg-green-50 transition-colors"
+                key={b.id}
+                type="button"
+                onClick={() => navigate(`/services?bucket=${b.id}`)}
+                className="group text-left bg-white border border-gray-200 rounded-xl p-4 hover:border-green-500 hover:shadow-sm transition"
               >
-                {cat.mainCategory}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-gray-900 group-hover:text-green-700">{b.name}</span>
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-green-600 flex-shrink-0" />
+                </div>
+                <p className="text-sm text-gray-500 mt-1">{b.description}</p>
+                <p className="text-xs text-gray-400 mt-2">
+                  {b.categories.length} {b.categories.length === 1 ? 'category' : 'categories'}
+                  {!b.technical && b.freeRadiusKm ? ` · free within ${b.freeRadiusKm} km` : ''}
+                </p>
               </button>
             ))}
           </div>
@@ -174,5 +162,35 @@ const Services = () => {
     </div>
   );
 };
+
+// A bucket's main categories, as 4 columns of plain links
+const BucketCategories = ({ bucket, onBack, onPick }) => (
+  <div>
+    <button
+      type="button"
+      onClick={onBack}
+      className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 mb-4"
+    >
+      <ArrowLeft className="w-4 h-4" /> All service groups
+    </button>
+    {!bucket.technical && bucket.freeRadiusKm && (
+      <p className="text-sm text-gray-500 mb-3">
+        Fundis in these categories serve clients within {bucket.freeRadiusKm} km of them.
+      </p>
+    )}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1">
+      {bucket.categories.map((cat) => (
+        <button
+          key={cat.name}
+          type="button"
+          onClick={() => onPick(cat.name)}
+          className="text-left py-2 px-2 -mx-2 rounded-md text-sm md:text-base font-medium text-gray-800 hover:text-green-700 hover:bg-green-50 transition-colors"
+        >
+          {cat.name}
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 export default Services;

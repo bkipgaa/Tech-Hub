@@ -6,7 +6,10 @@
  * (never renames or removes), so existing names are kept exactly as they are.
  *
  * Services are written as one string separated by "|" to keep the file short.
- * Goal: every category has 5+ service categories, each with 10+ services.
+ * Goal: every category has 4+ service categories, each with 10+ services.
+ * Which bucket each category sits in: data/serviceBuckets.js.
+ * Property & Real Estate was removed (Stays & Spaces covers property);
+ * scripts/expandServiceCatalog.js switches it off in the database.
  */
 
 module.exports = {
@@ -254,12 +257,13 @@ module.exports = {
     'Home Management': 'Home Organizing|Decluttering|Grocery Shopping|Meal Preparation|Home Maintenance Coordination|House Sitting|Plant Watering|Laundry Folding & Organizing|Closet Organizing|Move-in Setup',
   },
 
-  // Experts who work with the properties listed under Stays & Spaces
-  'Property & Real Estate': {
-    'Property Management': 'Residential Property Management|Commercial Property Management|Rent Collection|Tenant Screening|Lease Preparation & Renewal|Property Inspections|Maintenance Coordination|Service Charge Management|Estate & Apartment Management|Short-Stay (Airbnb) Management',
-    'Real Estate Agents': 'Rental Listing & Letting|Property Sales|Land Sales|Property Valuation|Office & Commercial Letting|Buyer Representation|Property Marketing & Photography|Market Price Advice|Title Search Assistance|Property Investment Advice',
-    'House Hunting': 'House Hunting Assistance|Office Space Search|Student Room Search|Relocation Assistance|Viewing Arrangement|Neighbourhood Tours|Rental Negotiation|Move-in Inspection|Short-Stay Booking Help|Expat Housing Assistance',
-    'Short-Stay Hosting Services': 'Airbnb Setup & Listing|Guest Check-in Service|Turnover Cleaning|Linen & Laundry for Hosts|Listing Photography|Pricing & Calendar Management|Guest Communication|Interior Setup for Rentals|Amenities Restocking|Host Co-hosting',
-    'Landlord Services': 'Tenancy Agreements|Rent Arrears Follow-up|Tenant Move-out Inspection|Deposit Settlement|Utility Bill Management|Caretaker Services|Property Repairs Coordination|Eviction Process Guidance|Rental Income Reporting|Property Insurance Advice',
-  },
+  // ───────────── NEW CATEGORIES BY BUCKET (see data/serviceBuckets.js) ─────────────
+  ...require('./categories/technical'),
+  ...require('./categories/personalCare'),
+  ...require('./categories/homeProperty'),
+  ...require('./categories/healthCare'),
+  ...require('./categories/education'),
+  ...require('./categories/eventsMedia'),
+  ...require('./categories/businessDigital'),
+
 };

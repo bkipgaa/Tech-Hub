@@ -5,8 +5,9 @@
  * data/catalogExpansion.js to the ServiceCatalog collection.
  *
  * Safe to run more than once: it only ADDS what is missing (matching names
- * case-insensitively). It never renames, removes or deactivates anything,
- * so admin edits and existing technician selections are untouched.
+ * case-insensitively). It never renames or removes anything, so admin edits
+ * and existing technician selections are untouched. The one exception:
+ * categories in RETIRED_CATEGORIES (data/serviceBuckets.js) are switched off.
  *
  * Usage (from backend/):
  *   node scripts/expandServiceCatalog.js           # dry run — shows what would change
@@ -19,6 +20,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const ServiceCatalog = require('../models/ServiceCatalog');
 const expansion = require('../data/catalogExpansion');
+const { RETIRED_CATEGORIES } = require('../data/serviceBuckets');
 
 const APPLY = process.argv.includes('--apply');
 const key = (s) => String(s).trim().toLowerCase();
@@ -80,6 +82,19 @@ const key = (s) => String(s).trim().toLowerCase();
       }
     } else {
       console.log(`      ${mainCategory}: already complete`);
+    }
+  }
+
+  // Retired categories are switched off (not deleted), so experts' saved
+  // services and old bookings still read correctly.
+  for (const mainCategory of RETIRED_CATEGORIES) {
+    const retired = await ServiceCatalog.findOne({ mainCategory, isActive: true });
+    if (!retired) continue;
+    console.log(`[OFF]  ${mainCategory}: ${APPLY ? 'switched off' : 'would be switched off'}`);
+    if (APPLY) {
+      retired.isActive = false;
+      retired.version = (retired.version || 1) + 1;
+      await retired.save();
     }
   }
 

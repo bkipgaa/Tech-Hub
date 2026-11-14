@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import ServicePicker from '../components/ServicePicker';
+import useServiceBuckets from '../hooks/useServiceBuckets';
 import { EMPTY_GROUP, servicesError } from '../utils/serviceGroups';
 import { LISTING_GROUPS } from '../utils/listingCategories';
 import { getLivePosition, reverseGeocode } from '../utils/geo';
@@ -46,6 +47,8 @@ const SignUp = () => {
   const [intent, setIntent] = useState('');
   const [services, setServices] = useState([{ ...EMPTY_GROUP }]);
   const [mainCategory, setMainCategory] = useState('');
+  const [clientBucketId, setClientBucketId] = useState(''); // clients pick a service group first
+  const { buckets } = useServiceBuckets();
   const [listingCategory, setListingCategory] = useState('');
   const [location, setLocation] = useState(null); // { lat, lng, formattedAddress }
   const [address, setAddress] = useState({ city: '', state: '' });
@@ -269,7 +272,7 @@ const SignUp = () => {
               <div>
                 <p className="font-semibold text-gray-800">What services do you offer?</p>
                 <p className="text-sm text-gray-500">
-                  Pick your main category, then the service categories and services you do. You can add another category too.
+                  Pick your service group and main category, then the service categories and services you do. You can add another category too.
                   Your Fundi profile goes live once our team approves it.
                 </p>
               </div>
@@ -280,8 +283,34 @@ const SignUp = () => {
           {step === 1 && intent === 'client' && catalog && (
             <div className="space-y-3">
               <p className="font-semibold text-gray-800">What kind of Fundi are you looking for?</p>
+              {buckets.length > 0 && (
+                <p className="text-sm text-gray-500">{clientBucketId ? 'Now pick a category.' : 'Pick a group first.'}</p>
+              )}
+              {buckets.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {buckets.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => {
+                        setClientBucketId(b.id);
+                        if (!b.categories.some((c) => c.name === mainCategory)) setMainCategory('');
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold border-2 ${
+                        clientBucketId === b.id ? 'bg-green-600 text-white border-green-600' : 'border-gray-200 text-gray-800 hover:border-green-400'
+                      }`}
+                    >
+                      {b.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {buckets.length > 0 && !clientBucketId ? null : (
               <div className="flex flex-wrap gap-2">
-                {Object.keys(catalog).sort().map((m) => (
+                {(buckets.length > 0
+                  ? (buckets.find((b) => b.id === clientBucketId)?.categories || []).map((c) => c.name).filter((m) => catalog[m])
+                  : Object.keys(catalog).sort()
+                ).map((m) => (
                   <button
                     key={m}
                     type="button"
@@ -294,6 +323,7 @@ const SignUp = () => {
                   </button>
                 ))}
               </div>
+              )}
             </div>
           )}
 
