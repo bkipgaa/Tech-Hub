@@ -17,6 +17,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   UserPlus, Mail, Lock, User, Phone, Wrench, Search, Home as HomeIcon, BedDouble,
+  Scissors, HeartPulse, GraduationCap, PartyPopper, Briefcase,
   ArrowLeft, ArrowRight, Navigation, Loader2, CheckCircle, MapPin, AlertCircle, FileText, X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -28,12 +29,22 @@ import { LISTING_GROUPS } from '../utils/listingCategories';
 import { getLivePosition, reverseGeocode } from '../utils/geo';
 import { CV_ACCEPT, cvFileError } from '../utils/cv';
 
-const INTENTS = [
-  { id: 'expert', icon: Wrench, title: "I'm a Fundi", text: 'Offer my services and get hired' },
-  { id: 'client', icon: Search, title: 'I need a Fundi', text: 'Find someone near me for a job' },
-  { id: 'lister', icon: HomeIcon, title: 'I want to list a property', text: 'Stays, rentals, business or entertainment spaces' },
-  { id: 'stay_seeker', icon: BedDouble, title: "I'm looking for a stay or space", text: 'Find places near me' },
-];
+// One icon per service group (data/serviceBuckets.js on the backend)
+const GROUP_ICONS = {
+  technical: Wrench,
+  'personal-care': Scissors,
+  'home-property': HomeIcon,
+  'health-care': HeartPulse,
+  education: GraduationCap,
+  'events-media': PartyPopper,
+  'business-digital': Briefcase,
+};
+
+// Used when the groups can't be loaded: the original single Fundi choice
+const FALLBACK_GROUPS = [{ id: '', name: 'Services', expertTermSingular: 'Fundi' }];
+
+// "a Stylist", "an Event Pro"
+const withArticle = (word) => `${/^[aeiou]/i.test(word) ? 'an' : 'a'} ${word}`;
 
 const STEPS = ['You are', 'Details', 'Location', 'Account'];
 
@@ -48,7 +59,12 @@ const SignUp = () => {
   const [services, setServices] = useState([{ ...EMPTY_GROUP }]);
   const [mainCategory, setMainCategory] = useState('');
   const [clientBucketId, setClientBucketId] = useState(''); // clients pick a service group first
-  const { buckets } = useServiceBuckets();
+  const [expertBucketId, setExpertBucketId] = useState(''); // group picked on the first step
+  const { buckets, loading: bucketsLoading } = useServiceBuckets();
+  // What the chosen group calls its experts (Fundi, Stylist, Tutor, …)
+  const chosenGroup = buckets.find((b) => b.id === (intent === 'client' ? clientBucketId : expertBucketId));
+  const termOne = chosenGroup?.expertTermSingular || 'Fundi';
+  const term = chosenGroup?.expertTerm || 'Fundis';
   const [listingCategory, setListingCategory] = useState('');
   const [location, setLocation] = useState(null); // { lat, lng, formattedAddress }
   const [address, setAddress] = useState({ city: '', state: '' });
@@ -108,7 +124,7 @@ const SignUp = () => {
     if (step === 0 && !intent) return 'Choose how you will use Webafix.';
     if (step === 1) {
       if (intent === 'expert') return servicesError(services);
-      if (intent === 'client' && !mainCategory) return 'Pick the kind of Fundi you need.';
+      if (intent === 'client' && !mainCategory) return `Pick the kind of ${termOne} you need.`;
       if ((intent === 'lister' || intent === 'stay_seeker') && !listingCategory) return 'Pick a category.';
     }
     if (step === 2) {
@@ -190,15 +206,28 @@ const SignUp = () => {
     else navigate(`/stays?category=${listingCategory}&near=1`);
   };
 
-  const pickIntent = (id) => {
+  // bucketId: the service group chosen with "I'm a …" / "I need a …"
+  const pickIntent = (id, bucketId = '') => {
+    if (id === 'expert' && bucketId !== expertBucketId) {
+      setExpertBucketId(bucketId);
+      setServices([{ ...EMPTY_GROUP }]); // the picker starts in the new group
+    }
+    if (id === 'client' && bucketId !== clientBucketId) {
+      setClientBucketId(bucketId);
+      setMainCategory('');
+    }
     setIntent(id);
     setError('');
     setStep(1);
   };
 
+  const groups = buckets.length ? buckets : FALLBACK_GROUPS;
+  const isPicked = (id, bucketId) =>
+    intent === id && (id === 'expert' ? expertBucketId : id === 'client' ? clientBucketId : '') === bucketId;
+
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className={`w-full space-y-6 bg-white p-6 sm:p-10 rounded-2xl shadow-xl ${intent === 'expert' && step === 1 ? 'max-w-2xl' : 'max-w-md'}`}>
+    <div className="min-h-screen flex items-center justify-center py-6 sm:py-12 px-3 sm:px-6 lg:px-8">
+      <div className={`w-full space-y-6 bg-white p-4 sm:p-10 rounded-2xl shadow-xl ${step === 0 || (intent === 'expert' && step === 1) ? 'max-w-2xl' : 'max-w-md'}`}>
         <div>
           <h2 className="text-3xl font-bold text-center text-green-700">Create Account</h2>
           <p className="mt-2 text-center text-gray-600">Join Webafix today</p>
@@ -226,24 +255,53 @@ const SignUp = () => {
           {step === 0 && (
             <div className="space-y-3">
               <p className="font-semibold text-gray-800">How will you use Webafix?</p>
-              {INTENTS.map(({ id, icon: Icon, title, text }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => pickIntent(id)}
-                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-colors ${
-                    intent === id ? 'border-green-600 bg-green-50' : 'border-gray-200 hover:border-green-400 hover:bg-green-50'
-                  }`}
-                >
-                  <span className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-5 h-5" />
-                  </span>
-                  <span>
-                    <span className="block font-semibold text-gray-900">{title}</span>
-                    <span className="block text-sm text-gray-500">{text}</span>
-                  </span>
-                </button>
-              ))}
+
+              {/* Column headings: offer on the left, hire on the right */}
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 px-3 sm:px-4 text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <span className="inline-flex items-center gap-1.5"><Wrench className="w-3.5 h-3.5 text-green-600" /> Offer my services</span>
+                <span className="inline-flex items-center gap-1.5"><Search className="w-3.5 h-3.5 text-green-600" /> Hire someone</span>
+              </div>
+
+              {bucketsLoading ? (
+                <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-green-600" /></div>
+              ) : (
+                groups.map((g) => (
+                  <ChoiceRow
+                    key={g.id || 'services'}
+                    icon={GROUP_ICONS[g.id] || Wrench}
+                    label={g.name}
+                    left={{
+                      title: `I'm ${withArticle(g.expertTermSingular)}`,
+                      text: 'Offer my services',
+                      picked: isPicked('expert', g.id),
+                      onClick: () => pickIntent('expert', g.id),
+                    }}
+                    right={{
+                      title: `I need ${withArticle(g.expertTermSingular)}`,
+                      text: 'Find one near me',
+                      picked: isPicked('client', g.id),
+                      onClick: () => pickIntent('client', g.id),
+                    }}
+                  />
+                ))
+              )}
+
+              <ChoiceRow
+                icon={BedDouble}
+                label="Stays & Spaces"
+                left={{
+                  title: 'I want to list a property',
+                  text: 'Stays, rentals, business or event spaces',
+                  picked: isPicked('lister', ''),
+                  onClick: () => pickIntent('lister'),
+                }}
+                right={{
+                  title: "I'm looking for a stay or space",
+                  text: 'Find places near me',
+                  picked: isPicked('stay_seeker', ''),
+                  onClick: () => pickIntent('stay_seeker'),
+                }}
+              />
             </div>
           )}
 
@@ -273,16 +331,16 @@ const SignUp = () => {
                 <p className="font-semibold text-gray-800">What services do you offer?</p>
                 <p className="text-sm text-gray-500">
                   Pick your service group and main category, then the service categories and services you do. You can add another category too.
-                  Your Fundi profile goes live once our team approves it.
+                  Your {termOne} profile goes live once our team approves it.
                 </p>
               </div>
-              <ServicePicker catalog={catalog} value={services} onChange={setServices} />
+              <ServicePicker catalog={catalog} value={services} onChange={setServices} defaultBucketId={expertBucketId} />
             </div>
           )}
 
           {step === 1 && intent === 'client' && catalog && (
             <div className="space-y-3">
-              <p className="font-semibold text-gray-800">What kind of Fundi are you looking for?</p>
+              <p className="font-semibold text-gray-800">What kind of {termOne} are you looking for?</p>
               {buckets.length > 0 && (
                 <p className="text-sm text-gray-500">{clientBucketId ? 'Now pick a category.' : 'Pick a group first.'}</p>
               )}
@@ -361,7 +419,7 @@ const SignUp = () => {
                 <p className="font-semibold text-gray-800">Share your location <span className="text-red-500">*</span></p>
                 <p className="text-sm text-gray-500">
                   {intent === 'expert'
-                    ? 'Clients only see Fundis near them, so share it from where you usually work.'
+                    ? `Clients only see ${term} near them, so share it from where you usually work.`
                     : 'We use it to show you what is near you. You can change it later on your profile.'}
                 </p>
               </div>
@@ -531,5 +589,35 @@ const SignUp = () => {
     </div>
   );
 };
+
+// One service group: offer on the left, hire on the right
+const ChoiceButton = ({ title, text, picked, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={picked}
+    className={`min-h-[64px] w-full rounded-lg border-2 px-3 py-2.5 text-left transition-colors active:scale-[0.98] ${
+      picked ? 'border-green-600 bg-green-50' : 'border-gray-200 bg-white hover:border-green-400 hover:bg-green-50'
+    }`}
+  >
+    <span className="block text-sm sm:text-base font-semibold leading-snug text-gray-900">{title}</span>
+    <span className="block text-xs sm:text-sm text-gray-500 mt-0.5">{text}</span>
+  </button>
+);
+
+const ChoiceRow = ({ icon: Icon, label, left, right }) => (
+  <div className="rounded-xl border border-gray-200 bg-gray-50 p-2.5 sm:p-4">
+    <p className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700">
+      <span className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0">
+        <Icon className="w-4 h-4" />
+      </span>
+      {label}
+    </p>
+    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+      <ChoiceButton {...left} />
+      <ChoiceButton {...right} />
+    </div>
+  </div>
+);
 
 export default SignUp;
