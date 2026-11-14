@@ -17,16 +17,22 @@ import { Wrench, Loader2, AlertCircle, ArrowRight, ArrowLeft, Search, ChevronRig
 import useServiceBuckets from '../hooks/useServiceBuckets';
 import useMyLocation from '../hooks/useMyLocation';
 import ServicesHighlights from '../components/ServicesHighlights';
-import { categoryPath } from '../utils/servicePaths';
+import { categoryPath, HIGHLIGHT_SECTIONS as SECTION_IDS } from '../utils/servicePaths';
 
 // useMyLocation statuses → the ones ServicesHighlights expects
 const HIGHLIGHT_STATUS = { idle: 'idle', locating: 'loading', ready: 'success', error: 'error' };
 
-// Buttons beside the heading that jump to the sections in ServicesHighlights
-const JUMP_LINKS = [
-  { id: 'popular-services', label: 'Most popular services' },
-  { id: 'top-fundis', label: 'Top 10 Fundis' },
-  { id: 'fundis-near-you', label: 'Fundis near you' },
+// Buttons beside the heading that jump to the sections in ServicesHighlights.
+// The landing page only has popular services; a group also has its top and
+// nearby experts, under the group's name for them (Fundis, Stylists, …).
+const jumpLinks = (bucket) => [
+  { id: SECTION_IDS.popular, label: 'Most popular services' },
+  ...(bucket
+    ? [
+        { id: SECTION_IDS.top, label: `Top 10 ${bucket.expertTerm}` },
+        { id: SECTION_IDS.nearby, label: `${bucket.expertTerm} near you` },
+      ]
+    : []),
 ];
 
 const GREEN_BUTTON =
@@ -100,7 +106,7 @@ const Services = () => {
               Search
             </button>
             {/* Jump to the sections further down this page */}
-            {JUMP_LINKS.map(({ id, label }) => (
+            {jumpLinks(bucket).map(({ id, label }) => (
               <button key={id} type="button" onClick={() => jumpTo(id)} className={GREEN_BUTTON}>
                 {label}
               </button>
@@ -143,6 +149,7 @@ const Services = () => {
           userLocation={userLocation}
           locationStatus={HIGHLIGHT_STATUS[status] || 'idle'}
           onEnableLocation={locate}
+          bucket={bucket}
         />
       </div>
 
@@ -175,7 +182,7 @@ const BucketCategories = ({ bucket, onBack, onPick }) => (
     </button>
     {!bucket.technical && bucket.freeRadiusKm && (
       <p className="text-sm text-gray-500 mb-3">
-        Fundis in these categories serve clients within {bucket.freeRadiusKm} km of them.
+        {bucket.expertTerm} in these categories serve clients within {bucket.freeRadiusKm} km of them.
       </p>
     )}
     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1">

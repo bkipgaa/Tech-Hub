@@ -24,6 +24,8 @@ const RETIRED_CATEGORIES = ['Property & Real Estate'];
 const BUCKETS = [
   {
     id: 'technical',
+    expertTerm: 'Fundis',
+    expertTermSingular: 'Fundi',
     name: 'Technical Services',
     technical: true,
     description: 'Fundis for repairs, installations, building and tech',
@@ -41,6 +43,8 @@ const BUCKETS = [
   },
   {
     id: 'personal-care',
+    expertTerm: 'Stylists',
+    expertTermSingular: 'Stylist',
     name: 'Personal Care & Appearance',
     technical: false,
     description: 'Hair, beauty, grooming, clothing and accessories',
@@ -56,6 +60,8 @@ const BUCKETS = [
   },
   {
     id: 'home-property',
+    expertTerm: 'Home Pros',
+    expertTermSingular: 'Home Pro',
     name: 'Home & Property',
     technical: false,
     description: 'Cleaning, gardens, pests, moving and keeping homes safe',
@@ -71,6 +77,8 @@ const BUCKETS = [
   },
   {
     id: 'health-care',
+    expertTerm: 'Wellness Pros',
+    expertTermSingular: 'Wellness Pro',
     name: 'Health, Wellness & Care',
     technical: false,
     description: 'Fitness, therapy, nursing, childcare and pets',
@@ -86,6 +94,8 @@ const BUCKETS = [
   },
   {
     id: 'education',
+    expertTerm: 'Tutors',
+    expertTermSingular: 'Tutor',
     name: 'Education & Training',
     technical: false,
     description: 'Tutors, lessons, coaching and skills training',
@@ -101,6 +111,8 @@ const BUCKETS = [
   },
   {
     id: 'events-media',
+    expertTerm: 'Event Pros',
+    expertTermSingular: 'Event Pro',
     name: 'Events, Food & Media',
     technical: false,
     description: 'Events, catering, entertainment, photos and video',
@@ -116,6 +128,8 @@ const BUCKETS = [
   },
   {
     id: 'business-digital',
+    expertTerm: 'Freelancers',
+    expertTermSingular: 'Freelancer',
     name: 'Business & Digital',
     technical: false,
     description: 'Marketing, design, writing, accounts and admin support',
@@ -143,6 +157,48 @@ const bucketOf = (mainCategory) => bucketByCategory.get(key(mainCategory)) || TE
 /** True when the category keeps the paid plans and commission */
 const isTechnicalCategory = (mainCategory) => bucketOf(mainCategory).technical;
 
+/** A bucket by its id (undefined when unknown) */
+const bucketById = (id) => BUCKETS.find((b) => b.id === id);
+
+/** True when a main category falls in the given bucket */
+const inBucket = (mainCategory, bucketId) => bucketOf(mainCategory).id === bucketId;
+
+const NON_TECHNICAL_CATEGORIES = BUCKETS.filter((b) => !b.technical).flatMap((b) => b.categories);
+
+/**
+ * MongoDB filter for experts who work in a bucket (in their main category,
+ * extra categories or service categories). Technical also takes experts
+ * with any category the bucket file doesn't list, as bucketOf does.
+ */
+function bucketExpertFilter(bucketId) {
+  const bucket = bucketById(bucketId);
+  if (!bucket) return {};
+  if (!bucket.technical) {
+    const cats = bucket.categories;
+    return { $or: [
+      { mainCategory: { $in: cats } },
+      { mainCategories: { $in: cats } },
+      { 'serviceCategories.mainCategory': { $in: cats } },
+    ] };
+  }
+  const other = NON_TECHNICAL_CATEGORIES;
+  return { $or: [
+    { mainCategory: { $nin: other } },
+    { mainCategories: { $elemMatch: { $nin: other } } },
+    { serviceCategories: { $elemMatch: { mainCategory: { $exists: true, $nin: other } } } },
+  ] };
+}
+
+/** The category to show on an expert's card in a bucket: their first one in it */
+function expertCategoryIn(tech, bucketId) {
+  const cats = [
+    tech?.mainCategory,
+    ...(tech?.mainCategories || []),
+    ...(tech?.serviceCategories || []).map((sc) => sc?.mainCategory),
+  ].filter(Boolean);
+  return cats.find((c) => inBucket(c, bucketId)) || tech?.mainCategory;
+}
+
 /** Every listed category, in bucket order (used to order the catalog) */
 const CATEGORY_ORDER = BUCKETS.flatMap((b) => b.categories);
 
@@ -152,5 +208,9 @@ module.exports = {
   NON_TECHNICAL_FREE_RADIUS_KM,
   RETIRED_CATEGORIES,
   bucketOf,
+  bucketById,
+  inBucket,
+  bucketExpertFilter,
+  expertCategoryIn,
   isTechnicalCategory,
 };
