@@ -15,7 +15,8 @@ import { Plus, X, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { EMPTY_GROUP } from '../utils/serviceGroups';
 import useServiceBuckets from '../hooks/useServiceBuckets';
 
-const ServicePicker = ({ catalog, value, onChange }) => {
+// defaultBucketId: the service group to start the first category in
+const ServicePicker = ({ catalog, value, onChange, defaultBucketId = '' }) => {
   const groups = value.length ? value : [{ ...EMPTY_GROUP }];
   const mainCategories = Object.keys(catalog || {}).sort();
 
@@ -37,6 +38,7 @@ const ServicePicker = ({ catalog, value, onChange }) => {
           )}
           onChange={(g) => setGroup(i, g)}
           onRemove={i > 0 ? () => removeGroup(i) : null}
+          defaultBucketId={i === 0 ? defaultBucketId : ''}
         />
       ))}
       {canAdd && (
@@ -52,13 +54,13 @@ const ServicePicker = ({ catalog, value, onChange }) => {
   );
 };
 
-const GroupEditor = ({ index, group, catalog, mainCategories, onChange, onRemove }) => {
+const GroupEditor = ({ index, group, catalog, mainCategories, onChange, onRemove, defaultBucketId }) => {
   const [open, setOpen] = useState(null); // service category whose services are showing
 
   // Service group (bucket) first, then a main category inside it. Without
   // bucket data (still loading or failed), all categories are listed as before.
   const { buckets, bucketOf } = useServiceBuckets();
-  const [pickedBucketId, setPickedBucketId] = useState('');
+  const [pickedBucketId, setPickedBucketId] = useState(defaultBucketId || '');
   const bucketId = pickedBucketId || bucketOf(group.mainCategory)?.id || '';
   const bucket = buckets.find((b) => b.id === bucketId);
   const useBuckets = buckets.length > 0;
