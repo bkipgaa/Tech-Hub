@@ -23,6 +23,7 @@ import api from '../services/api';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
 import BookFundiModal from '../components/booking/BookFundiModal';
 import { categoryPath } from '../utils/servicePaths';
+import useServiceBuckets from '../hooks/useServiceBuckets';
 
 const TechnicianSearchResults = () => {
   const navigate = useNavigate();
@@ -35,6 +36,12 @@ const TechnicianSearchResults = () => {
   const radius = searchParams.get('radius') || '10';
   const lat = searchParams.get('lat');
   const lng = searchParams.get('lng');
+
+  // What the experts in this service's group are called: Fundis, Stylists, Tutors, …
+  const { bucketOf } = useServiceBuckets();
+  const group = bucketOf(mainCategory);
+  const term = group?.expertTerm || 'Fundis';
+  const termOne = group?.expertTermSingular || 'Fundi';
 
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +79,7 @@ const TechnicianSearchResults = () => {
   }, [lat, lng]);
 
   const requestLocation = () => {
-    const required = 'Please allow location access. We need your location to show Fundis near you.';
+    const required = `Please allow location access. We need your location to show ${term} near you.`;
     if (!navigator.geolocation) {
       setError(required);
       setLoading(false);
@@ -118,14 +125,14 @@ const TechnicianSearchResults = () => {
       if (payload.success) {
         setTechnicians(Array.isArray(data) ? data : []);
         if (data.length === 0) {
-          setError('No Fundis found for this service within the selected distance.');
+          setError(`No ${term} found for this service within the selected distance.`);
         }
       } else {
-        setError(payload.message || 'Failed to fetch Fundis.');
+        setError(payload.message || `Failed to fetch ${term}.`);
       }
     } catch (err) {
       console.error('Search error:', err);
-      setError('Could not load Fundis. Please try again.');
+      setError(`Could not load ${term}. Please try again.`);
     } finally {
       setLoading(false);
     }
@@ -159,7 +166,7 @@ const TechnicianSearchResults = () => {
                 Back to {serviceCategory || 'Services'}
               </button>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
-                Fundis for {subService}
+                {term} for {subService}
               </h1>
               <p className="text-sm text-gray-500 mt-1">
                 {mainCategory} &rsaquo; {serviceCategory} &rsaquo; {subService}
@@ -194,7 +201,7 @@ const TechnicianSearchResults = () => {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-10 h-10 text-green-600 animate-spin mb-4" />
-            <p className="text-gray-600">Finding Fundis near you...</p>
+            <p className="text-gray-600">Finding {term} near you...</p>
           </div>
         ) : error ? (
           <div className="max-w-xl mx-auto text-center py-16">
@@ -226,7 +233,7 @@ const TechnicianSearchResults = () => {
               <span className="font-semibold text-gray-800">
                 {technicians.length}
               </span>{' '}
-              Fundi{technicians.length !== 1 ? 's' : ''}
+              {technicians.length === 1 ? termOne : term}
             </p>
 
             {technicians.map((tech) => (
@@ -359,7 +366,7 @@ const TechnicianSearchResults = () => {
                           onClick={() => handleBook(tech)}
                           className="bg-green-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
                         >
-                          Book Fundi
+                          Book {termOne}
                         </button>
                       )}
                     </div>
@@ -374,7 +381,8 @@ const TechnicianSearchResults = () => {
       {bookingFundi && (
         <BookFundiModal
           technicianId={bookingFundi._id ?? bookingFundi.id}
-          fundiName={bookingFundi.user?.firstName || 'this Fundi'}
+          fundiName={bookingFundi.user?.firstName || `this ${termOne}`}
+          expertTerm={termOne}
           presetCategory={serviceCategory}
           presetSubService={subService}
           onClose={() => setBookingFundi(null)}

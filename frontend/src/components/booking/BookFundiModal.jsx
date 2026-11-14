@@ -18,6 +18,7 @@ import api from '../../services/api';
 const BookFundiModal = ({
   technicianId,
   fundiName = 'this Fundi',
+  expertTerm = 'Fundi', // what the group calls its experts (Stylist, Tutor, …)
   serviceCategories = [], // the Fundi's [{ categoryName, subServices: [] }]
   presetCategory = '',
   presetSubService = '',
@@ -203,7 +204,7 @@ const BookFundiModal = ({
                 Booked!
               </>
             ) : (
-              'Book Fundi'
+              `Book ${expertTerm}`
             )}
           </button>
         </form>

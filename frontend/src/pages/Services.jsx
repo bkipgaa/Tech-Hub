@@ -96,7 +96,7 @@ const Services = () => {
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{bucket ? bucket.name : 'Browse Services'}</h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">
               {bucket
-                ? 'Pick a category → choose a service → set your distance → book a Fundi.'
+                ? `Pick a category → choose a service → set your distance → book a ${bucket.expertTermSingular || 'Fundi'}.`
                 : 'Pick a group of services to see its categories.'}
             </p>
           </div>
@@ -158,7 +158,7 @@ const Services = () => {
         <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
           <h3 className="text-lg font-bold text-gray-800 mb-2">Need a specific service not listed?</h3>
           <p className="text-gray-600 text-sm mb-5">
-            Contact us and we'll connect you with the right Fundi.
+            Contact us and we'll connect you with the right {bucket?.expertTermSingular || 'Fundi'}.
           </p>
           <button className="bg-gray-800 text-white px-6 py-3 rounded-xl font-semibold hover:bg-red-600 transition-colors inline-flex items-center gap-2">
             Contact Us
