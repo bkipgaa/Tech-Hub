@@ -4,6 +4,9 @@ const { PUBLIC_EXPERT_FILTER } = require('../utils/expertVisibility');
 const Booking = require('../models/Booking');
 const searchController = require('./searchController');
 const mongoose = require('mongoose');
+const {
+  BUCKETS, CATEGORY_ORDER, NON_TECHNICAL_FREE_RADIUS_KM, RETIRED_CATEGORIES, bucketOf,
+} = require('../data/serviceBuckets');
 
 // ===========================================
 // SIMPLE IN-MEMORY CACHE (resets on deploy)
@@ -30,16 +33,10 @@ const getBookingStats = () => Booking.aggregate([
   }}
 ]);
 
-// Display order for the original categories; categories added later by admins
-// follow alphabetically. Also the fallback when the catalog is empty/unreachable.
-const DEFAULT_CATEGORY_ORDER = [
-  'IT & Networking', 'Electrical Services', 'Mechanical Services', 'Plumbing',
-  'Programming & AI', 'Hairdressing & Beauty', 'Carpentry & Furniture',
-  'Laundry & Dry Cleaning', 'Cleaning Services', 'Painting & Decorating',
-  'Welding & Fabrication', 'Automotive Repair', 'Tutoring & Training',
-  'Photography & Videography', 'Event Planning', 'Construction & Renovation',
-  'HVAC Services', 'Appliance Repair', 'Moving & Logistics', 'Gardening & Landscaping'
-];
+// Display order: bucket by bucket (data/serviceBuckets.js); categories added
+// later by admins follow alphabetically. Also the fallback when the catalog
+// is empty/unreachable.
+const DEFAULT_CATEGORY_ORDER = CATEGORY_ORDER;
 
 const orderCategories = (names) => {
   const rank = (name) => {
@@ -121,6 +118,51 @@ exports.getMainCategories = async (req, res) => {
       message: 'Unable to fetch categories',
       data: DEFAULT_CATEGORY_ORDER.map(c => ({ name: c, hasServices: false }))
     });
+  }
+};
+
+// ===========================================
+// BUCKETS — groups of main categories
+// ===========================================
+// [{ id, name, description, technical, freeRadiusKm, categories: [{ name, serviceCategoryCount }] }]
+// Only categories active in the catalog are listed; ones the bucket file
+// doesn't know go under Technical Services. Empty buckets are left out.
+exports.getServiceBuckets = async (req, res) => {
+  try {
+    if (!dbConnected()) {
+      return res.status(503).json({ success: false, message: 'Database unavailable', data: [] });
+    }
+
+    const catalogs = await ServiceCatalog.find({ isActive: true })
+      .select('mainCategory serviceCategories.isActive')
+      .lean();
+    const active = new Map(catalogs
+      .filter((c) => !RETIRED_CATEGORIES.includes(c.mainCategory))
+      .map((c) => [
+        c.mainCategory,
+        (c.serviceCategories || []).filter((sc) => sc.isActive !== false).length,
+      ]));
+
+    const grouped = new Map(BUCKETS.map((b) => [b.id, []]));
+    orderCategories([...active.keys()]).forEach((name) => {
+      grouped.get(bucketOf(name).id).push({ name, serviceCategoryCount: active.get(name) });
+    });
+
+    const data = BUCKETS
+      .map((b) => ({
+        id: b.id,
+        name: b.name,
+        description: b.description,
+        technical: b.technical,
+        freeRadiusKm: b.technical ? null : NON_TECHNICAL_FREE_RADIUS_KM,
+        categories: grouped.get(b.id),
+      }))
+      .filter((b) => b.categories.length);
+
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ success: true, count: data.length, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
 

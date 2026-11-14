@@ -1,8 +1,9 @@
 /**
  * ServicePicker.jsx
  * =================
- * Pick the categories an expert works in: a main category, then its service
- * categories and the services under each. The first main category is
+ * Pick the categories an expert works in: a service group (bucket, e.g.
+ * Technical Services), a main category in it, then its service categories
+ * and the services under each. The first main category is
  * required; more can be added with "Add another category".
  *
  * value: [{ mainCategory, serviceCategories: [{ categoryName, subServices: [] }] }]
@@ -12,6 +13,7 @@
 import React, { useState } from 'react';
 import { Plus, X, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { EMPTY_GROUP } from '../utils/serviceGroups';
+import useServiceBuckets from '../hooks/useServiceBuckets';
 
 const ServicePicker = ({ catalog, value, onChange }) => {
   const groups = value.length ? value : [{ ...EMPTY_GROUP }];
@@ -52,6 +54,24 @@ const ServicePicker = ({ catalog, value, onChange }) => {
 
 const GroupEditor = ({ index, group, catalog, mainCategories, onChange, onRemove }) => {
   const [open, setOpen] = useState(null); // service category whose services are showing
+
+  // Service group (bucket) first, then a main category inside it. Without
+  // bucket data (still loading or failed), all categories are listed as before.
+  const { buckets, bucketOf } = useServiceBuckets();
+  const [pickedBucketId, setPickedBucketId] = useState('');
+  const bucketId = pickedBucketId || bucketOf(group.mainCategory)?.id || '';
+  const bucket = buckets.find((b) => b.id === bucketId);
+  const useBuckets = buckets.length > 0;
+  const categoryOptions = useBuckets
+    ? (bucket?.categories || []).map((c) => c.name).filter((m) => mainCategories.includes(m))
+    : mainCategories;
+  const chooseBucket = (id) => {
+    setPickedBucketId(id);
+    setOpen(null);
+    if (group.mainCategory && bucketOf(group.mainCategory)?.id !== id) {
+      onChange({ mainCategory: '', serviceCategories: [] });
+    }
+  };
   const catalogEntries = catalog?.[group.mainCategory] || [];
   // Keep picked service categories that are no longer in the catalog visible
   const entries = [
@@ -88,7 +108,7 @@ const GroupEditor = ({ index, group, catalog, mainCategories, onChange, onRemove
     <div className="border border-gray-200 rounded-xl p-4 bg-white">
       <div className="flex items-center justify-between gap-2 mb-2">
         <label className="text-sm font-semibold text-gray-700">
-          {index === 0 ? <>Main category <span className="text-red-500">*</span></> : 'Another category'}
+          {index === 0 ? <>Service group and category <span className="text-red-500">*</span></> : 'Another category'}
         </label>
         {onRemove && (
           <button type="button" onClick={onRemove} className="text-gray-400 hover:text-red-600 p-1" aria-label="Remove category">
@@ -96,17 +116,38 @@ const GroupEditor = ({ index, group, catalog, mainCategories, onChange, onRemove
           </button>
         )}
       </div>
-      <select
-        value={group.mainCategory}
-        onChange={(e) => onChange({ mainCategory: e.target.value, serviceCategories: [] })}
-        className="w-full p-2.5 border-2 border-green-300 rounded-lg focus:border-green-600 focus:outline-none bg-white"
-      >
-        <option value="">Select a category…</option>
-        {mainCategories.map((m) => <option key={m} value={m}>{m}</option>)}
-        {group.mainCategory && !mainCategories.includes(group.mainCategory) && (
-          <option value={group.mainCategory}>{group.mainCategory}</option>
-        )}
-      </select>
+      {useBuckets && (
+        <>
+          <select
+            value={bucketId}
+            onChange={(e) => chooseBucket(e.target.value)}
+            aria-label="Service group"
+            className="w-full p-2.5 border-2 border-green-300 rounded-lg focus:border-green-600 focus:outline-none bg-white mb-2"
+          >
+            <option value="">Select a service group…</option>
+            {buckets.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          {bucket && !bucket.technical && bucket.freeRadiusKm && (
+            <p className="text-xs text-green-700 mb-2">
+              Free for now: clients within {bucket.freeRadiusKm} km can find you, with no plan or commission.
+            </p>
+          )}
+        </>
+      )}
+      {(!useBuckets || bucket) && (
+        <select
+          value={group.mainCategory}
+          onChange={(e) => onChange({ mainCategory: e.target.value, serviceCategories: [] })}
+          aria-label="Main category"
+          className="w-full p-2.5 border-2 border-green-300 rounded-lg focus:border-green-600 focus:outline-none bg-white"
+        >
+          <option value="">Select a category…</option>
+          {categoryOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+          {group.mainCategory && !categoryOptions.includes(group.mainCategory) && (
+            <option value={group.mainCategory}>{group.mainCategory}</option>
+          )}
+        </select>
+      )}
 
       {group.mainCategory && (
         <div className="mt-4">

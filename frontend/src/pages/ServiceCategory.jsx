@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import useMyLocation from '../hooks/useMyLocation';
+import useServiceBuckets from '../hooks/useServiceBuckets';
 import RadiusPicker from '../components/RadiusPicker';
 import { categoryPath } from '../utils/servicePaths';
 
@@ -47,6 +48,8 @@ const StepTitle = ({ n, children }) => (
 const ServiceCategory = () => {
   const navigate = useNavigate();
   const { mainCategory, serviceCategory } = useParams();
+  const { bucketOf } = useServiceBuckets();
+  const bucket = bucketOf(mainCategory);
 
   // ── Service categories of this main category ──
   // Results are kept with the key they were loaded for; loading = no result for the current key yet
@@ -147,6 +150,14 @@ const ServiceCategory = () => {
             <ArrowLeft className="w-4 h-4" />
             Services
           </Link>
+          {bucket && (
+            <>
+              <ChevronRight className="w-4 h-4 text-gray-300" />
+              <Link to={`/services?bucket=${bucket.id}`} className="hover:text-gray-800">
+                {bucket.name}
+              </Link>
+            </>
+          )}
           {serviceCategory && (
             <>
               <ChevronRight className="w-4 h-4 text-gray-300" />
@@ -224,6 +235,11 @@ const ServiceCategory = () => {
                       value={maxDistance === '' ? '' : Number(maxDistance)}
                       onChange={chooseDistance}
                     />
+                    {bucket && !bucket.technical && bucket.freeRadiusKm && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Fundis for {bucket.name.toLowerCase()} serve clients within {bucket.freeRadiusKm} km.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">

@@ -3,6 +3,7 @@ const router = express.Router();
 
 const {
   getMainCategories,
+  getServiceBuckets,
   getServiceCategoriesByMain,
   getSubServices,
   getFullCatalog,
@@ -19,6 +20,7 @@ const {
 // 1️⃣ STATIC ROUTES (no parameters) — ALWAYS FIRST
 // =============================================
 router.get('/main-categories', getMainCategories);
+router.get('/buckets', getServiceBuckets);
 router.get('/search', searchServices);
 router.get('/popular', getPopularServices);
 router.get('/categories-with-counts', getCategoriesWithCounts);

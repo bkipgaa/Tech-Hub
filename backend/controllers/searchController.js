@@ -12,7 +12,7 @@ const Technician = require('../models/Technician');
 const { PUBLIC_EXPERT_FILTER } = require('../utils/expertVisibility');
 const ServiceCatalog = require('../models/ServiceCatalog');
 const { getEffectivePlan } = require('../utils/subscriptionPlans');
-const { isPaidPlan, withinReach, rankByPlan } = require('../utils/searchReach');
+const { isPaidPlan, withinReach, rankByPlan, reachKm, usesPlanReach } = require('../utils/searchReach');
 
 // ===========================================
 // HELPERS
@@ -326,7 +326,8 @@ if (mainCategory) {
       }
     }
 
-    const visibleTechnicians = withinReach(candidates, searchRadius);
+    // Non-technical categories reach 100 km for free (utils/searchReach.js)
+    const visibleTechnicians = withinReach(candidates, searchRadius, undefined, mainCategory);
     console.log(`[searchTechnicians] ${visibleTechnicians.length} technician(s) passed filtering`);
 
     // 8. Sorting (default: recommended — paid plans first, then rating + completed jobs, nearer first)
@@ -602,11 +603,12 @@ exports.getNearbyTechnicians = async (req, res) => {
         const [techLng, techLat] = tech.location.coordinates;
         if (techLat !== 0 || techLng !== 0) {
           const distance = calculateDistance(latitude, longitude, techLat, techLng);
-          const visibilityRadius = getVisibilityRadius(tech);
+          const visibilityRadius = reachKm(tech); // 100 km for non-technical-only experts
           if (distance <= Math.min(visibilityRadius, searchRadius)) {
             tech.distance = distance;
             tech.visibilityRadius = visibilityRadius;
             tech.subscriptionPlan = tech.subscription?.plan || 'trial';
+            if (!usesPlanReach(tech)) tech.freeReach = true; // plans don't lift non-technical experts
             visible.push(tech);
           }
         }
