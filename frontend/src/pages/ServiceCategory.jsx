@@ -237,7 +237,7 @@ const ServiceCategory = () => {
                     />
                     {bucket && !bucket.technical && bucket.freeRadiusKm && (
                       <p className="text-xs text-gray-500 mt-2">
-                        Fundis for {bucket.name.toLowerCase()} serve clients within {bucket.freeRadiusKm} km.
+                        {bucket.expertTerm} serve clients within {bucket.freeRadiusKm} km.
                       </p>
                     )}
                   </div>

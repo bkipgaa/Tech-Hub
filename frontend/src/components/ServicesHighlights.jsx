@@ -6,6 +6,10 @@
  *   2. Top 10 experts: best rating first, then most jobs completed
  *   3. Top 5 experts near the visitor (needs their location)
  *
+ * On the Services landing page (no bucket) only the popular services show.
+ * Inside a group (bucket) all three show, limited to that group and using
+ * its name for the experts (Fundis, Stylists, Tutors, …).
+ *
  * Clicking a service opens Search pre-filled with it; clicking an expert
  * opens their profile.
  *
@@ -13,6 +17,7 @@
  *   userLocation      {lat, lng} | null
  *   locationStatus    'idle' | 'loading' | 'success' | 'error'
  *   onEnableLocation  () => void
+ *   bucket            { id, name, expertTerm } | undefined
  */
 
 import React, { useEffect, useState } from 'react';
@@ -20,9 +25,12 @@ import { useNavigate } from 'react-router-dom';
 import { Star, Briefcase, MapPin, TrendingUp, Award, Navigation, Loader2, CheckCircle } from 'lucide-react';
 import api from '../services/api';
 import { cldImage, AVATAR_WIDTH } from '../utils/media';
+import { HIGHLIGHT_SECTIONS } from '../utils/servicePaths';
 
 const NEARBY_RADIUS_KM = 50;
 const GRID = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3';
+
+const SECTION_IDS = HIGHLIGHT_SECTIONS;
 
 const SectionHeading = ({ icon: Icon, title, subtitle }) => (
   <div className="flex items-start gap-2 mb-3">
@@ -96,35 +104,42 @@ export const ExpertCard = ({ tech, rank, onClick }) => {
   );
 };
 
-const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) => {
+const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation, bucket }) => {
   const navigate = useNavigate();
+  const bucketId = bucket?.id || '';
+  const term = bucket?.expertTerm || 'Fundis';
 
-  const [popular, setPopular] = useState({ loading: true, data: [] });
-  const [top, setTop] = useState({ loading: true, data: [] });
-  const [nearby, setNearby] = useState({ loading: false, data: [], loaded: false });
-
-  useEffect(() => {
-    api.get('/service-catalog/popular?limit=10')
-      .then((res) => setPopular({ loading: false, data: res.data?.data || [] }))
-      .catch(() => setPopular({ loading: false, data: [] }));
-    api.get('/search/top-technicians?limit=10')
-      .then((res) => setTop({ loading: false, data: res.data?.data || [] }))
-      .catch(() => setTop({ loading: false, data: [] }));
-  }, []);
+  // Results are kept with the group they were loaded for; no match = still loading
+  const [popular, setPopular] = useState({ key: null, data: [] });
+  const [top, setTop] = useState({ key: null, data: [] });
+  const [nearby, setNearby] = useState({ key: null, data: [] });
 
   useEffect(() => {
-    if (!userLocation) return;
-    setNearby((n) => ({ ...n, loading: true }));
+    const group = bucketId ? `&bucket=${encodeURIComponent(bucketId)}` : '';
+    api.get(`/service-catalog/popular?limit=10${group}`)
+      .then((res) => setPopular({ key: bucketId, data: res.data?.data || [] }))
+      .catch(() => setPopular({ key: bucketId, data: [] }));
+    if (!bucketId) return;
+    api.get(`/search/top-technicians?limit=10${group}`)
+      .then((res) => setTop({ key: bucketId, data: res.data?.data || [] }))
+      .catch(() => setTop({ key: bucketId, data: [] }));
+  }, [bucketId]);
+
+  const nearbyKey = userLocation && bucketId ? `${bucketId}|${userLocation.lat},${userLocation.lng}` : null;
+  useEffect(() => {
+    if (!nearbyKey) return;
     const params = new URLSearchParams({
       lat: userLocation.lat,
       lng: userLocation.lng,
       radius: NEARBY_RADIUS_KM,
       limit: 5,
+      bucket: bucketId,
     });
     api.get(`/search/nearby?${params.toString()}`)
-      .then((res) => setNearby({ loading: false, data: res.data?.data || [], loaded: true }))
-      .catch(() => setNearby({ loading: false, data: [], loaded: true }));
-  }, [userLocation]);
+      .then((res) => setNearby({ key: nearbyKey, data: res.data?.data || [] }))
+      .catch(() => setNearby({ key: nearbyKey, data: [] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearbyKey]);
 
   const openService = (item) => {
     const params = new URLSearchParams({
@@ -142,12 +157,20 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
     </div>
   );
 
+  const popularLoading = popular.key !== bucketId;
+  const topLoading = top.key !== bucketId;
+  const nearbyLoading = nearby.key !== nearbyKey;
+
   return (
     <div className="space-y-10 mt-10">
       {/* ─── Most popular services ─── */}
-      <section id="popular-services" className="scroll-mt-24">
-        <SectionHeading icon={TrendingUp} title="Most popular services" subtitle="Services with the most completed bookings" />
-        {popular.loading ? spinner : popular.data.length === 0 ? (
+      <section id={SECTION_IDS.popular} className="scroll-mt-24">
+        <SectionHeading
+          icon={TrendingUp}
+          title="Most popular services"
+          subtitle={bucket ? `${bucket.name} services with the most completed bookings` : 'Services with the most completed bookings'}
+        />
+        {popularLoading ? spinner : popular.data.length === 0 ? (
           <Placeholder>Popular services will show here soon.</Placeholder>
         ) : (
           <div className={GRID}>
@@ -166,51 +189,59 @@ const ServicesHighlights = ({ userLocation, locationStatus, onEnableLocation }) 
         )}
       </section>
 
-      {/* ─── Top 10 experts ─── */}
-      <section id="top-fundis" className="scroll-mt-24">
-        <SectionHeading icon={Award} title="Top 10 Fundis" subtitle="Ranked by rating, then by jobs completed" />
-        {top.loading ? spinner : top.data.length === 0 ? (
-          <Placeholder>Top Fundis will show here once jobs are rated.</Placeholder>
-        ) : (
-          <div className={GRID}>
-            {top.data.map((tech, i) => (
-              <ExpertCard key={tech._id} tech={tech} rank={i + 1} onClick={() => openExpert(tech)} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ─── Top 5 near you ─── */}
-      <section id="fundis-near-you" className="scroll-mt-24">
-        <SectionHeading icon={MapPin} title="Fundis near you" subtitle={`The closest available Fundis within ${NEARBY_RADIUS_KM} km`} />
-        {!userLocation ? (
-          <Placeholder>
-            {locationStatus === 'loading' ? (
-              'Finding your location…'
+      {bucket && (
+        <>
+          {/* ─── Top 10 experts in this group ─── */}
+          <section id={SECTION_IDS.top} className="scroll-mt-24">
+            <SectionHeading icon={Award} title={`Top 10 ${term}`} subtitle="Ranked by rating, then by jobs completed" />
+            {topLoading ? spinner : top.data.length === 0 ? (
+              <Placeholder>Top {term} will show here once jobs are rated.</Placeholder>
             ) : (
-              <>
-                <p className="mb-3">Allow location access to see Fundis near you.</p>
-                <button
-                  type="button"
-                  onClick={onEnableLocation}
-                  className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors"
-                >
-                  <Navigation className="w-4 h-4" />
-                  Use my location
-                </button>
-              </>
+              <div className={GRID}>
+                {top.data.map((tech, i) => (
+                  <ExpertCard key={tech._id} tech={tech} rank={i + 1} onClick={() => openExpert(tech)} />
+                ))}
+              </div>
             )}
-          </Placeholder>
-        ) : nearby.loading || !nearby.loaded ? spinner : nearby.data.length === 0 ? (
-          <Placeholder>No Fundis within {NEARBY_RADIUS_KM} km yet. Try Search with a wider radius.</Placeholder>
-        ) : (
-          <div className={GRID}>
-            {nearby.data.map((tech) => (
-              <ExpertCard key={tech._id} tech={tech} onClick={() => openExpert(tech)} />
-            ))}
-          </div>
-        )}
-      </section>
+          </section>
+
+          {/* ─── Top 5 near you in this group ─── */}
+          <section id={SECTION_IDS.nearby} className="scroll-mt-24">
+            <SectionHeading
+              icon={MapPin}
+              title={`${term} near you`}
+              subtitle={`The closest available ${term} within ${NEARBY_RADIUS_KM} km`}
+            />
+            {!userLocation ? (
+              <Placeholder>
+                {locationStatus === 'loading' ? (
+                  'Finding your location…'
+                ) : (
+                  <>
+                    <p className="mb-3">Allow location access to see {term} near you.</p>
+                    <button
+                      type="button"
+                      onClick={onEnableLocation}
+                      className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+                    >
+                      <Navigation className="w-4 h-4" />
+                      Use my location
+                    </button>
+                  </>
+                )}
+              </Placeholder>
+            ) : nearbyLoading ? spinner : nearby.data.length === 0 ? (
+              <Placeholder>No {term} within {NEARBY_RADIUS_KM} km yet. Try Search with a wider radius.</Placeholder>
+            ) : (
+              <div className={GRID}>
+                {nearby.data.map((tech) => (
+                  <ExpertCard key={tech._id} tech={tech} onClick={() => openExpert(tech)} />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 };

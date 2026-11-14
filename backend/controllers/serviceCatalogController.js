@@ -6,6 +6,7 @@ const searchController = require('./searchController');
 const mongoose = require('mongoose');
 const {
   BUCKETS, CATEGORY_ORDER, NON_TECHNICAL_FREE_RADIUS_KM, RETIRED_CATEGORIES, bucketOf,
+  bucketById, inBucket,
 } = require('../data/serviceBuckets');
 
 // ===========================================
@@ -16,7 +17,7 @@ const cache = {
   categories: new Map(),      // key: mainCategory
   fullCatalogs: new Map(),    // key: mainCategory
   subServices: new Map(),     // key: `${mainCategory}|${serviceCategory}`
-  popular: { data: null, timestamp: 0 }
+  popular: new Map()           // key: `${bucket}|${limit}`
 };
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -154,6 +155,8 @@ exports.getServiceBuckets = async (req, res) => {
         name: b.name,
         description: b.description,
         technical: b.technical,
+        expertTerm: b.expertTerm,
+        expertTermSingular: b.expertTermSingular,
         freeRadiusKm: b.technical ? null : NON_TECHNICAL_FREE_RADIUS_KM,
         categories: grouped.get(b.id),
       }))
@@ -451,15 +454,19 @@ exports.searchServices = async (req, res) => {
 exports.getPopularServices = async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    // ?bucket=<id> keeps only services from that group (e.g. personal-care)
+    const bucketId = bucketById(req.query.bucket) ? req.query.bucket : '';
     if (!dbConnected()) {
       return res.status(503).json({ success: false, message: 'Database unavailable' });
     }
 
-    if (cache.popular.data && !isStale(cache.popular.timestamp)) {
-      return res.json({ ...cache.popular.data, cached: true });
+    const cacheKey = `${bucketId}|${limit}`;
+    const cachedPopular = cache.popular.get(cacheKey);
+    if (cachedPopular && !isStale(cachedPopular.timestamp)) {
+      return res.json({ ...cachedPopular.data, cached: true });
     }
 
-    const popular = await ServiceCatalog.aggregate([
+    const allPopular = await ServiceCatalog.aggregate([
       { $match: { isActive: true } },
       { $unwind: '$serviceCategories' },
       { $match: { 'serviceCategories.isActive': { $ne: false } } },
@@ -476,6 +483,9 @@ exports.getPopularServices = async (req, res) => {
           typicalDuration: '$serviceCategories.subServices.typicalDuration'
       }},
     ]).allowDiskUse(false);
+    const popular = allPopular.filter((s) =>
+      !RETIRED_CATEGORIES.includes(s.mainCategory) && (!bucketId || inBucket(s.mainCategory, bucketId))
+    );
 
     // Rank by real bookings: completed first, then all bookings made,
     // then searches as a tie-breaker. Bookings carry no mainCategory, so
@@ -538,7 +548,7 @@ exports.getPopularServices = async (req, res) => {
       metadata: { ranking: ['completedBookings', 'totalBookings', 'searchCount'] }
     };
 
-    cache.popular = { data: payload, timestamp: Date.now() };
+    cache.popular.set(cacheKey, { data: payload, timestamp: Date.now() });
     res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -883,7 +893,7 @@ exports.clearCatalogCache = () => {
   cache.categories.clear();
   cache.fullCatalogs.clear();
   cache.subServices.clear();
-  cache.popular = { data: null, timestamp: 0 };
+  cache.popular.clear();
 };
 
 module.exports = exports;

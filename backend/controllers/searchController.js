@@ -13,6 +13,9 @@ const { PUBLIC_EXPERT_FILTER } = require('../utils/expertVisibility');
 const ServiceCatalog = require('../models/ServiceCatalog');
 const { getEffectivePlan } = require('../utils/subscriptionPlans');
 const { isPaidPlan, withinReach, rankByPlan, reachKm, usesPlanReach } = require('../utils/searchReach');
+const {
+  bucketById, bucketExpertFilter, expertCategoryIn, NON_TECHNICAL_FREE_RADIUS_KM,
+} = require('../data/serviceBuckets');
 
 // ===========================================
 // HELPERS
@@ -583,11 +586,16 @@ exports.getNearbyTechnicians = async (req, res) => {
       );
     }
 
+    // ?bucket=<id> keeps only experts working in that group (e.g. personal-care)
+    const bucketId = bucketById(req.query.bucket) ? req.query.bucket : '';
+    const bucket = bucketById(bucketId);
+
     const technicians = await Technician.find({
       isActive: true,
       isAvailable: true,
       verificationStatus: { $in: ['verified', 'pending'] },
-      ...PUBLIC_EXPERT_FILTER
+      ...PUBLIC_EXPERT_FILTER,
+      ...(bucketId && bucketExpertFilter(bucketId))
     })
     .populate('userId', 'firstName lastName profileImage')
     .lean();
@@ -603,12 +611,16 @@ exports.getNearbyTechnicians = async (req, res) => {
         const [techLng, techLat] = tech.location.coordinates;
         if (techLat !== 0 || techLng !== 0) {
           const distance = calculateDistance(latitude, longitude, techLat, techLng);
-          const visibilityRadius = reachKm(tech); // 100 km for non-technical-only experts
+          // Reach for the group asked for (100 km for non-technical); without one,
+          // 100 km for experts who only offer non-technical services
+          const planReach = bucket ? bucket.technical : usesPlanReach(tech);
+          const visibilityRadius = planReach ? reachKm(tech) : NON_TECHNICAL_FREE_RADIUS_KM;
           if (distance <= Math.min(visibilityRadius, searchRadius)) {
             tech.distance = distance;
             tech.visibilityRadius = visibilityRadius;
             tech.subscriptionPlan = tech.subscription?.plan || 'trial';
-            if (!usesPlanReach(tech)) tech.freeReach = true; // plans don't lift non-technical experts
+            if (!planReach) tech.freeReach = true; // plans don't lift non-technical experts
+            if (bucketId) tech.mainCategory = expertCategoryIn(tech, bucketId);
             visible.push(tech);
           }
         }
@@ -683,11 +695,14 @@ exports.getNearbyTechnicians = async (req, res) => {
 exports.getTopTechnicians = async (req, res) => {
   try {
     const limitNum = Math.min(parseInt(req.query.limit) || 10, 20);
+    // ?bucket=<id> keeps only experts working in that group (e.g. personal-care)
+    const bucketId = bucketById(req.query.bucket) ? req.query.bucket : '';
 
     const technicians = await Technician.find({
       isActive: true,
       verificationStatus: { $in: ['verified', 'pending'] },
-      ...PUBLIC_EXPERT_FILTER
+      ...PUBLIC_EXPERT_FILTER,
+      ...(bucketId && bucketExpertFilter(bucketId))
     })
     .sort({ 'rating.average': -1, 'statistics.completedJobs': -1, 'rating.count': -1 })
     .limit(limitNum)
@@ -697,7 +712,7 @@ exports.getTopTechnicians = async (req, res) => {
     const data = technicians.map(tech => ({
       _id: tech._id,
       businessName: tech.businessName,
-      mainCategory: tech.mainCategory,
+      mainCategory: bucketId ? expertCategoryIn(tech, bucketId) : tech.mainCategory,
       profileHeadline: tech.profileHeadline,
       rating: tech.rating,
       completedJobs: tech.statistics?.completedJobs || 0,
