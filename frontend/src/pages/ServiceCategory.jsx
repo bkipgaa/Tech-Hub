@@ -50,6 +50,9 @@ const ServiceCategory = () => {
   const { mainCategory, serviceCategory } = useParams();
   const { bucketOf } = useServiceBuckets();
   const bucket = bucketOf(mainCategory);
+  // What the experts in this group are called: Fundis, Stylists, Tutors, …
+  const term = bucket?.expertTerm || 'Fundis';
+  const termOne = bucket?.expertTermSingular || 'Fundi';
 
   // ── Service categories of this main category ──
   // Results are kept with the key they were loaded for; loading = no result for the current key yet
@@ -220,7 +223,7 @@ const ServiceCategory = () => {
 
             {/* Step 1 — distance */}
             <section className="mb-6">
-              <StepTitle n={1}>How far can the Fundi come from?</StepTitle>
+              <StepTitle n={1}>How far can the {termOne} come from?</StepTitle>
               <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
                 <div className="flex flex-col md:flex-row md:items-end gap-4">
                   <div className="flex-1">
@@ -275,7 +278,7 @@ const ServiceCategory = () => {
 
             {/* Step 2 — service → View Fundis */}
             <section>
-              <StepTitle n={2}>Pick a service and view Fundis</StepTitle>
+              <StepTitle n={2}>Pick a service and view {term}</StepTitle>
               {subLoading ? (
                 <div className="flex justify-center items-center py-16 bg-white rounded-xl border border-gray-200">
                   <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
@@ -312,7 +315,7 @@ const ServiceCategory = () => {
                           'Enable location'
                         ) : (
                           <>
-                            View Fundis
+                            View {term}
                             <ArrowRight className="w-3.5 h-3.5" />
                           </>
                         )}
