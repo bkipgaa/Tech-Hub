@@ -1,21 +1,25 @@
 /**
  * ListingForm.jsx
  * ===============
- * Create (/stays/new, optionally ?category=) or edit (/stays/:id/edit) a Stays & Spaces listing.
+ * List a business in its group (/businesses/new/:groupId, optionally ?category=;
+ * the group is picked first on /businesses/new) or edit one (/businesses/:id/edit).
+ * Shops get an address, opening hours, delivery and their products instead of a price.
  * Photos upload one at a time to /listings/photos and are saved with the listing.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, AlertCircle, ImagePlus, X, Star } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { cldImage } from '../utils/media';
 import { LocationPicker } from '../components/stays/ListingMap';
+import ProductsEditor from '../components/stays/ProductsEditor';
+import { groupIcon } from '../components/stays/groupIcons';
 import usePlaces from '../hooks/usePlaces';
 import {
-  LISTING_GROUPS, PROPERTY_TYPES, AMENITIES, LISTER_TYPES, COUNTIES,
-  categoryById, isShortStay, isBusiness, isEntertainment, amenitiesFor, priceUnitLabel,
+  PROPERTY_TYPES, LISTER_TYPES, COUNTIES,
+  categoryById, groupById, isShortStay, isBusiness, isEntertainment, isShop, amenitiesFor, priceUnitLabel,
   LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE,
 } from '../utils/listingCategories';
 
@@ -38,6 +42,9 @@ const EMPTY = {
   estate: '',
   openingHours: '',
   landmark: '',
+  address: '',
+  products: [],
+  delivery: false,
   lat: '',
   lng: '',
   amenities: [],
@@ -66,17 +73,23 @@ const Section = ({ title, children }) => (
 );
 
 const ListingForm = () => {
-  const { id } = useParams();
+  const { id, groupId } = useParams();
   const isEdit = !!id;
   const navigate = useNavigate();
   const { user } = useAuth();
   const fileInput = useRef(null);
 
-  // ?category= comes from signup ("I want to list a property")
+  // ?category= comes from signup ("I want to list my business"), inside the group's page
   const [searchParams] = useSearchParams();
-  const startCategory = categoryById(searchParams.get('category')) ? searchParams.get('category') : '';
+  const startCategory = categoryById(searchParams.get('category'))?.groupId === groupId ? searchParams.get('category') : '';
+  // A group with a single type has it picked already
+  const onlyCategory = groupById(groupId)?.categories.length === 1 ? groupById(groupId).categories[0].id : '';
 
-  const [form, setForm] = useState({ ...EMPTY, category: isEdit ? '' : startCategory, contactPhone: user?.phone || '' });
+  const [form, setForm] = useState({
+    ...EMPTY,
+    category: isEdit ? '' : startCategory || onlyCategory,
+    contactPhone: user?.phone || '',
+  });
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(0);
@@ -152,7 +165,15 @@ const ListingForm = () => {
     setSaving(true);
     try {
       const allowed = new Set(amenitiesFor(form.category).map((a) => a.id));
-      const payload = { ...form, amenities: form.amenities.filter((a) => allowed.has(a)), availableFrom: form.availableFrom || null };
+      const payload = {
+        ...form,
+        amenities: form.amenities.filter((a) => allowed.has(a)),
+        availableFrom: form.availableFrom || null,
+        // Only shops sell products; empty rows are dropped by the server
+        products: isShop(form.category)
+          ? form.products.map(({ key, ...p }) => ({ ...p, price: p.price === '' ? null : p.price })) // eslint-disable-line no-unused-vars
+          : [],
+      };
       const r = isEdit ? await api.put(`/listings/${id}`, payload) : await api.post('/listings', payload);
       navigate("/my-listings", { state: { notice: r.data?.message } });
     } catch (err) {
@@ -171,23 +192,48 @@ const ListingForm = () => {
     );
   }
 
+  // The group this page lists in: from the URL when listing, from the listing when editing
+  const group = groupById(isEdit ? categoryById(form.category)?.groupId : groupId);
+  if (!isEdit && !group) return <Navigate to="/businesses/new" replace />;
+  if (isEdit && !group && !error) {
+    return (
+      <div className="flex justify-center py-24">
+        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
+  const GroupIcon = groupIcon(group?.id);
+
   const category = categoryById(form.category);
   const shortStay = isShortStay(form.category);
   const business = isBusiness(form.category);
   const entertainment = isEntertainment(form.category);
+  const shop = group?.kind === 'shop';
   const priceLabel = entertainment
     ? 'Entry fee (KES)'
     : `Price (KES)${category ? ` ${priceUnitLabel(category.priceUnit)}` : ''}`;
+  const placeWord = shop || entertainment ? 'business' : 'property';
 
   return (
     <div className="min-h-screen bg-gray-50">
       <form onSubmit={submit} className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-        <Link to="/my-listings" className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-green-700">
-          <ArrowLeft className="w-4 h-4" /> My listings
+        <Link
+          to={isEdit ? '/my-listings' : '/businesses/new'}
+          className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-green-700"
+        >
+          <ArrowLeft className="w-4 h-4" /> {isEdit ? 'My listings' : 'Change business group'}
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">{isEdit ? 'Edit listing' : 'List your property'}</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <div className="flex items-center gap-3">
+            <span className="w-11 h-11 rounded-lg bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0">
+              <GroupIcon className="w-5 h-5" />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">{isEdit ? 'Edit listing' : 'List your business'}</h1>
+              {group && <p className="text-sm font-semibold text-green-700">{group.name}</p>}
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mt-2">
             Your first {LISTING_FREE_COUNT} listings are free for {LISTING_FREE_MONTHS} months. Any more, and every listing after that,
             are KES {LISTING_PRICE} a month each. New listings are checked by our team before they go live.
           </p>
@@ -199,47 +245,69 @@ const ListingForm = () => {
           </div>
         )}
 
-        <Section title="What are you listing?">
-          {LISTING_GROUPS.map((g) => (
-            <div key={g.id}>
-              <p className="inline-block text-xs font-semibold uppercase tracking-wide text-white bg-red-600 px-2.5 py-1 rounded-md mb-2">
-                {g.name} · {priceUnitLabel(g.priceUnit)}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {g.categories.map((c) => (
-                  <button
-                    type="button"
-                    key={c.id}
-                    onClick={() => setForm((f) => ({ ...f, category: c.id }))}
-                    className={`px-3 py-2 rounded-lg text-sm border ${
-                      form.category === c.id
-                        ? 'bg-green-600 text-white border-green-600'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-green-100 hover:border-green-500'
-                    }`}
-                  >
-                    {c.name}
-                  </button>
-                ))}
-              </div>
+        <Section title={shop ? 'What kind of business is it?' : 'What are you listing?'}>
+          {group && (
+            <div className="flex flex-wrap gap-2">
+              {group.categories.map((c) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  onClick={() => setForm((f) => ({ ...f, category: c.id }))}
+                  aria-pressed={form.category === c.id}
+                  className={`px-3 py-2 rounded-lg text-sm border ${
+                    form.category === c.id
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-green-100 hover:border-green-500'
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
             </div>
-          ))}
-          <Field label="You are the">
-            <select value={form.listerType} onChange={set('listerType')} className={inputClass}>
-              {LISTER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
-          </Field>
+          )}
+          {!shop && (
+            <Field label="You are the">
+              <select value={form.listerType} onChange={set('listerType')} className={inputClass}>
+                {LISTER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </Field>
+          )}
         </Section>
 
-        <Section title="Describe the place">
-          <Field label="Title" required hint={entertainment ? 'e.g. Rooftop lounge with live band, Westlands' : 'e.g. Cosy 1-bedroom near Yaya Centre'}>
+        <Section title={shop ? 'About your business' : 'Describe the place'}>
+          <Field
+            label={shop ? 'Business name' : 'Title'}
+            required
+            hint={
+              shop
+                ? 'e.g. Mwangi Hardware & Electricals, Kahawa West'
+                : entertainment
+                ? 'e.g. Rooftop lounge with live band, Westlands'
+                : 'e.g. Cosy 1-bedroom near Yaya Centre'
+            }
+          >
             <input value={form.title} onChange={set('title')} maxLength={120} required className={inputClass} />
           </Field>
-          <Field label="Description" hint={entertainment ? 'Music, events, drinks and food, dress code, age limit.' : 'What makes it good? Rules, nearby shops, transport, water and power.'}>
+          <Field
+            label="Description"
+            hint={
+              shop
+                ? 'What you sell or offer, brands you stock, whether you deliver, how to pay.'
+                : entertainment
+                ? 'Music, events, drinks and food, dress code, age limit.'
+                : 'What makes it good? Rules, nearby shops, transport, water and power.'
+            }
+          >
             <textarea value={form.description} onChange={set('description')} rows={5} maxLength={3000} className={inputClass} />
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            {!business && !entertainment && (
+            {shop && (
+              <Field label="Opening hours" hint="e.g. Mon–Sat, 8am–6pm">
+                <input value={form.openingHours} onChange={set('openingHours')} maxLength={120} className={inputClass} />
+              </Field>
+            )}
+            {!business && !entertainment && !shop && (
               <Field label="Unit type">
                 <select value={form.propertyType} onChange={set('propertyType')} className={inputClass}>
                   <option value="">Choose…</option>
@@ -247,12 +315,12 @@ const ListingForm = () => {
                 </select>
               </Field>
             )}
-            {!business && !entertainment && (
+            {!business && !entertainment && !shop && (
               <Field label="Bedrooms">
                 <input type="number" min="0" value={form.bedrooms} onChange={set('bedrooms')} className={inputClass} />
               </Field>
             )}
-            {!business && !entertainment && (
+            {!business && !entertainment && !shop && (
               <Field label="Bathrooms">
                 <input type="number" min="0" value={form.bathrooms} onChange={set('bathrooms')} className={inputClass} />
               </Field>
@@ -275,6 +343,18 @@ const ListingForm = () => {
           </div>
         </Section>
 
+        {shop ? (
+          <Section title={`Products (${form.products.length})`}>
+            <p className="text-sm text-gray-500 -mt-2">
+              Customers pick items from this list and send you the order on WhatsApp. Leave the price empty to say “ask for price”.
+            </p>
+            <ProductsEditor
+              value={form.products}
+              onChange={(products) => setForm((f) => ({ ...f, products }))}
+              onError={setError}
+            />
+          </Section>
+        ) : (
         <Section title="Price">
           <div className="grid grid-cols-2 gap-3">
             <Field label={priceLabel} required hint={entertainment ? 'Enter 0 for free entry' : undefined}>
@@ -290,6 +370,7 @@ const ListingForm = () => {
             </Field>}
           </div>
         </Section>
+        )}
 
         <Section title="Location">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -336,15 +417,29 @@ const ListingForm = () => {
               </datalist>
             </Field>
           </div>
-          <Field label="Nearby landmark" hint="Don't add the house number. Share it once you've spoken to the client.">
+          {shop && (
+            <Field label="Address" hint="Street, building and floor, e.g. Moi Avenue, Bazaar Plaza, ground floor">
+              <input value={form.address} onChange={set('address')} maxLength={160} className={inputClass} />
+            </Field>
+          )}
+          <Field
+            label="Nearby landmark"
+            hint={shop ? 'e.g. Opposite Naivas, next to the stage' : "Don't add the house number. Share it once you've spoken to the client."}
+          >
             <input value={form.landmark} onChange={set('landmark')} maxLength={160} className={inputClass} />
           </Field>
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1">
-              Pin on the map <span className="text-red-500">*</span>
+              Live location on the map <span className="text-red-500">*</span>
             </p>
-            <p className="text-xs text-gray-500 mb-2">This is how clients searching “near me” find your place.</p>
+            <p className="text-xs text-gray-500 mb-2">
+              {shop
+                ? 'Standing at your business? Tap “I’m at the business”. Customers see this pin and get directions to you.'
+                : 'This is how clients searching “near me” find your place.'}
+            </p>
             <LocationPicker
+              placeWord={placeWord}
+              exact={shop}
               value={form.lat !== '' && form.lng !== '' ? { lat: Number(form.lat), lng: Number(form.lng) } : null}
               onChange={({ lat, lng }) => setForm((f) => ({ ...f, lat, lng }))}
             />
@@ -429,6 +524,12 @@ const ListingForm = () => {
             <input type="checkbox" checked={form.whatsapp} onChange={set('whatsapp')} className="rounded text-green-600 focus:ring-green-500" />
             Clients can also message me on WhatsApp on this number
           </label>
+          {shop && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" checked={form.delivery} onChange={set('delivery')} className="rounded text-green-600 focus:ring-green-500" />
+              We deliver orders
+            </label>
+          )}
         </Section>
 
         <div className="flex gap-3 justify-end pb-8">

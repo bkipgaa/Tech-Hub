@@ -1,12 +1,12 @@
 /**
  * MyListings.jsx
  * ==============
- * The signed-in user's Stays & Spaces listings: review status, what each one
+ * The signed-in user's Businesses listings: review status, what each one
  * costs and until when it's live, paying for selected listings, and
  * pause/resume, edit, delete.
  *
  * Pricing: the first 5 listings are free for 3 months from the first listing;
- * otherwise each listing is KES 200 a month. Only approved listings can be paid for.
+ * otherwise each listing is KES 500 a month. Only approved listings can be paid for.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -142,10 +142,10 @@ const MyListings = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">My listings</h1>
-            <p className="text-sm text-gray-500">Your places on Stays &amp; Spaces</p>
+            <p className="text-sm text-gray-500">Your businesses and places on Webafix</p>
           </div>
           <Link
-            to="/stays/new"
+            to="/businesses/new"
             className="inline-flex items-center gap-2 bg-green-600 text-white font-semibold px-4 py-2.5 rounded-lg hover:bg-green-700"
           >
             <Plus className="w-4 h-4" /> New listing
@@ -270,7 +270,7 @@ const MyListings = () => {
                         <span className="sm:hidden">Select to pay</span>
                       </label>
                     )}
-                    <Link to={`/stays/${l._id}`} className="sm:w-40 aspect-[4/3] rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                    <Link to={`/businesses/${l._id}`} className="sm:w-40 aspect-[4/3] rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                       {l.photos?.[0]?.url ? (
                         <img src={cldImage(l.photos[0].url, 320)} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -289,7 +289,7 @@ const MyListings = () => {
                         )}
                         <span className="text-xs text-gray-500">{categoryById(l.category)?.name}</span>
                       </div>
-                      <Link to={`/stays/${l._id}`} className="block font-semibold text-gray-800 hover:text-green-700 mt-1 truncate">
+                      <Link to={`/businesses/${l._id}`} className="block font-semibold text-gray-800 hover:text-green-700 mt-1 truncate">
                         {l.title}
                       </Link>
                       <p className="text-sm text-gray-500 truncate">{placeLabel(l)}</p>
@@ -312,7 +312,7 @@ const MyListings = () => {
                       )}
                       {canEdit ? (
                         <Link
-                          to={`/stays/${l._id}/edit`}
+                          to={`/businesses/${l._id}/edit`}
                           className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50"
                         >
                           <Pencil className="w-4 h-4" /> Edit

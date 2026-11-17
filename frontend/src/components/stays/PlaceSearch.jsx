@@ -36,7 +36,7 @@ const PlaceSearch = ({ value = {}, counts = {}, onSearch }) => {
     <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr_auto] gap-2">
       <label className="sr-only" htmlFor="ps-category">What are you looking for?</label>
       <select id="ps-category" value={category} onChange={(e) => setCategory(e.target.value)} className={selectClass}>
-        <option value="">Any type of place</option>
+        <option value="">Any type of business</option>
         {LISTING_GROUPS.map((g) => (
           <optgroup key={g.id} label={g.name}>
             {g.categories.map((c) => (

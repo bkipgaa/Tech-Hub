@@ -18,6 +18,8 @@ import useServiceBuckets from '../hooks/useServiceBuckets';
 import useMyLocation from '../hooks/useMyLocation';
 import ServicesHighlights from '../components/ServicesHighlights';
 import { categoryPath, HIGHLIGHT_SECTIONS as SECTION_IDS } from '../utils/servicePaths';
+import { groupsForBucket } from '../utils/listingCategories';
+import RelatedBusinesses from '../components/stays/RelatedBusinesses';
 
 // useMyLocation statuses → the ones ServicesHighlights expects
 const HIGHLIGHT_STATUS = { idle: 'idle', locating: 'loading', ready: 'success', error: 'error' };
@@ -115,7 +117,11 @@ const Services = () => {
         </div>
 
         {bucket ? (
-          <BucketCategories bucket={bucket} onBack={() => navigate('/services')} onPick={(name) => navigate(categoryPath(name))} />
+          <>
+            <BucketCategories bucket={bucket} onBack={() => navigate('/services')} onPick={(name) => navigate(categoryPath(name))} />
+            {/* Businesses that go with this group's services */}
+            <RelatedBusinesses groups={groupsForBucket(bucket)} location={userLocation} subject={bucket.name} />
+          </>
         ) : buckets.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {buckets.map((b) => (

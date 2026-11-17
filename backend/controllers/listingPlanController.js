@@ -1,7 +1,7 @@
 /**
  * listingPlanController.js
  * ========================
- * Stays & Spaces payments: KES 200 per listing per month, paid by card
+ * Business listing payments: KES 500 per listing per month, paid by card
  * (Paystack) or M-Pesa STK push. The lister picks which approved listings to
  * pay for; each payment covers the next month.
  *

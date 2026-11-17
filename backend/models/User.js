@@ -82,7 +82,7 @@ const userSchema = new mongoose.Schema({
   },
 
   // Stays & Spaces: 3 free months from the first listing (up to 5 listings),
-  // then KES 200 per listing per month (utils/listingPlan.js)
+  // then KES 500 per listing per month (utils/listingPlan.js)
   listingPlan: {
     freeUntil: { type: Date, default: null },
     paidUntil: { type: Date, default: null }, // old account-wide plan; carried over to listings on upgrade

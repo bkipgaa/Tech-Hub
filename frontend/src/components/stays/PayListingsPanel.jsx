@@ -1,7 +1,7 @@
 /**
  * PayListingsPanel.jsx
  * ====================
- * Pay for selected listings for the next month: KES 200 per listing, by M-Pesa (STK
+ * Pay for selected listings for the next month: KES 500 per listing, by M-Pesa (STK
  * push, polled until Safaricom answers) or card (Paystack redirect back to
  * My Listings, which verifies the ?reference=).
  */

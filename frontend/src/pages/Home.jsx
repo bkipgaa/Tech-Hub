@@ -171,10 +171,10 @@ const Home = () => {
               <ArrowRight className="w-5 h-5" />
             </button>
             <button
-              onClick={() => navigate('/stays')}
+              onClick={() => navigate('/businesses')}
               className="bg-green-600 text-white px-6 sm:px-8 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-colors"
             >
-              Find Stays &amp; Places
+              Find Businesses
             </button>
             <button
               onClick={() => navigate('/available-jobs')}
@@ -264,30 +264,30 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Stays & Spaces Section */}
+      {/* Businesses Section */}
       <div className="max-w-7xl mx-auto px-4 pt-10">
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-1">Stays &amp; Spaces</h2>
-          <p className="text-gray-500 text-sm">Airbnbs, hotels, homes for rent, office space and places to go out. Contact owners directly.</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-1">Businesses</h2>
+          <p className="text-gray-500 text-sm">Shops, pharmacies, restaurants, hotels, homes for rent and more near you. Contact them and order directly.</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {LISTING_GROUPS.map((group) => (
             <button
               key={group.id}
-              onClick={() => navigate(`/stays?group=${group.id}`)}
+              onClick={() => navigate(`/businesses?group=${group.id}`)}
               className="group text-left bg-white p-4 rounded-md shadow-sm border border-gray-200 hover:shadow-md hover:border-green-500 hover:bg-green-50 transition-all duration-200"
             >
               <h3 className="font-semibold text-gray-800 group-hover:text-green-700">{group.name}</h3>
-              <p className="text-xs text-gray-500 mt-1">{group.categories.map((c) => c.name).join(' · ')}</p>
+              <p className="text-xs text-gray-500 mt-1">{group.blurb}</p>
             </button>
           ))}
         </div>
         <div className="text-center mt-4">
           <button
-            onClick={() => navigate(user ? '/stays/new' : '/stays')}
+            onClick={() => navigate(user ? '/businesses/new' : '/businesses')}
             className="text-sm font-semibold text-green-700 hover:text-green-800 inline-flex items-center gap-1"
           >
-            {user ? 'List your property for free' : 'Browse all places'} <ChevronRight className="w-4 h-4" />
+            {user ? 'List your business for free' : 'Browse all businesses'} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>

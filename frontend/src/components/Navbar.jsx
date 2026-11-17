@@ -96,7 +96,7 @@ const Navbar = () => {
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "Services", path: "/services" },
-    { name: "Stays & Spaces", path: "/stays" },
+    { name: "Businesses", path: "/businesses" },
     { name: "Available Jobs", path: "/available-jobs" },
     { name: "My Bookings", path: "/bookings" },
   ];

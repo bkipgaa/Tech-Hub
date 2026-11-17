@@ -285,7 +285,7 @@ exports.listingPlanReminder = (data) => {
   const intro = ended.length
     ? `<p>These listings are no longer showing in search. Nothing has been deleted: pay ${price} a month per listing and they show again straight away.</p>`
     : anyFree
-    ? `<p>Your 3 free months on Stays &amp; Spaces are ending. After that each listing is ${price} a month, so you only pay for the ones you want to keep.</p>`
+    ? `<p>Your 3 free months on Webafix Businesses are ending. After that each listing is ${price} a month, so you only pay for the ones you want to keep.</p>`
     : `<p>Renew to keep these listings in search. Each one is ${price} a month, and paying early adds time on top of what's left.</p>`;
 
   return {
@@ -308,7 +308,7 @@ exports.listingPlanPaid = (data) => ({
     'Payment received',
     `
       <p>Hi <strong>${data.name}</strong>,</p>
-      <p>Thanks! We received your Stays &amp; Spaces payment.</p>
+      <p>Thanks! We received your Businesses listing payment.</p>
       <div style="background:#f9fafb;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid ${BRAND.color};">
         <p style="margin:4px 0;"><strong>Amount:</strong> KES ${Number(data.amount).toLocaleString('en-KE')}</p>
         <p style="margin:4px 0;"><strong>Paid by:</strong> ${data.method === 'mpesa' ? 'M-Pesa' : 'Card'}</p>
@@ -332,9 +332,9 @@ exports.listingApproved = (data) => ({
     `<p>Hi <strong>${data.name}</strong>,</p>
      <p>Good news: <strong>${data.title}</strong> has been approved.</p>
      ${data.live
-       ? '<p>It is now live in Stays &amp; Spaces search, and clients can contact you directly.</p>'
+       ? '<p>It is now live in Businesses search, and customers can contact you directly.</p>'
        : `<p>To show it in search, pay <strong>KES ${Number(data.price).toLocaleString('en-KE')} a month</strong> from My Listings.</p>`}`,
-    data.live ? `${BRAND.url}/stays/${data.listingId}` : `${BRAND.url}/my-listings`,
+    data.live ? `${BRAND.url}/businesses/${data.listingId}` : `${BRAND.url}/my-listings`,
     data.live ? 'View listing' : 'Pay and go live'
   ),
 });
@@ -348,7 +348,7 @@ exports.listingRejected = (data) => ({
      <p>We couldn't approve <strong>${data.title}</strong> yet. Here's why:</p>
      <div style="background:#fef2f2;padding:16px;border-radius:8px;margin:16px 0;border-left:4px solid ${BRAND.accentRed};">${data.reason}</div>
      <p>Edit the listing to fix this and it will be sent for review again.</p>`,
-    `${BRAND.url}/stays/${data.listingId}/edit`,
+    `${BRAND.url}/businesses/${data.listingId}/edit`,
     'Edit listing'
   ),
 });

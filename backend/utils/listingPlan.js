@@ -18,7 +18,7 @@ const Listing = require('../models/Listing');
 
 const FREE_MONTHS = 3;
 const FREE_LISTINGS = 5;
-const PRICE_PER_LISTING = 200; // KES per listing per month
+const PRICE_PER_LISTING = 500; // KES per listing per month
 const PAY_MONTHS = [1]; // each payment covers the next month only
 
 // Listings that still count towards the free slots (rejected ones give theirs back)

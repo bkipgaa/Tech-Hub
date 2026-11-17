@@ -23,7 +23,7 @@ export const LEGAL = {
   odpcRegNo: '{{ODPC registration number}}',
 
   effectiveDate: '{{1 January 2027}}',
-  version: '1.0',
+  version: '1.1', // 1.1: Businesses (shops, products, orders), KES 500 listing fee, service groups
 
   // Business decisions (suggested starting points shown in the braces)
   disputeDays: '{{14}}',
@@ -37,10 +37,13 @@ export const LEGAL = {
   commissionPerJob: 'KES 500',
   reminderDays: '7, 3 and 1 days',
 
-  // Stays & Spaces listing fees (match backend/utils/listingPlan.js)
+  // Non-technical service groups: free for now within this distance (backend/data/serviceBuckets.js)
+  nonTechnicalRadius: '100 km',
+
+  // Businesses listing fees (match backend/utils/listingPlan.js)
   listingFreeMonths: 3,
   listingFreeCount: 5,
-  listingFee: 'KES 200',
+  listingFee: 'KES 500',
 
   breachReportHours: '{{48 hours}}',
   mediationCity: '{{Nairobi}}',
