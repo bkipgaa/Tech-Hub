@@ -20,7 +20,7 @@ import { groupIcon } from '../components/stays/groupIcons';
 import usePlaces from '../hooks/usePlaces';
 import {
   PROPERTY_TYPES, LISTER_TYPES, COUNTIES,
-  categoryById, groupById, isShortStay, isBusiness, isEntertainment, isShop, amenitiesFor, priceUnitLabel,
+  categoryById, groupById, isShortStay, isBusiness, isEntertainment, isShop, offersOf, priceUnitLabel,
   LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE, LISTING_PRICE_CHANGE_NOTE,
 } from '../utils/listingCategories';
 
@@ -115,6 +115,8 @@ const ListingForm = () => {
           ...EMPTY,
           ...Object.fromEntries(Object.entries(l).filter(([k]) => k in EMPTY).map(([k, v]) => [k, v ?? ''])),
           availableFrom: l.availableFrom ? l.availableFrom.slice(0, 10) : '',
+          // Older listings ticked items from a fixed list; they become the lister's own items
+          extras: offersOf(l),
         });
       })
       .catch((err) => setError(err.response?.data?.message || 'Could not load this listing.'))
@@ -122,12 +124,6 @@ const ListingForm = () => {
   }, [id, isEdit]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
-
-  const toggleAmenity = (a) =>
-    setForm((f) => ({
-      ...f,
-      amenities: f.amenities.includes(a) ? f.amenities.filter((x) => x !== a) : [...f.amenities, a],
-    }));
 
   const addPhotos = async (files) => {
     const room = MAX_PHOTOS - form.photos.length;
@@ -166,10 +162,9 @@ const ListingForm = () => {
     }
     setSaving(true);
     try {
-      const allowed = new Set(amenitiesFor(form.category).map((a) => a.id));
       const payload = {
         ...form,
-        amenities: form.amenities.filter((a) => allowed.has(a)),
+        amenities: [], // "What it offers" is only the lister's own items now (extras)
         availableFrom: form.availableFrom || null,
         // Only shops sell products; empty rows are dropped by the server
         products: isShop(form.category)
@@ -449,19 +444,6 @@ const ListingForm = () => {
         </Section>
 
         <Section title="What it offers">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {amenitiesFor(form.category).map((a) => (
-              <label key={a.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.amenities.includes(a.id)}
-                  onChange={() => toggleAmenity(a.id)}
-                  className="rounded text-green-600 focus:ring-green-500"
-                />
-                {a.label}
-              </label>
-            ))}
-          </div>
           <ExtrasEditor
             value={form.extras}
             onChange={(extras) => setForm((f) => ({ ...f, extras }))}

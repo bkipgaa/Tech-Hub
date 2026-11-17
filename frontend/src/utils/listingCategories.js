@@ -698,16 +698,24 @@ export const AMENITIES = [
   { id: 'wheelchair_access', label: 'Wheelchair access', for: 'shop' },
 ];
 
-// Amenities that make sense for a category (entertainment and shops have their own sets)
-export const amenitiesFor = (categoryId) => {
-  const ent = isEntertainment(categoryId);
-  const shop = isShop(categoryId);
-  const shared = ['wifi', 'parking', 'security', 'cctv', 'backup_power', 'air_conditioning'];
-  if (shop) return AMENITIES.filter((a) => a.for === 'shop' || a.id === 'card_payments' || shared.includes(a.id));
-  return AMENITIES.filter((a) => (ent ? a.for === 'entertainment' || shared.includes(a.id) : !a.for));
-};
-
+// AMENITIES is no longer offered in the listing form: listers type what they
+// offer themselves (`extras`). It stays only to name items older listings ticked.
 export const amenityLabel = (id) => AMENITIES.find((a) => a.id === id)?.label || id;
+
+/**
+ * "What it offers" for a listing: the lister's own items, plus anything an older
+ * listing ticked from the old fixed list (until the lister next saves it),
+ * without repeats.
+ */
+export const offersOf = (listing) => {
+  const seen = new Set();
+  return [...(listing?.amenities || []).map(amenityLabel), ...(listing?.extras || [])].filter((item) => {
+    const k = String(item).toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+};
 
 export const LISTER_TYPES = [
   { id: 'owner', label: 'Owner / landlord' },

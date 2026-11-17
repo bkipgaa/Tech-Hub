@@ -14,7 +14,7 @@ import {
 import adminApi from '../../services/adminApi';
 import PermissionGate from '../../components/admin/PermissionGate';
 import { cldImage } from '../../utils/media';
-import { categoryById, formatPrice, placeLabel, amenityLabel, propertyTypeLabel, LISTING_PRICE } from '../../utils/listingCategories';
+import { categoryById, formatPrice, placeLabel, offersOf, propertyTypeLabel, LISTING_PRICE } from '../../utils/listingCategories';
 
 const TABS = [
   { id: 'pending', label: 'Waiting for review' },
@@ -101,13 +101,10 @@ const ListingCard = ({ listing, tab, onDone }) => {
 
           <p className="text-xs text-gray-500">{facts.join(' · ')}</p>
           {listing.description && <p className="text-sm text-gray-700 whitespace-pre-line line-clamp-6">{listing.description}</p>}
-          {listing.amenities?.length > 0 && (
-            <p className="text-xs text-gray-500">Offers: {listing.amenities.map(amenityLabel).join(', ')}</p>
-          )}
           {/* Typed in by the lister, so worth reading before approving */}
-          {listing.extras?.length > 0 && (
+          {offersOf(listing).length > 0 && (
             <p className="text-xs text-gray-700">
-              <span className="font-semibold">Lister's own items:</span> {listing.extras.join(', ')}
+              <span className="font-semibold">What it offers:</span> {offersOf(listing).join(', ')}
             </p>
           )}
 
