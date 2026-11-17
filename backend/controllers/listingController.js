@@ -212,6 +212,21 @@ const readListingInput = (body, existing = null) => {
       ? [...new Set(body.amenities.filter((a) => AMENITIES.includes(a)))]
       : [];
   }
+  if (body.extras !== undefined) {
+    if (!Array.isArray(body.extras)) return { error: 'Invalid items under "What it offers".' };
+    const seen = new Set();
+    const extras = [];
+    for (const raw of body.extras) {
+      const item = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (!item || seen.has(item.toLowerCase())) continue; // drop blanks and repeats
+      seen.add(item.toLowerCase());
+      extras.push(item);
+    }
+    if (extras.length > Listing.MAX_EXTRAS) {
+      return { error: `You can add up to ${Listing.MAX_EXTRAS} of your own items under "What it offers".` };
+    }
+    data.extras = extras;
+  }
   if (body.photos !== undefined) {
     if (!Array.isArray(body.photos)) return { error: 'Invalid photos.' };
     const photos = body.photos

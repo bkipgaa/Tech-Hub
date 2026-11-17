@@ -15,12 +15,13 @@ import { useAuth } from '../context/AuthContext';
 import { cldImage } from '../utils/media';
 import { LocationPicker } from '../components/stays/ListingMap';
 import ProductsEditor from '../components/stays/ProductsEditor';
+import ExtrasEditor from '../components/stays/ExtrasEditor';
 import { groupIcon } from '../components/stays/groupIcons';
 import usePlaces from '../hooks/usePlaces';
 import {
   PROPERTY_TYPES, LISTER_TYPES, COUNTIES,
   categoryById, groupById, isShortStay, isBusiness, isEntertainment, isShop, amenitiesFor, priceUnitLabel,
-  LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE,
+  LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE, LISTING_PRICE_CHANGE_NOTE,
 } from '../utils/listingCategories';
 
 const MAX_PHOTOS = 12;
@@ -48,6 +49,7 @@ const EMPTY = {
   lat: '',
   lng: '',
   amenities: [],
+  extras: [], // the lister's own "What it offers" items
   photos: [],
   contactPhone: '',
   whatsapp: true,
@@ -235,7 +237,7 @@ const ListingForm = () => {
           </div>
           <p className="text-sm text-gray-500 mt-2">
             Your first {LISTING_FREE_COUNT} listings are free for {LISTING_FREE_MONTHS} months. Any more, and every listing after that,
-            are KES {LISTING_PRICE} a month each. New listings are checked by our team before they go live.
+            are KES {LISTING_PRICE} a month each{LISTING_PRICE_CHANGE_NOTE}. New listings are checked by our team before they go live.
           </p>
         </div>
 
@@ -460,6 +462,11 @@ const ListingForm = () => {
               </label>
             ))}
           </div>
+          <ExtrasEditor
+            value={form.extras}
+            onChange={(extras) => setForm((f) => ({ ...f, extras }))}
+            placeholder={shop ? 'e.g. Free tile cutting, Hire purchase' : entertainment ? 'e.g. Ladies night on Wednesdays' : 'e.g. Borehole water, Kids play area'}
+          />
         </Section>
 
         <Section title={`Photos (${form.photos.length}/${MAX_PHOTOS})`}>

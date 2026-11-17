@@ -16,6 +16,7 @@ const photoSchema = new mongoose.Schema({
 }, { _id: false });
 
 const MAX_PRODUCTS = 60;
+const MAX_EXTRAS = 20;
 
 // Something a business sells
 const productSchema = new mongoose.Schema({
@@ -68,6 +69,11 @@ const listingSchema = new mongoose.Schema({
   },
 
   amenities: [{ type: String, enum: AMENITIES }],
+  // "What it offers" items the lister types in themselves, e.g. "Free tile cutting"
+  extras: {
+    type: [{ type: String, trim: true, maxlength: 60 }],
+    validate: [(v) => v.length <= MAX_EXTRAS, `At most ${MAX_EXTRAS} of your own items`],
+  },
 
   // Businesses: what they sell. Customers pick items and send the order on WhatsApp.
   products: {
@@ -116,3 +122,4 @@ listingSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Listing', listingSchema);
 module.exports.MAX_PRODUCTS = MAX_PRODUCTS;
+module.exports.MAX_EXTRAS = MAX_EXTRAS;
