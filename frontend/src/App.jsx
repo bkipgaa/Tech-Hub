@@ -63,6 +63,8 @@ import Privacy from './pages/Privacy';
 import Stays from './pages/Stays';
 import ListingDetails from './pages/ListingDetails';
 import ListingForm from './pages/ListingForm';
+import ListBusiness from './pages/ListBusiness';
+import StaysRedirect from './components/stays/StaysRedirect';
 import MyListings from './pages/MyListings';
 
 import './App.css';
@@ -114,19 +116,28 @@ function App() {
           <Route path="technicians/search" element={<TechnicianSearchResults />} />
           <Route path="jobs/:jobId" element={<JobDetails />} />
 
-          {/* ── Stays & Spaces ───────────────────────────── */}
-          <Route path="stays" element={<Stays />} />
+          {/* ── Businesses (was Stays & Spaces at /stays) ── */}
+          <Route path="businesses" element={<Stays />} />
           <Route
-            path="stays/new"
+            path="businesses/new"
+            element={
+              <PrivateRoute>
+                <ListBusiness />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="businesses/new/:groupId"
             element={
               <PrivateRoute>
                 <ListingForm />
               </PrivateRoute>
             }
           />
-          <Route path="stays/:id" element={<ListingDetails />} />
+          <Route path="businesses/:id" element={<ListingDetails />} />
+          <Route path="stays/*" element={<StaysRedirect />} />
           <Route
-            path="stays/:id/edit"
+            path="businesses/:id/edit"
             element={
               <PrivateRoute>
                 <ListingForm />

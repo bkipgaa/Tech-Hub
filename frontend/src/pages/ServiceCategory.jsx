@@ -25,6 +25,8 @@ import useMyLocation from '../hooks/useMyLocation';
 import useServiceBuckets from '../hooks/useServiceBuckets';
 import RadiusPicker from '../components/RadiusPicker';
 import { categoryPath } from '../utils/servicePaths';
+import { groupsForService } from '../utils/listingCategories';
+import RelatedBusinesses from '../components/stays/RelatedBusinesses';
 
 const RADIUS_KEY = 'webafix.searchRadius';
 
@@ -332,6 +334,9 @@ const ServiceCategory = () => {
             </section>
           </>
         )}
+
+        {/* Businesses that go with this service, e.g. hardware shops for Plumbing */}
+        <RelatedBusinesses groups={groupsForService(mainCategory)} location={userLocation} subject={mainCategory} />
       </div>
     </div>
   );

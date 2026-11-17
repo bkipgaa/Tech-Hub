@@ -57,7 +57,7 @@ const MENU_SECTIONS = [
     items: [
       { path: '/admin/technicians',   label: 'Fundis',    icon: Wrench,     permission: 'technicians.view' },
       { path: '/admin/verifications', label: 'Verifications',  icon: BadgeCheck, permission: 'verifications.view' },
-      { path: '/admin/listings',      label: 'Stays & Spaces', icon: Building2,  permission: 'listings.view' },
+      { path: '/admin/listings',      label: 'Businesses', icon: Building2,  permission: 'listings.view' },
       { path: '/admin/bookings',      label: 'Bookings',       icon: Briefcase,  permission: 'bookings.view' },
       { path: '/admin/jobs',          label: 'Jobs',           icon: FileText,   permission: 'jobs.view' },
       { path: '/admin/catalog',       label: 'Service Catalog', icon: ListTree,  permission: 'catalog.view' },

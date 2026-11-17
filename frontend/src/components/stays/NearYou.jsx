@@ -1,8 +1,8 @@
 /**
  * NearYou.jsx
  * ===========
- * "Near you" strip: the closest short stays, rentals, business spaces and
- * experts to the visitor, nearest first, with a link to see all.
+ * "Near you" strip: the closest businesses (all, or one group: hardware,
+ * pharmacies, stays…) and experts to the visitor, nearest first, with a link to see all.
  * Asks for location only when the visitor taps the button (or uses it
  * straight away if they already allowed it).
  */
@@ -15,14 +15,13 @@ import useMyLocation from '../../hooks/useMyLocation';
 import { useAuth } from '../../context/AuthContext';
 import ListingCard from './ListingCard';
 import { ExpertCard } from '../ServicesHighlights';
+import { LISTING_GROUPS } from '../../utils/listingCategories';
 
 const NEARBY_KM = 50;
 
 const TABS = [
-  { id: 'short_stays', label: 'Stays', hint: 'Airbnbs, guest houses & hotels' },
-  { id: 'rentals', label: 'Rentals', hint: 'Homes, hostels & rooms' },
-  { id: 'business', label: 'Business spaces', hint: 'Offices & shops' },
-  { id: 'entertainment', label: 'Entertainment', hint: 'Clubs, bars, casinos & more' },
+  { id: 'all', label: 'All businesses', hint: 'Everything listed near you' },
+  ...LISTING_GROUPS.map((g) => ({ id: g.id, label: g.name, hint: g.blurb })),
   { id: 'experts', label: 'Fundis', hint: 'Fundis & professionals' },
 ];
 
@@ -30,7 +29,7 @@ const NearYou = ({ className = '' }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { location, status, error, locate } = useMyLocation({ autoIfGranted: true });
-  const [tab, setTab] = useState('short_stays');
+  const [tab, setTab] = useState('all');
   const [result, setResult] = useState({ key: null, items: [] });
 
   const key = location ? `${tab}@${location.lat},${location.lng}` : null;
@@ -41,7 +40,9 @@ const NearYou = ({ className = '' }) => {
     const request =
       tab === 'experts'
         ? api.get('/search/nearby', { params: { lat: location.lat, lng: location.lng, radius: NEARBY_KM, limit: 4 } })
-        : api.get('/listings', { params: { lat: location.lat, lng: location.lng, maxKm: NEARBY_KM, group: tab, limit: 4 } });
+        : api.get('/listings', {
+            params: { lat: location.lat, lng: location.lng, maxKm: NEARBY_KM, group: tab === 'all' ? undefined : tab, limit: 4 },
+          });
     request
       .then((r) => !cancelled && setResult({ key, items: r.data?.data || [] }))
       .catch(() => !cancelled && setResult({ key, items: [] }));
@@ -50,8 +51,9 @@ const NearYou = ({ className = '' }) => {
 
   const loading = location && result.key !== key;
   // Experts open the expert search, which finds your location and sorts by distance
-  const seeAll = tab === 'experts' ? '/search' : `/stays?near=1&group=${tab}`;
-  const seeAllLabel = `See all nearby ${(TABS.find((t) => t.id === tab)?.label || '').toLowerCase()}`;
+  const groupLink = (t) => (t === 'all' ? '/businesses?near=1' : `/businesses?near=1&group=${t}`);
+  const seeAll = tab === 'experts' ? '/search' : groupLink(tab);
+  const seeAllLabel = tab === 'all' ? 'See all nearby' : `See all nearby: ${TABS.find((t) => t.id === tab)?.label || ''}`;
 
   return (
     <section className={className}>
@@ -60,7 +62,7 @@ const NearYou = ({ className = '' }) => {
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <Navigation className="w-5 h-5 text-green-600" /> Near you
           </h2>
-          <p className="text-sm text-gray-500">The closest places and Fundis, nearest first</p>
+          <p className="text-sm text-gray-500">The closest businesses and Fundis, nearest first</p>
         </div>
         {location && (
           <Link to={seeAll} className="text-sm font-semibold text-green-700 hover:text-green-800 inline-flex items-center gap-1">
@@ -75,7 +77,7 @@ const NearYou = ({ className = '' }) => {
             <LocateFixed className="w-6 h-6 text-red-600" />
           </div>
           <div className="flex-1">
-            <p className="font-semibold text-gray-800">See Airbnbs, rentals, offices, places to go out and Fundis around you</p>
+            <p className="font-semibold text-gray-800">See shops, pharmacies, restaurants, stays and Fundis around you</p>
             <p className="text-sm text-gray-500">
               We use your location only to sort results by distance. It isn't saved or shared.
             </p>
@@ -87,7 +89,7 @@ const NearYou = ({ className = '' }) => {
           </div>
           <button
             // Guests are asked to log in or sign up first, then land on places near them
-            onClick={user ? locate : () => navigate('/stays?near=1')}
+            onClick={user ? locate : () => navigate('/businesses?near=1')}
             disabled={status === 'locating'}
             className="inline-flex items-center justify-center gap-2 bg-red-600 text-white font-semibold px-5 py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-60"
           >
@@ -128,7 +130,7 @@ const NearYou = ({ className = '' }) => {
                   Browse all services
                 </Link>
               ) : (
-                <Link to={`/stays?near=1&group=${tab}`} className="text-green-700 font-medium hover:underline">
+                <Link to={groupLink(tab)} className="text-green-700 font-medium hover:underline">
                   Search further away
                 </Link>
               )}

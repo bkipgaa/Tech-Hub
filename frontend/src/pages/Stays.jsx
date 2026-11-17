@@ -1,8 +1,8 @@
 /**
  * Stays.jsx
  * =========
- * Stays & Spaces: browse Airbnbs, guest houses, hotels, houses for rent,
- * hostels, offices and shops. Filters live in the URL so results can be
+ * Businesses (/businesses): browse shops, pharmacies, restaurants, hotels,
+ * Airbnbs, houses for rent, offices and places to go out. Filters live in the URL so results can be
  * shared and survive a refresh.
  */
 
@@ -18,8 +18,15 @@ import ListingCard from '../components/stays/ListingCard';
 import NearYou from '../components/stays/NearYou';
 import PlaceSearch from '../components/stays/PlaceSearch';
 import {
-  LISTING_GROUPS, DISTANCE_BANDS, categoryById, groupById, bandById, priceUnitLabel, placeLabel,
+  LISTING_GROUPS, DISTANCE_BANDS, categoryById, groupById, bandById, placeLabel,
 } from '../utils/listingCategories';
+import { groupIcon } from '../components/stays/groupIcons';
+
+const GroupIcon = ({ groupId }) => (
+  <span className="w-9 h-9 rounded-lg bg-green-50 text-green-700 flex items-center justify-center">
+    {React.createElement(groupIcon(groupId), { className: 'w-5 h-5' })}
+  </span>
+);
 
 const FILTER_KEYS = ['group', 'category', 'county', 'town', 'estate', 'minPrice', 'maxPrice', 'bedrooms', 'sort', 'page'];
 
@@ -137,7 +144,7 @@ const Stays = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const searchSummary = [
-    categoryById(category)?.name || groupById(group)?.name || 'All places',
+    categoryById(category)?.name || groupById(group)?.name || 'All businesses',
     placeText ? `in ${placeText}` : '',
     nearOn ? (band.maxKm ? `${band.label.toLowerCase()} from you` : 'near you') : '',
   ].filter(Boolean).join(' ');
@@ -152,18 +159,18 @@ const Stays = () => {
         <div className="max-w-7xl mx-auto px-4 py-10">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold">Stays &amp; Spaces</h1>
+              <h1 className="text-3xl md:text-4xl font-bold">Businesses</h1>
               <p className="text-green-50 mt-2 max-w-xl">
-                Airbnbs, hotels, homes for rent, office space and places to go out across Kenya.
-                Contact hosts and owners directly. No booking fees.
+                Shops, hardware, pharmacies, restaurants, hotels, Airbnbs, homes for rent and places to go out near you.
+                Contact them directly and order their products. No booking fees.
               </p>
             </div>
             <Link
-              to={user ? '/stays/new' : '/login'}
-              state={user ? undefined : { from: { pathname: '/stays/new' } }}
+              to={user ? '/businesses/new' : '/login'}
+              state={user ? undefined : { from: { pathname: '/businesses/new' } }}
               className="inline-flex items-center gap-2 bg-white text-green-700 font-semibold px-5 py-2.5 rounded-lg hover:bg-green-50 self-start md:self-auto"
             >
-              <Plus className="w-4 h-4" /> List your property
+              <Plus className="w-4 h-4" /> List your business
             </Link>
           </div>
 
@@ -367,14 +374,14 @@ const Stays = () => {
             ) : listings.length === 0 ? (
               <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
                 <HomeIcon className="w-10 h-10 text-gray-300 mx-auto" />
-                <p className="mt-3 font-semibold text-gray-700">No places here yet</p>
+                <p className="mt-3 font-semibold text-gray-700">Nothing listed here yet</p>
                 <p className="text-sm text-gray-500 mt-1">Try another area or category, or be the first to list one.</p>
                 <Link
-                  to={user ? '/stays/new' : '/login'}
-                  state={user ? undefined : { from: { pathname: '/stays/new' } }}
+                  to={user ? '/businesses/new' : '/login'}
+                  state={user ? undefined : { from: { pathname: '/businesses/new' } }}
                   className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
                 >
-                  <Plus className="w-4 h-4" /> List your property
+                  <Plus className="w-4 h-4" /> List your business
                 </Link>
               </div>
             ) : (
@@ -420,32 +427,16 @@ const Stays = () => {
                       : 'bg-white border-gray-200 hover:bg-green-100 hover:border-green-500'
                   }`}
                 >
-                  <p className="font-semibold text-gray-800">{g.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{g.blurb} · {priceUnitLabel(g.priceUnit)}</p>
+                  <GroupIcon groupId={g.id} />
+                  <p className="font-semibold text-gray-800 mt-2 leading-snug">{g.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{g.blurb}</p>
                   <p className="text-xs text-green-700 font-medium mt-2">{groupCount(g)} listed</p>
                 </button>
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-2 mt-4">
-              {visibleGroups.flatMap((g) => g.categories).map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => pickCategory(c.id)}
-                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                    category === c.id
-                      ? 'bg-green-600 text-white border-green-600'
-                      : 'bg-white text-gray-700 border-gray-200 hover:bg-green-100 hover:border-green-500 hover:text-green-800'
-                  }`}
-                >
-                  {c.name}
-                  <span className={category === c.id ? 'text-green-100' : 'text-gray-400'}> · {counts[c.id] || 0}</span>
-                </button>
-              ))}
-            </div>
 
-
-            <h2 className="mt-10 text-xl font-bold text-gray-800">Latest places</h2>
+            <h2 className="mt-10 text-xl font-bold text-gray-800">Latest listings</h2>
             {/* ─── Filters ──────────────────────────────────── */}
             <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
               <p className="text-sm text-gray-600">
@@ -562,14 +553,14 @@ const Stays = () => {
             ) : listings.length === 0 ? (
               <div className="mt-6 bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
                 <HomeIcon className="w-10 h-10 text-gray-300 mx-auto" />
-                <p className="mt-3 font-semibold text-gray-700">No places here yet</p>
+                <p className="mt-3 font-semibold text-gray-700">Nothing listed here yet</p>
                 <p className="text-sm text-gray-500 mt-1">Try another area or category, or be the first to list one.</p>
                 <Link
-                  to={user ? '/stays/new' : '/login'}
-                  state={user ? undefined : { from: { pathname: '/stays/new' } }}
+                  to={user ? '/businesses/new' : '/login'}
+                  state={user ? undefined : { from: { pathname: '/businesses/new' } }}
                   className="inline-flex items-center gap-2 mt-4 bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
                 >
-                  <Plus className="w-4 h-4" /> List your property
+                  <Plus className="w-4 h-4" /> List your business
                 </Link>
               </div>
             ) : (
@@ -608,16 +599,16 @@ const Stays = () => {
             <Wrench className="w-6 h-6 text-green-600" />
           </div>
           <div className="flex-1">
-            <p className="font-semibold text-gray-800">Landlords and hosts: need help with your property?</p>
+            <p className="font-semibold text-gray-800">Running a business or a property? Need an expert?</p>
             <p className="text-sm text-gray-500">
-              Find property managers, agents, cleaners, plumbers and electricians, all rated by clients.
+              Fundis, Stylists, Home Pros, Tutors and more near you, all rated by clients. Each business page also links to the experts that go with it.
             </p>
           </div>
           <Link
             to="/services"
             className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-green-600 text-green-700 font-semibold hover:bg-green-50"
           >
-            Find a Fundi
+            Find an expert
           </Link>
         </div>
       </div>

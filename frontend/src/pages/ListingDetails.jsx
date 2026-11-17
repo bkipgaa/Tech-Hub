@@ -1,24 +1,27 @@
 /**
  * ListingDetails.jsx
  * ==================
- * One Stays & Spaces listing: photos, details, amenities and the lister's
- * contact buttons (call / WhatsApp). The phone number is only sent by the
- * API to signed-in users.
+ * One business or place: photos, details, amenities, its products (shops:
+ * pick items and order on WhatsApp) and the lister's contact buttons (call /
+ * WhatsApp). The phone number is only sent by the API to signed-in users.
+ * Shops show their exact location with directions; homes only an area.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Phone, MessageCircle, BedDouble, Bath, Users, Ruler, CalendarDays, Clock,
-  CheckCircle, Loader2, AlertCircle, ImageOff, Wrench, Pencil, Eye, ChevronLeft, ChevronRight,
+  CheckCircle, Loader2, AlertCircle, ImageOff, Pencil, Eye, ChevronLeft, ChevronRight, Navigation, Truck,
 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { cldImage } from '../utils/media';
 import ListingCard from '../components/stays/ListingCard';
 import { AreaMap } from '../components/stays/ListingMap';
+import ProductsOrder from '../components/stays/ProductsOrder';
+import LinkedServices from '../components/stays/LinkedServices';
 import {
-  categoryById, formatPrice, propertyTypeLabel, amenityLabel, listerTypeLabel, toInternationalPhone, placeLabel,
+  categoryById, groupById, formatPrice, propertyTypeLabel, amenityLabel, listerTypeLabel, toInternationalPhone, placeLabel,
 } from '../utils/listingCategories';
 
 const Fact = ({ icon: Icon, label, value }) => (
@@ -79,18 +82,25 @@ const ListingDetails = () => {
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <AlertCircle className="w-10 h-10 text-gray-300 mx-auto" />
         <p className="mt-3 text-gray-700 font-semibold">{error || 'Listing not found.'}</p>
-        <Link to="/stays" className="inline-block mt-4 text-green-700 font-medium hover:underline">
-          Back to Stays &amp; Spaces
+        <Link to="/businesses" className="inline-block mt-4 text-green-700 font-medium hover:underline">
+          Back to Businesses
         </Link>
       </div>
     );
   }
 
   const category = categoryById(listing.category);
+  const group = groupById(category?.groupId);
+  const shop = group?.kind === 'shop';
   const photos = listing.photos || [];
   const photo = photos[photoIndex];
   const phone = listing.contactPhone ? toInternationalPhone(listing.contactPhone) : null;
-  const waText = encodeURIComponent(`Hi, I saw "${listing.title}" on Webafix. Is it still available?`);
+  const waText = encodeURIComponent(
+    shop ? `Hi, I found ${listing.title} on Webafix.` : `Hi, I saw "${listing.title}" on Webafix. Is it still available?`
+  );
+  // Shops share their exact pin, so customers get directions
+  const exactPin = shop && listing.lat != null ? { lat: listing.lat, lng: listing.lng } : null;
+  const near = listing.estate || listing.town || listing.area;
   const ownerName = listing.owner ? `${listing.owner.firstName || ''} ${listing.owner.lastName || ''}`.trim() : '';
 
   const facts = [];
@@ -113,8 +123,8 @@ const ListingDetails = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <Link to="/stays" className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-green-700">
-          <ArrowLeft className="w-4 h-4" /> Stays &amp; Spaces
+        <Link to="/businesses" className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-green-700">
+          <ArrowLeft className="w-4 h-4" /> Businesses
         </Link>
 
         {listing.isOwner && (
@@ -134,7 +144,7 @@ const ListingDetails = () => {
                 <Link to="/my-listings" className="font-semibold underline">Pay to go live</Link>
               )}
             </span>
-            <Link to={`/stays/${listing._id}/edit`} className="inline-flex items-center gap-1 font-semibold hover:underline">
+            <Link to={`/businesses/${listing._id}/edit`} className="inline-flex items-center gap-1 font-semibold hover:underline">
               <Pencil className="w-4 h-4" /> Edit listing
             </Link>
           </div>
@@ -198,9 +208,15 @@ const ListingDetails = () => {
               {category && <p className="text-xs font-semibold uppercase tracking-wide text-green-700">{category.name}</p>}
               <h1 className="text-2xl font-bold text-gray-800 mt-1">{listing.title}</h1>
               <p className="text-gray-500 flex items-center gap-1 mt-1">
-                <MapPin className="w-4 h-4" /> {placeLabel(listing)}
+                <MapPin className="w-4 h-4 flex-shrink-0" /> {shop && listing.address ? `${listing.address}, ` : ''}
+                {placeLabel(listing)}
                 {listing.landmark ? ` · ${listing.landmark}` : ''}
               </p>
+              {shop && listing.delivery && (
+                <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full">
+                  <Truck className="w-4 h-4" /> Delivers
+                </p>
+              )}
 
               {facts.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5">
@@ -210,7 +226,7 @@ const ListingDetails = () => {
 
               {listing.description && (
                 <div className="mt-6">
-                  <h2 className="font-semibold text-gray-800 mb-2">About this place</h2>
+                  <h2 className="font-semibold text-gray-800 mb-2">{shop ? 'About this business' : 'About this place'}</h2>
                   <p className="text-gray-600 whitespace-pre-line text-sm leading-relaxed">{listing.description}</p>
                 </div>
               )}
@@ -229,8 +245,33 @@ const ListingDetails = () => {
               )}
             </div>
 
+            {shop && <ProductsOrder listing={listing} phone={phone} />}
+
+            {/* Shops: exact location and directions */}
+            {exactPin && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h2 className="font-semibold text-gray-800">Where to find us</h2>
+                    <p className="text-sm text-gray-500">
+                      {[listing.address, placeLabel(listing), listing.landmark].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${exactPin.lat},${exactPin.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-green-700"
+                  >
+                    <Navigation className="w-4 h-4" /> Get directions
+                  </a>
+                </div>
+                <AreaMap center={exactPin} />
+              </div>
+            )}
+
             {/* Area map: approximate for visitors, exact pin only on the edit page */}
-            {(listing.approxLocation || (listing.isOwner && listing.lat != null)) && (
+            {!exactPin && (listing.approxLocation || (listing.isOwner && listing.lat != null)) && (
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="font-semibold text-gray-800 mb-1">Where it is</h2>
                 <p className="text-sm text-gray-500 mb-3">
@@ -244,7 +285,11 @@ const ListingDetails = () => {
           {/* ─── Contact column ──────────────────────────── */}
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-gray-200 p-6 lg:sticky lg:top-20">
-              <p className="text-2xl font-bold text-green-700">{formatPrice(listing.price, listing.priceUnit)}</p>
+              {shop ? (
+                <p className="text-lg font-bold text-gray-800">{category?.name}</p>
+              ) : (
+                <p className="text-2xl font-bold text-green-700">{formatPrice(listing.price, listing.priceUnit)}</p>
+              )}
               {listing.deposit > 0 && (
                 <p className="text-sm text-gray-500 mt-1">Deposit: KES {listing.deposit.toLocaleString('en-KE')}</p>
               )}
@@ -252,7 +297,7 @@ const ListingDetails = () => {
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <p className="text-xs text-gray-500">Listed by</p>
                 <p className="font-semibold text-gray-800">{ownerName || 'Webafix member'}</p>
-                <p className="text-xs text-gray-500">{listerTypeLabel(listing.listerType)}</p>
+                {!shop && <p className="text-xs text-gray-500">{listerTypeLabel(listing.listerType)}</p>}
               </div>
 
               {listing.isOwner ? null : phone ? (
@@ -274,7 +319,9 @@ const ListingDetails = () => {
                     </a>
                   )}
                   <p className="text-xs text-gray-400 text-center pt-1">
-                    Never pay a deposit before you've viewed the place.
+                    {shop
+                      ? 'Pay the business directly when you get your order.'
+                      : "Never pay a deposit before you've viewed the place."}
                   </p>
                 </div>
               ) : (
@@ -288,23 +335,13 @@ const ListingDetails = () => {
               )}
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="font-semibold text-gray-800 flex items-center gap-2">
-                <Wrench className="w-4 h-4 text-green-600" /> Need a fundi for this property?
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                Movers, cleaners, plumbers and electricians near {listing.estate || listing.town || listing.area}.
-              </p>
-              <Link to="/services" className="inline-block mt-3 text-sm font-semibold text-green-700 hover:underline">
-                Find a Fundi →
-              </Link>
-            </div>
+            <LinkedServices groupId={group?.id} near={near} />
           </div>
         </div>
 
         {nearby.length > 0 && (
           <div className="mt-10">
-            <h2 className="text-xl font-bold text-gray-800">More places nearby</h2>
+            <h2 className="text-xl font-bold text-gray-800">{shop ? 'More businesses nearby' : 'More places nearby'}</h2>
             <p className="text-sm text-gray-500 mb-4">Closest to this {category ? category.name.toLowerCase() : 'place'} first</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {nearby.map((l) => <ListingCard key={l._id} listing={l} />)}

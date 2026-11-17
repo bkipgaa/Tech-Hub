@@ -4,19 +4,19 @@
  * Sign up in four steps:
  *   1. How will you use Webafix? expert, client, list a property, find a stay
  *   2. What for: an expert's categories and services, the kind of expert a
- *      client needs, or a Stays & Spaces category
+ *      client needs, or a business type
  *   3. Share your location (required); town and county are filled in from it
  *   4. Account details; experts can also attach their CV, which is uploaded
  *      once the account exists and fills in their profile sections
  * Afterwards each kind of user lands where they can get going: experts on
  * their dashboard, clients on Services, listers on the listing form and
- * stay seekers on Stays & Spaces near them.
+ * business seekers on Businesses near them.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  UserPlus, Mail, Lock, User, Phone, Wrench, Search, Home as HomeIcon, BedDouble,
+  UserPlus, Mail, Lock, User, Phone, Wrench, Search, Home as HomeIcon, Store,
   Scissors, HeartPulse, GraduationCap, PartyPopper, Briefcase,
   ArrowLeft, ArrowRight, Navigation, Loader2, CheckCircle, MapPin, AlertCircle, FileText, X,
 } from 'lucide-react';
@@ -25,7 +25,7 @@ import api from '../services/api';
 import ServicePicker from '../components/ServicePicker';
 import useServiceBuckets from '../hooks/useServiceBuckets';
 import { EMPTY_GROUP, servicesError } from '../utils/serviceGroups';
-import { LISTING_GROUPS } from '../utils/listingCategories';
+import { LISTING_GROUPS, categoryById } from '../utils/listingCategories';
 import { getLivePosition, reverseGeocode } from '../utils/geo';
 import { CV_ACCEPT, cvFileError } from '../utils/cv';
 
@@ -202,8 +202,11 @@ const SignUp = () => {
 
     if (intent === 'expert') navigate('/technician-dashboard');
     else if (intent === 'client') navigate(`/services?category=${encodeURIComponent(mainCategory)}`);
-    else if (intent === 'lister') navigate(`/stays/new?category=${listingCategory}`);
-    else navigate(`/stays?category=${listingCategory}&near=1`);
+    else if (intent === 'lister') {
+      // Straight to the listing page of the business's group, with its type picked
+      navigate(`/businesses/new/${categoryById(listingCategory)?.groupId || ''}?category=${listingCategory}`);
+    }
+    else navigate(`/businesses?category=${listingCategory}&near=1`);
   };
 
   // bucketId: the service group chosen with "I'm a …" / "I need a …"
@@ -287,17 +290,17 @@ const SignUp = () => {
               )}
 
               <ChoiceRow
-                icon={BedDouble}
-                label="Stays & Spaces"
+                icon={Store}
+                label="Businesses"
                 left={{
-                  title: 'I want to list a property',
-                  text: 'Stays, rentals, business or event spaces',
+                  title: 'I want to list my business',
+                  text: 'Shops, pharmacies, hotels, rentals and more',
                   picked: isPicked('lister', ''),
                   onClick: () => pickIntent('lister'),
                 }}
                 right={{
-                  title: "I'm looking for a stay or space",
-                  text: 'Find places near me',
+                  title: "I'm looking for a business",
+                  text: 'Shops, stays and places near me',
                   picked: isPicked('stay_seeker', ''),
                   onClick: () => pickIntent('stay_seeker'),
                 }}

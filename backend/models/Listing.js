@@ -1,9 +1,10 @@
 /**
  * Listing.js
  * ==========
- * A place in Stays & Spaces: an Airbnb, guest house, hotel, house for rent,
- * hostel, office or shop. Any signed-in user can list one; clients contact
- * the lister directly by phone or WhatsApp.
+ * A business or place in Businesses: a hardware shop, pharmacy, restaurant,
+ * Airbnb, hotel, house for rent, office, club… (utils/listingCategories.js).
+ * Any signed-in user can list one; clients contact the lister directly by
+ * phone or WhatsApp, and can send a business an order for its products.
  */
 
 const mongoose = require('mongoose');
@@ -13,6 +14,18 @@ const photoSchema = new mongoose.Schema({
   url: { type: String, required: true },
   publicId: String,
 }, { _id: false });
+
+const MAX_PRODUCTS = 60;
+
+// Something a business sells
+const productSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true, maxlength: 80 },
+  price: { type: Number, min: 0, default: null }, // null: ask for the price
+  unit: { type: String, trim: true, maxlength: 30, default: '' }, // e.g. per bag, per metre
+  description: { type: String, trim: true, maxlength: 300, default: '' },
+  photo: { type: photoSchema, default: undefined },
+  inStock: { type: Boolean, default: true },
+});
 
 const listingSchema = new mongoose.Schema({
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -31,8 +44,9 @@ const listingSchema = new mongoose.Schema({
   sizeSqft: { type: Number, min: 0, default: null },               // offices and shops
 
   // Per night, per month, or the entry fee for entertainment (0 = free entry)
-  price: { type: Number, required: true, min: 0 },
-  priceUnit: { type: String, enum: ['night', 'month', 'entry'], required: true },
+  // Shops (priceUnit 'none') have no single price; they list products instead
+  price: { type: Number, min: 0, default: 0 },
+  priceUnit: { type: String, enum: ['night', 'month', 'entry', 'none'], required: true },
   deposit: { type: Number, min: 0, default: null },
   openingHours: { type: String, trim: true, maxlength: 120, default: '' }, // entertainment
 
@@ -43,6 +57,8 @@ const listingSchema = new mongoose.Schema({
   estate: { type: String, trim: true, maxlength: 60, default: '' }, // e.g. Kilimani (optional)
   area: { type: String, trim: true, maxlength: 80 },     // legacy single field, read as the town
   landmark: { type: String, trim: true, maxlength: 160, default: '' },
+  // Street and building, for businesses customers walk into
+  address: { type: String, trim: true, maxlength: 160, default: '' },
 
   // Pin set by the lister on a map, as GeoJSON [lng, lat]. Never sent to other
   // users as-is: they get a distance and an approximate area (see the controller).
@@ -52,6 +68,13 @@ const listingSchema = new mongoose.Schema({
   },
 
   amenities: [{ type: String, enum: AMENITIES }],
+
+  // Businesses: what they sell. Customers pick items and send the order on WhatsApp.
+  products: {
+    type: [productSchema],
+    validate: [(v) => v.length <= MAX_PRODUCTS, `At most ${MAX_PRODUCTS} products`],
+  },
+  delivery: { type: Boolean, default: false }, // the business delivers
   photos: { type: [photoSchema], validate: [(v) => v.length <= 12, 'At most 12 photos'] },
 
   contactPhone: { type: String, required: true, trim: true },
@@ -75,7 +98,7 @@ const listingSchema = new mongoose.Schema({
   views: { type: Number, default: 0 },
 
   // Pricing (utils/listingPlan.js): a lister's first 5 listings are free during
-  // their 3 free months (freeSlot); otherwise KES 200 per listing per month.
+  // their 3 free months (freeSlot); otherwise KES 500 per listing per month.
   freeSlot: { type: Boolean, default: false },
   paidUntil: { type: Date, default: null },
   // When the listing stops showing: the later of paidUntil and, for a free
@@ -92,3 +115,4 @@ listingSchema.index({ status: 1, category: 1, county: 1, town: 1, estate: 1, pri
 listingSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Listing', listingSchema);
+module.exports.MAX_PRODUCTS = MAX_PRODUCTS;

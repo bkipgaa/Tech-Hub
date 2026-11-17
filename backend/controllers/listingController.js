@@ -20,6 +20,7 @@ const {
   COUNTIES,
   groupFor,
   priceUnitFor,
+  isShopCategory,
 } = require('../utils/listingCategories');
 const User = require('../models/User');
 const listingPlan = require('../utils/listingPlan');
@@ -47,13 +48,23 @@ const removeUnusedPhotos = async (photos) => {
     .filter((id) => typeof id === 'string' && id.startsWith(`${PHOTO_FOLDER}/`)))];
   if (!ids.length) return;
   try {
-    const stillUsed = await Listing.distinct('photos.publicId', { 'photos.publicId': { $in: ids } });
+    const [onListings, onProducts] = await Promise.all([
+      Listing.distinct('photos.publicId', { 'photos.publicId': { $in: ids } }),
+      Listing.distinct('products.photo.publicId', { 'products.photo.publicId': { $in: ids } }),
+    ]);
+    const stillUsed = [...onListings, ...onProducts];
     const unused = ids.filter((id) => !stillUsed.includes(id));
     await Promise.all(unused.map((id) => cloudinary.uploader.destroy(id, { resource_type: 'image', invalidate: true })));
   } catch (error) {
     console.error('[listingController] Could not remove listing photos', ids, error.message);
   }
 };
+
+// A listing's own photos plus its product photos
+const allPhotos = (listing) => [
+  ...(listing.photos || []),
+  ...(listing.products || []).map((p) => p.photo).filter(Boolean),
+];
 
 const OWNER_FIELDS = 'firstName lastName profileImage';
 
@@ -110,7 +121,9 @@ const present = (listing, viewer, ownerUser = null) => {
     OWNER_ONLY.forEach((k) => delete l[k]);
   }
   const coords = l.location?.coordinates;
-  if (l.isOwner && coords?.length === 2) {
+  // Shops want to be found: everyone gets their exact pin for directions.
+  // Homes and stays only show an approximate area to anyone but the owner.
+  if ((l.isOwner || isShopCategory(l.category)) && coords?.length === 2) {
     l.lat = coords[1];
     l.lng = coords[0];
   } else {
@@ -149,6 +162,7 @@ const readListingInput = (body, existing = null) => {
     ['town', 60, !existing?.town && !existing?.area],
     ['estate', 60, false],
     ['landmark', 160, false],
+    ['address', 160, false],
     ['openingHours', 120, false],
     ['contactPhone', 20, true],
   ]) {
@@ -166,7 +180,9 @@ const readListingInput = (body, existing = null) => {
     return { error: 'Please enter a valid phone number, e.g. 0712 345 678.' };
   }
 
-  if (body.price !== undefined || !existing) {
+  if (data.priceUnit === 'none') {
+    data.price = 0; // shops price their products instead
+  } else if (body.price !== undefined || !existing || existing.priceUnit === 'none') {
     const price = toNumber(body.price);
     // Entertainment can be free to enter; everything else needs a price
     const freeAllowed = data.priceUnit === 'entry';
@@ -217,6 +233,32 @@ const readListingInput = (body, existing = null) => {
   }
 
   if (body.whatsapp !== undefined) data.whatsapp = !!body.whatsapp;
+  if (body.delivery !== undefined) data.delivery = !!body.delivery;
+
+  if (body.products !== undefined) {
+    if (!Array.isArray(body.products)) return { error: 'Invalid products.' };
+    if (body.products.length > Listing.MAX_PRODUCTS) return { error: `You can add up to ${Listing.MAX_PRODUCTS} products.` };
+    const products = [];
+    for (const p of body.products) {
+      const name = String(p?.name || '').trim().slice(0, 80);
+      if (!name) continue; // empty rows are dropped
+      const price = toNumber(p.price);
+      if (price !== null && (!Number.isFinite(price) || price < 0)) return { error: `Invalid price for ${name}.` };
+      const photoUrl = p.photo?.url;
+      products.push({
+        ...(mongoose.isValidObjectId(p._id) ? { _id: p._id } : {}),
+        name,
+        price: price === null ? null : Math.round(price),
+        unit: String(p.unit || '').trim().slice(0, 30),
+        description: String(p.description || '').trim().slice(0, 300),
+        photo: typeof photoUrl === 'string' && /^https:\/\//.test(photoUrl)
+          ? { url: photoUrl, publicId: typeof p.photo.publicId === 'string' ? p.photo.publicId : undefined }
+          : undefined,
+        inStock: p.inStock !== false,
+      });
+    }
+    data.products = products;
+  }
   if (body.availableFrom !== undefined) {
     const d = body.availableFrom ? new Date(body.availableFrom) : null;
     data.availableFrom = d && !isNaN(d) ? d : null;
@@ -335,7 +377,9 @@ exports.getPlaces = async (req, res) => {
 };
 
 // Fields never sent in result lists
-const LIST_HIDDEN = { contactPhone: 0, description: 0, location: 0, activeUntil: 0, paidUntil: 0, freeSlot: 0, reminders: 0, review: 0 };
+const LIST_HIDDEN = {
+  contactPhone: 0, description: 0, location: 0, activeUntil: 0, paidUntil: 0, freeSlot: 0, reminders: 0, review: 0, products: 0,
+};
 
 /**
  * Nearest-first search with $geoNear. Each item gets `distanceKm`;
@@ -386,12 +430,17 @@ exports.searchListings = async (req, res) => {
     const filter = visibleFilter();
     if (typeof category === 'string' && CATEGORY_IDS.includes(category)) filter.category = category;
     else if (typeof group === 'string' && LISTING_GROUPS.some((g) => g.id === group)) filter.group = group;
+    else if (typeof req.query.groups === 'string') {
+      // Several groups at once, e.g. the businesses that go with a service (?groups=hardware,electronics)
+      const ids = req.query.groups.split(',').filter((id) => LISTING_GROUPS.some((g) => g.id === id));
+      if (ids.length) filter.group = { $in: ids };
+    }
     if (typeof county === 'string' && county) filter.county = county;
     if (typeof town === 'string' && town.trim()) filter.town = exactly(tidyPlace(town));
     if (typeof estate === 'string' && estate.trim()) filter.estate = exactly(tidyPlace(estate));
     if (typeof q === 'string' && q.trim()) {
       const rx = new RegExp(escapeRegex(q.trim()), 'i');
-      filter.$or = [{ title: rx }, { town: rx }, { estate: rx }, { landmark: rx }, { county: rx }];
+      filter.$or = [{ title: rx }, { town: rx }, { estate: rx }, { landmark: rx }, { county: rx }, { 'products.name': rx }];
     }
     const min = toNumber(minPrice);
     const max = toNumber(maxPrice);
@@ -563,7 +612,7 @@ exports.updateListing = async (req, res) => {
     const { data, error } = readListingInput(req.body, listing);
     if (error) return fail(res, 400, error);
     await useKnownSpelling(data, listing);
-    const photosBefore = listing.photos.map((p) => ({ publicId: p.publicId }));
+    const photosBefore = allPhotos(listing).map((p) => ({ publicId: p.publicId }));
     Object.assign(listing, data);
     const resubmitted = listing.status === 'rejected';
     if (resubmitted) {
@@ -573,7 +622,7 @@ exports.updateListing = async (req, res) => {
     }
     await listing.save();
     // Photos taken off this listing (checked after saving, so they no longer count as used)
-    if (data.photos) await removeUnusedPhotos(photosBefore);
+    if (data.photos || data.products) await removeUnusedPhotos(photosBefore);
     res.json({
       success: true,
       data: present(listing, req.user, user),
@@ -611,7 +660,7 @@ exports.deleteListing = async (req, res) => {
     const listing = await findOwnListing(req, res);
     if (!listing) return;
     await listing.deleteOne();
-    await removeUnusedPhotos(listing.photos);
+    await removeUnusedPhotos(allPhotos(listing));
     res.json({ success: true, message: 'Listing deleted.' });
   } catch (error) {
     fail(res, 500, 'Failed to delete listing.', error);

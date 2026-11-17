@@ -43,7 +43,8 @@ const ClickToPlace = ({ onPick }) => {
 
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
 
-export const LocationPicker = ({ value, onChange, height = 320 }) => {
+// placeWord: "property" or "business"; exact: customers see the exact pin (shops)
+export const LocationPicker = ({ value, onChange, height = 320, placeWord = 'property', exact = false }) => {
   const [view, setView] = useState(value || null);
   const [locating, setLocating] = useState(false);
   const [query, setQuery] = useState('');
@@ -128,7 +129,7 @@ export const LocationPicker = ({ value, onChange, height = 320 }) => {
           className="px-4 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
         >
           {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
-          I'm at the property
+          I'm at the {placeWord}
         </button>
       </div>
 
@@ -151,8 +152,10 @@ export const LocationPicker = ({ value, onChange, height = 320 }) => {
       <p className={`text-xs ${message ? 'text-amber-700' : 'text-gray-500'}`}>
         {message ||
           (value
-            ? 'Pin set. Drag it if it isn’t exactly on the property. Clients only see the approximate area, never the exact pin.'
-            : 'Tap the map where the property is, search for a place, or use your location if you’re there now.')}
+            ? `Pin set. Drag it if it isn’t exactly on the ${placeWord}. ${
+                exact ? 'Customers see this pin so they can find you.' : 'Clients only see the approximate area, never the exact pin.'
+              }`
+            : `Tap the map where the ${placeWord} is, search for a place, or use your location if you’re there now.`)}
       </p>
     </div>
   );

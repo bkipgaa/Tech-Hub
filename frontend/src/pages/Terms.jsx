@@ -6,9 +6,9 @@ const E = L.legalEntity;
 
 const sections = [
   { id: 'marketplace', title: 'We are a marketplace, not the contractor', body: [
-    `${E} ("**Webafix**", "we", "us"), a company registered in Kenya (registration number ${L.registrationNo}, KRA PIN ${L.kraPin}), runs the Webafix online platform (the "**platform**"), which helps clients find and contact independent technicians and engineers ("**Technicians**"), helps Technicians find work through bookings and job postings, and lets people list places to stay, rent or work from in **Stays & Spaces**.`,
+    `${E} ("**Webafix**", "we", "us"), a company registered in Kenya (registration number ${L.registrationNo}, KRA PIN ${L.kraPin}), runs the Webafix online platform (the "**platform**"), which helps clients find and contact independent technicians and engineers ("**Technicians**"), helps Technicians find work through bookings and job postings, and lets businesses and places (such as shops, pharmacies, restaurants, hotels, Airbnbs, homes for rent and entertainment venues) be listed in **Businesses** so customers can find and contact them. In these Terms, "**Technician**" means anyone offering services through a profile on the platform, in any service group (for example Fundis, Stylists, Home Pros, Wellness Pros, Tutors, Event Pros and Freelancers).`,
     `**Webafix does not provide technical services, employ Technicians, or guarantee any work.** Any service contract is directly between the client and the Technician. Technicians are independent contractors, not employees, agents or partners of Webafix.`,
-    `**Webafix does not own, inspect, manage or rent out any place listed in Stays & Spaces.** Any stay, tenancy or lease is directly between the guest or tenant and the person who listed the place.`,
+    `**Webafix does not own, run, inspect or manage any business or place listed in Businesses, and does not sell, stock or deliver their products.** Any order, purchase, delivery, stay, tenancy or lease is directly between the customer and the business or person who listed it.`,
     `We do not control or guarantee the quality, safety, legality, timing or price of services, or the accuracy of what users post.`,
     ...(L.formerName ? [`Webafix was previously known as **${L.formerName}**. Any reference to ${L.formerName} on the site, in the app or in past messages means Webafix, and these Terms apply to it.`] : []),
   ]},
@@ -32,8 +32,8 @@ const sections = [
   { id: 'payments', title: 'Payments', body: [
     { ul: [
       `**Webafix does not hold, receive or pass on money for services.** Clients pay Technicians directly, by the methods the Technician offers (cash, M-Pesa, card, bank transfer). Webafix is not a party to these payments, so it cannot refund them. Any refund, deposit or money for materials is agreed between the client and the Technician.`,
-      `**Webafix does not take bookings, rent, deposits or any other payment for places in Stays & Spaces.** Guests and tenants pay the lister directly.`,
-      `The only payments made through the platform are **Technician subscriptions** and **Stays & Spaces listing fees**. They are processed by **Paystack** (card) and **Safaricom M-Pesa**. Their terms also apply. We never see or store card details or M-Pesa PINs.`,
+      `**Webafix does not take orders, payments for products, bookings, rent, deposits or any other payment for businesses and places in Businesses.** Customers, guests and tenants pay the business or lister directly.`,
+      `The only payments made through the platform are **Technician subscriptions** and **Businesses listing fees**. They are processed by **Paystack** (card) and **Safaricom M-Pesa**. Their terms also apply. We never see or store card details or M-Pesa PINs.`,
       `Prices are in **Kenya Shillings (KES)**. Prices shown by Technicians are estimates until a quotation is accepted.`,
       `Keep your receipts. Technicians must give clients a receipt for money received.`,
     ]},
@@ -51,14 +51,15 @@ const sections = [
     `Clients can post jobs and Technicians can apply. Our admins may approve or reject jobs before they appear. Approval is **not** an endorsement of the client, a verification, or a promise of payment.`,
     `Job posts and applications must be genuine, lawful and accurate. No fake jobs, misleading rates, or charging fees for "access" to jobs.`,
   ]},
-  { id: 'stays', title: 'Stays & Spaces', body: [
-    `Any signed-in user can list a place in Stays & Spaces, such as an Airbnb, guest house, hotel, hostel, house for rent, office, shop or entertainment venue. The person listing it (the "**lister**") may be the owner, an agent, a property manager or a host.`,
+  { id: 'businesses', title: 'Businesses', body: [
+    `Any signed-in user can list a business or place in Businesses. This includes shops (for example hardware, electronics, phones, home and living, fashion and beauty, pharmacies and health facilities, food and drinks, schools, auto, agriculture, and business and office supplies), stays (Airbnbs, guest houses, hotels), homes, hostels, offices and shops to let, and entertainment venues. The person listing it (the "**lister**") may be the owner, an agent, a property manager, a host or someone authorised to act for the business.`,
     { ul: [
-      `**Contact is direct.** Guests and tenants contact the lister by phone or WhatsApp. Webafix does not take bookings or payments for places and is not a party to any stay, tenancy or lease.`,
-      `**Listers** must have the right to list the place (as owner, or with the owner's authority) and must give accurate details: real photos of that place, the actual price and any deposit, the location and what is included. Keep the listing up to date and pause it when the place is not available. You are responsible for any licences, permits, taxes and laws that apply to letting the place.`,
-      `**Review.** Our team reviews each listing, and each change to it, before it appears. Approval is **not** a check of ownership, condition, safety or legality, and not an endorsement of the lister.`,
-      `**What others see.** The lister's contact phone is shown only to signed-in users. Other users see an approximate area, not the exact map pin.`,
-      `**Guests and tenants** should use their own judgement: view the place before paying, confirm the lister's identity and right to let it, get a written agreement and receipts, and be wary of anyone who asks for money before a viewing.`,
+      `**Contact and orders are direct.** Customers contact the business by phone or WhatsApp. On a shop's page a customer can pick products and send an order message to the business on WhatsApp. That message goes straight from the customer to the business: Webafix does not receive, accept or process the order, and is not a party to any sale, delivery, stay, tenancy or lease. Prices, availability, delivery, returns and refunds are agreed between the customer and the business.`,
+      `**Listers** must have the right to list the business or place (as owner, or with the owner's authority) and must give accurate details: real photos, the products you actually sell and their actual prices, the actual price and any deposit for places, opening hours, the address and location, and what is included. Keep the listing up to date: mark products out of stock and pause the listing when you are closed or the place is not available.`,
+      `**Licences and the law.** You are responsible for every licence, permit, registration, tax and law that applies to your business, for example a pharmacy or health facility licence, a liquor licence, food handling permits, or permits for letting a place. You must not list counterfeit, stolen, prohibited or unlicensed goods. Age-restricted products, such as alcohol, may only be sold to adults, and prescription medicines only as the law allows.`,
+      `**Review.** Our team reviews each listing, and each change to it, before it appears. Approval is **not** a check of ownership, licences, condition, product quality, safety or legality, and not an endorsement of the lister.`,
+      `**What others see.** The lister's contact phone is shown only to signed-in users. For shops and other businesses customers visit, the exact map pin and address are shown so customers can find you and get directions. For homes, stays and other places to rent, other users see an approximate area, not the exact map pin.`,
+      `**Customers, guests and tenants** should use their own judgement: confirm the price and what you are getting before you pay, check goods on delivery or collection, view a place before paying for it, confirm the lister's identity and right to let it, get receipts and written agreements, and be wary of anyone who asks for money before a viewing or delivery.`,
       `We may refuse, hide or remove listings that are fake, misleading, duplicated, unsafe, unlawful or reported by users, and suspend the lister's account.`,
     ]},
     `**Listing fees.** A lister's first listing starts their **${L.listingFreeMonths} free months**. During that time up to **${L.listingFreeCount} listings** are free. Other listings, and all listings after the free months, cost **${L.listingFee} per listing per month**, as shown in the app when you pay. Each payment keeps that listing in search for one more month. We send reminders before a listing's time runs out. An unpaid listing stays saved but is hidden from search, and can't be edited, until it is paid for. Listing fees are non-refundable, except where the law requires a refund or we end the service for our own reasons.`,
@@ -76,6 +77,7 @@ const sections = [
       `give false identity, qualifications, licences or reviews, or impersonate anyone;`,
       `submit fake, edited or reused proof-of-work photos, or mark work as complete or paid when it is not;`,
       `post fake listings, list a place you have no right to let, or ask for money for a place that does not exist or is not available;`,
+      `list or sell counterfeit, stolen, prohibited or unlicensed goods, or take payment for products you do not have or will not deliver;`,
       `harass, threaten, discriminate against or defraud anyone;`,
       `use the platform for illegal work, or work you are not licensed to do;`,
       `scrape, hack, probe, overload, reverse-engineer or interfere with the platform, which may also be an offence under the Computer Misuse and Cybercrimes Act, 2018;`,
@@ -163,7 +165,9 @@ const sections = [
     `Mark a job complete only when the work is finished and you have been paid in full. Proof-of-work photos must be genuine photos of that job, taken at the job location. Repeated late cancellations, no-shows or false completions can lead to warnings, reduced visibility or suspension.`,
   ]},
   { id: 't-fees', title: 'Subscriptions', body: [
+    `The subscriptions and commission below apply to **Technical Services** (Fundis).`,
     { ul: [
+      `**Other service groups.** For services in the other groups (Personal Care & Appearance, Home & Property, Health, Wellness & Care, Education & Training, Events, Food & Media, and Business & Digital) there is currently **no subscription and no commission**, and you are shown to clients within ${L.nonTechnicalRadius}. We may introduce daily, weekly or monthly rates for these groups; we will give at least ${L.feeChangeNotice} notice before any charge applies.`,
       `**Free plan.** Every Technician can stay on the **Free plan** at no monthly cost, visible to clients within ${L.freeRadius}. When few Technicians match a client's search nearby, we may also show Technicians further away, on any plan. We do not guarantee this.`,
       `**Commission on the Free plan.** For each booking you receive while on the Free plan, you owe a commission of **${L.commissionPerJob}** once the work is marked completed. The client's rating and the completed job are recorded but do not appear on your profile until the commission is paid. The commission is non-refundable once the job is completed.`,
       `**Paid plans** differ by **visibility radius** and price (in KES). Some paid plans have the same radius as the Free plan. Paid plans are listed above the Free plan in default search results and charge **no commission**, and ratings and completed jobs show on your profile immediately. The plan details and prices shown in the app when you pay are the ones that apply. Your first month on a paid plan can be taken free, **once**, whichever plan you choose.`,

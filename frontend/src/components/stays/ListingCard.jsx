@@ -23,7 +23,7 @@ const ListingCard = ({ listing }) => {
 
   return (
     <Link
-      to={`/stays/${listing._id}`}
+      to={`/businesses/${listing._id}`}
       className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md hover:border-green-400 transition-all flex flex-col"
     >
       <div className="relative aspect-[4/3] bg-gray-100">
@@ -69,7 +69,9 @@ const ListingCard = ({ listing }) => {
         )}
 
         <p className="mt-auto pt-3 text-lg font-bold text-green-700">
-          {formatPrice(listing.price, listing.priceUnit)}
+          {formatPrice(listing.price, listing.priceUnit) || (
+            <span className="text-sm">{listing.delivery ? 'Delivers · View products' : 'View products'}</span>
+          )}
         </p>
       </div>
     </Link>

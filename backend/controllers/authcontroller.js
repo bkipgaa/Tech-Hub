@@ -153,7 +153,7 @@ exports.register = async (req, res) => {
     } else {
       const listingCategory = String(req.body.listingCategory || '');
       if (!CATEGORY_IDS.includes(listingCategory)) {
-        return res.status(400).json({ success: false, message: 'Pick a Stays & Spaces category.' });
+        return res.status(400).json({ success: false, message: 'Pick a type of business or place.' });
       }
       preferences.listingCategory = listingCategory;
     }

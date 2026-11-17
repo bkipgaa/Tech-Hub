@@ -1,7 +1,7 @@
 /**
  * Listings.jsx (admin)
  * ====================
- * Review Stays & Spaces listings. New listings wait here until approved;
+ * Review Businesses listings. New listings wait here until approved;
  * approved ones can be hidden again. Rejections need a reason, which is
  * emailed to the lister so they know what to fix.
  */
@@ -14,7 +14,7 @@ import {
 import adminApi from '../../services/adminApi';
 import PermissionGate from '../../components/admin/PermissionGate';
 import { cldImage } from '../../utils/media';
-import { categoryById, formatPrice, placeLabel, amenityLabel, propertyTypeLabel } from '../../utils/listingCategories';
+import { categoryById, formatPrice, placeLabel, amenityLabel, propertyTypeLabel, LISTING_PRICE } from '../../utils/listingCategories';
 
 const TABS = [
   { id: 'pending', label: 'Waiting for review' },
@@ -114,12 +114,12 @@ const ListingCard = ({ listing, tab, onDone }) => {
             {listing.review?.rejectionReason && (
               <span className="sm:col-span-2 text-red-700"><strong>Reason given:</strong> {listing.review.rejectionReason}</span>
             )}
-            <span>{listing.freeSlot ? 'Free listing (free months)' : 'Paid listing (KES 200 a month)'}</span>
+            <span>{listing.freeSlot ? 'Free listing (free months)' : `Paid listing (KES ${LISTING_PRICE} a month)`}</span>
           </div>
 
           {['active', 'paused', 'hidden'].includes(tab) && (
             <a
-              href={`/stays/${listing._id}`}
+              href={`/businesses/${listing._id}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
@@ -236,7 +236,7 @@ const AdminListings = () => {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <Building2 className="w-6 h-6 text-green-600" /> Stays &amp; Spaces listings
+          <Building2 className="w-6 h-6 text-green-600" /> Business listings
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
           New listings only appear in search after you approve them. Rejecting emails the lister your reason.
