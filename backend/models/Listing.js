@@ -16,7 +16,7 @@ const photoSchema = new mongoose.Schema({
 }, { _id: false });
 
 const MAX_PRODUCTS = 60;
-const MAX_EXTRAS = 20;
+const MAX_EXTRAS = 30;
 
 // Something a business sells
 const productSchema = new mongoose.Schema({

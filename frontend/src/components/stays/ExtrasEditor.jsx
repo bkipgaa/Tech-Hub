@@ -1,15 +1,15 @@
 /**
  * ExtrasEditor.jsx
  * ================
- * "What it offers" items the lister types in themselves (beyond the
- * checkboxes), e.g. "Free tile cutting" or "Kids play area". Saved on the
- * listing as `extras` and shown to users with the other amenities.
+ * "What it offers": the items the lister types in themselves, e.g. "Free
+ * tile cutting" or "Kids play area". Saved on the listing as `extras`; this
+ * is the list users see on the listing.
  */
 
 import React, { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 
-const MAX_EXTRAS = 20; // matches backend/models/Listing.js
+const MAX_EXTRAS = 30; // matches backend/models/Listing.js
 const MAX_LENGTH = 60;
 
 const ExtrasEditor = ({ value, onChange, placeholder }) => {
@@ -33,8 +33,9 @@ const ExtrasEditor = ({ value, onChange, placeholder }) => {
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-700">Anything else you offer?</p>
-      <p className="text-xs text-gray-500 mb-2">Add your own, one at a time. Up to {MAX_EXTRAS}.</p>
+      <p className="text-sm text-gray-500 mb-2">
+        List what customers get, one item at a time. This is what people see on your listing. Up to {MAX_EXTRAS}.
+      </p>
       <div className="flex gap-2">
         <input
           value={text}

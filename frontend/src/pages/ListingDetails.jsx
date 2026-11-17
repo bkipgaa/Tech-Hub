@@ -21,7 +21,7 @@ import { AreaMap } from '../components/stays/ListingMap';
 import ProductsOrder from '../components/stays/ProductsOrder';
 import LinkedServices from '../components/stays/LinkedServices';
 import {
-  categoryById, groupById, formatPrice, propertyTypeLabel, amenityLabel, listerTypeLabel, toInternationalPhone, placeLabel,
+  categoryById, groupById, formatPrice, propertyTypeLabel, offersOf, listerTypeLabel, toInternationalPhone, placeLabel,
 } from '../utils/listingCategories';
 
 const Fact = ({ icon: Icon, label, value }) => (
@@ -231,12 +231,12 @@ const ListingDetails = () => {
                 </div>
               )}
 
-              {(listing.amenities?.length > 0 || listing.extras?.length > 0) && (
+              {offersOf(listing).length > 0 && (
                 <div className="mt-6">
                   <h2 className="font-semibold text-gray-800 mb-2">What it offers</h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {/* The ticked options, then the lister's own items */}
-                    {[...(listing.amenities || []).map(amenityLabel), ...(listing.extras || [])].map((label) => (
+                    {/* What the lister typed in (older listings: what they ticked) */}
+                    {offersOf(listing).map((label) => (
                       <span key={label} className="flex items-start gap-2 text-sm text-gray-700">
                         <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" /> {label}
                       </span>
