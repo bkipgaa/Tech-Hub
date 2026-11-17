@@ -104,6 +104,12 @@ const ListingCard = ({ listing, tab, onDone }) => {
           {listing.amenities?.length > 0 && (
             <p className="text-xs text-gray-500">Offers: {listing.amenities.map(amenityLabel).join(', ')}</p>
           )}
+          {/* Typed in by the lister, so worth reading before approving */}
+          {listing.extras?.length > 0 && (
+            <p className="text-xs text-gray-700">
+              <span className="font-semibold">Lister's own items:</span> {listing.extras.join(', ')}
+            </p>
+          )}
 
           <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 grid sm:grid-cols-2 gap-1">
             <span><strong>Lister:</strong> {`${owner.firstName || ''} ${owner.lastName || ''}`.trim() || '—'}</span>

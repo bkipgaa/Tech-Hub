@@ -231,13 +231,14 @@ const ListingDetails = () => {
                 </div>
               )}
 
-              {listing.amenities?.length > 0 && (
+              {(listing.amenities?.length > 0 || listing.extras?.length > 0) && (
                 <div className="mt-6">
                   <h2 className="font-semibold text-gray-800 mb-2">What it offers</h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {listing.amenities.map((a) => (
-                      <span key={a} className="flex items-center gap-2 text-sm text-gray-700">
-                        <CheckCircle className="w-4 h-4 text-green-600" /> {amenityLabel(a)}
+                    {/* The ticked options, then the lister's own items */}
+                    {[...(listing.amenities || []).map(amenityLabel), ...(listing.extras || [])].map((label) => (
+                      <span key={label} className="flex items-start gap-2 text-sm text-gray-700">
+                        <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" /> {label}
                       </span>
                     ))}
                   </div>

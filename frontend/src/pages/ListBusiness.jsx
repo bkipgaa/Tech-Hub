@@ -9,7 +9,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { LISTING_GROUPS, LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE } from '../utils/listingCategories';
+import { LISTING_GROUPS, LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE, LISTING_PRICE_CHANGE_NOTE } from '../utils/listingCategories';
 import { groupIcon } from '../components/stays/groupIcons';
 
 const ListBusiness = () => {
@@ -28,7 +28,7 @@ const ListBusiness = () => {
           What kind of business is it? Pick its group to continue.
         </p>
         <p className="text-xs text-gray-500 mt-1">
-          Your first {LISTING_FREE_COUNT} listings are free for {LISTING_FREE_MONTHS} months, then KES {LISTING_PRICE} a month each.
+          Your first {LISTING_FREE_COUNT} listings are free for {LISTING_FREE_MONTHS} months, then KES {LISTING_PRICE} a month each{LISTING_PRICE_CHANGE_NOTE}.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-6">

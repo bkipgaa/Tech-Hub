@@ -44,7 +44,9 @@ const applyPaystackTransaction = async (tx) => {
   const listingIds = String(meta.listingIds || '').split(',').filter((id) => mongoose.isValidObjectId(id));
   const months = Number(meta.months);
   if (!listingIds.length || !listingPlan.PAY_MONTHS.includes(months)) return null;
-  if (tx.currency !== 'KES' || Number(tx.amount) < listingPlan.priceFor(listingIds.length, months) * 100) return null;
+  // Priced at when the payment was started, so one started just before a price change still counts
+  const startedAt = tx.created_at || tx.createdAt || tx.paid_at || new Date();
+  if (tx.currency !== 'KES' || Number(tx.amount) < listingPlan.priceFor(listingIds.length, months, startedAt) * 100) return null;
   const user = await User.findById(meta.userId);
   if (!user) return null;
   await listingPlan.applyPayment(user, {

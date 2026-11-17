@@ -5,8 +5,8 @@
  *
  *   first listing  → starts the lister's FREE_MONTHS free months
  *   free months    → up to FREE_LISTINGS listings are free ("free slots");
- *                    any more cost PRICE_PER_LISTING a month each
- *   after that     → every listing costs PRICE_PER_LISTING a month
+ *                    any more cost pricePerListing() a month each
+ *   after that     → every listing costs pricePerListing() a month
  *   unpaid         → the listing stays saved but is hidden from search
  *                    (and can't be edited) until it's paid for
  *
@@ -18,8 +18,14 @@ const Listing = require('../models/Listing');
 
 const FREE_MONTHS = 3;
 const FREE_LISTINGS = 5;
-const PRICE_PER_LISTING = 500; // KES per listing per month
 const PAY_MONTHS = [1]; // each payment covers the next month only
+
+// KES per listing per month. The price went up from 200 to 500 on 1 December
+// 2026 (midnight in Nairobi, UTC+3), after users were given notice.
+const OLD_PRICE = 200;
+const NEW_PRICE = 500;
+const NEW_PRICE_FROM = new Date('2026-12-01T00:00:00+03:00');
+const pricePerListing = (at = new Date()) => (new Date(at) >= NEW_PRICE_FROM ? NEW_PRICE : OLD_PRICE);
 
 // Listings that still count towards the free slots (rejected ones give theirs back)
 const COUNTED = { status: { $ne: 'rejected' } };
@@ -96,7 +102,9 @@ const planSummary = async (user, now = new Date()) => {
     freeMonths: FREE_MONTHS,
     freeListings: FREE_LISTINGS,
     freeUsed,
-    pricePerListing: PRICE_PER_LISTING,
+    pricePerListing: pricePerListing(now),
+    // Shown before the switch so listers know what's coming
+    newPrice: now < NEW_PRICE_FROM ? { amount: NEW_PRICE, from: NEW_PRICE_FROM } : null,
     payMonths: PAY_MONTHS,
     currency: 'KES',
   };
@@ -113,8 +121,8 @@ const syncOwnerListings = async (user) => {
   );
 };
 
-/** Price for paying `count` listings for `months` months. */
-const priceFor = (count, months) => PRICE_PER_LISTING * count * months;
+/** Price for paying `count` listings for `months` months, at the price on date `at`. */
+const priceFor = (count, months, at = new Date()) => pricePerListing(at) * count * months;
 
 /**
  * Record a payment covering `listingIds` for `months` months (idempotent per
@@ -221,7 +229,11 @@ const migrateListings = async () => {
 module.exports = {
   FREE_MONTHS,
   FREE_LISTINGS,
-  PRICE_PER_LISTING,
+  // Today's price; read as listingPlan.PRICE_PER_LISTING (not destructured) so it's always current
+  get PRICE_PER_LISTING() { return pricePerListing(); },
+  pricePerListing,
+  NEW_PRICE,
+  NEW_PRICE_FROM,
   PAY_MONTHS,
   addMonths,
   freeUntil,

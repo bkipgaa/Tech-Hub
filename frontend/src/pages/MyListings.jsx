@@ -18,7 +18,7 @@ import {
 import api from '../services/api';
 import { cldImage } from '../utils/media';
 import {
-  categoryById, formatPrice, placeLabel, LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE,
+  categoryById, formatPrice, placeLabel, LISTING_FREE_MONTHS, LISTING_FREE_COUNT, LISTING_PRICE, LISTING_PRICE_CHANGE_NOTE,
 } from '../utils/listingCategories';
 import PayListingsPanel from '../components/stays/PayListingsPanel';
 
@@ -162,7 +162,7 @@ const MyListings = () => {
                   <>
                     <p className="font-semibold text-gray-800">Your first {LISTING_FREE_MONTHS} months are free</p>
                     <p className="text-sm text-gray-600">
-                      Up to {LISTING_FREE_COUNT} listings, starting with your first one. After that it's KES {LISTING_PRICE} per listing a month.
+                      Up to {LISTING_FREE_COUNT} listings, starting with your first one. After that it's KES {LISTING_PRICE} per listing a month{LISTING_PRICE_CHANGE_NOTE}.
                     </p>
                   </>
                 ) : plan.freeActive ? (

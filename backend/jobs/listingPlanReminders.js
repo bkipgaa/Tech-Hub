@@ -16,7 +16,7 @@
 
 const Listing = require('../models/Listing');
 const notify = require('../services/notificationService');
-const { PRICE_PER_LISTING, freeUntil } = require('../utils/listingPlan');
+const { pricePerListing, freeUntil } = require('../utils/listingPlan');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STAGES = [1, 3, 7];   // days before the end
@@ -69,7 +69,7 @@ const sendListingPlanReminders = async (now = new Date()) => {
       const result = await notify.listingPlanReminder({
         email: owner.email,
         name: `${owner.firstName || ''} ${owner.lastName || ''}`.trim() || 'there',
-        price: PRICE_PER_LISTING,
+        price: pricePerListing(now), // what renewing costs today
         items: entries.map((e) => ({
           title: e.listing.title,
           endDate: formatDate(e.until),

@@ -731,8 +731,17 @@ export const COUNTIES = [
 // Listing pricing (mirrors backend/utils/listingPlan.js)
 export const LISTING_FREE_MONTHS = 3;   // free months from your first listing
 export const LISTING_FREE_COUNT = 5;    // listings that are free during those months
-export const LISTING_PRICE = 500;       // KES per listing per month otherwise
 export const LISTING_PAY_MONTHS = [1]; // each payment covers the next month
+
+// KES per listing per month otherwise: 200, then 500 from 1 December 2026 (midnight, Nairobi).
+// The server charges the price at the time of payment; this is for display.
+export const LISTING_NEW_PRICE = 500;
+export const LISTING_NEW_PRICE_FROM = new Date('2026-12-01T00:00:00+03:00');
+export const listingPriceAt = (at = new Date()) => (at >= LISTING_NEW_PRICE_FROM ? LISTING_NEW_PRICE : 200);
+export const LISTING_PRICE = listingPriceAt(); // today's price, when the page loaded
+/** " (KES 500 from 1 December 2026)" until the new price starts, then '' */
+export const LISTING_PRICE_CHANGE_NOTE =
+  LISTING_PRICE === LISTING_NEW_PRICE ? '' : ` (KES ${LISTING_NEW_PRICE} from 1 December 2026)`;
 
 export const formatPrice = (price, unit) => {
   if (unit === 'none') return ''; // shops price their products, not the listing
