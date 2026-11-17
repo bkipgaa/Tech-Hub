@@ -11,7 +11,7 @@ const sections = [
       `Company registration number: ${L.registrationNo}`,
       `KRA PIN: ${L.kraPin}`,
       `Registered address: ${L.address}`,
-      `ODPC registration number: ${L.odpcRegNo}`,
+      ...(L.odpcRegNo ? [`ODPC registration number: ${L.odpcRegNo}`] : []),
       `Data protection contact: ${L.dpoName}, ${L.privacyEmail}, ${L.phone}`,
     ]},
     `We are the **data controller** for the personal data described here. This policy is issued under the **Data Protection Act, 2019 (Kenya)** and its regulations.`,
